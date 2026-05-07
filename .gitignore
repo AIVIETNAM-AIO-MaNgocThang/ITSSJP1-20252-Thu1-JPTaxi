@@ -7,6 +7,10 @@ backend/node_modules/
 backend/dist/
 backend/uploads/
 frontend/node_modules/
+node_modules/
+dist/
+build/
+.env
 <<<<<<< HEAD
 =======
 package/
