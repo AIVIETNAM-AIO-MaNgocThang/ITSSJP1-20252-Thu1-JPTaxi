@@ -13,6 +13,7 @@ CREATE TYPE user_type_enum AS ENUM ('customer', 'driver');
 CREATE TYPE license_type_enum AS ENUM ('B', 'C1', 'C', 'D1', 'D2', 'D');
 CREATE TYPE payment_method_enum AS ENUM ('VISA', 'MASTER', 'JCB', 'VNPAY');
 CREATE TYPE vehicle_type_enum AS ENUM ('4', '7', '9');  -- số chỗ ngồi
+CREATE TYPE driver_japanese_level_enum AS ENUM ('N5', 'N4', 'N3', 'N2', 'N1', 'Native');
 
 -- =====================================================
 -- 2. Bảng thực thể chính (không lookup)
@@ -62,6 +63,7 @@ CREATE TABLE driver (
     approved_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NULL,
+    driver_japanese_level driver_japanese_level_enum NOT NULL,
     FOREIGN KEY (approved_by) REFERENCES admin(admin_id) ON DELETE SET NULL,
     CONSTRAINT unique_id_nationality UNIQUE (id_number, nationality)
 );
