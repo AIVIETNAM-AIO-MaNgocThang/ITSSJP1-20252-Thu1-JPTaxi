@@ -31,6 +31,7 @@ CREATE TABLE customer (
     password_hash VARCHAR(255) NOT NULL,
     is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     is_phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    avatar_url VARCHAR(255) NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NULL
 );
@@ -63,6 +64,7 @@ CREATE TABLE driver (
     approved_at TIMESTAMPTZ NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NULL,
+    avatar_url VARCHAR(255) NULL,
     driver_japanese_level driver_japanese_level_enum NOT NULL,
     FOREIGN KEY (approved_by) REFERENCES admin(admin_id) ON DELETE SET NULL,
     CONSTRAINT unique_id_nationality UNIQUE (id_number, nationality)
