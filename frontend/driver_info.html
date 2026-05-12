@@ -107,15 +107,8 @@
       padding: 0;
       overflow: hidden;
       background: #fff;
-      border: 2px solid #ecfdf5;
+      border: 1px solid var(--line);
       border-radius: 50%;
-    }
-
-    .profile-button:hover,
-    .profile-button:focus-visible {
-      border-color: rgba(16, 185, 129, 0.7);
-      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.14);
-      outline: none;
     }
 
     .profile-button img {
@@ -203,6 +196,13 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+    }
+
+    .avatar-hint {
+      color: var(--green-dark);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
     }
 
     .driver-name {
@@ -759,26 +759,31 @@
   <header class="topbar">
     <a class="brand" href="#" aria-label="JP TAXI for Driver">
       <span class="brand-icon">🚕</span>
-      <span>JP TAXI <small>for Driver</small></span>
+      <span>JP TAXI</span>
     </a>
-    <div class="top-actions">
+    
       <div class="account-menu">
-        <button class="profile-button" id="accountButton" type="button" aria-label="アバターを選択">
+        <button class="profile-button" id="accountButton" type="button" aria-label="アバターを選択" aria-expanded="false">
           <img id="headerAvatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80" alt="">
         </button>
-        <input id="avatarInput" type="file" accept="image/*" hidden>
+        <div class="account-dropdown" id="accountDropdown" aria-hidden="true">
+          <button type="button">👤 アカウント編集</button>
+          <button type="button">🚪 ログアウト</button>
+        </div>
       </div>
-    </div>
+
   </header>
 
   <main class="layout">
     <aside class="sidebar">
       <section class="driver-mini" aria-label="ドライバー概要">
-        <div class="driver-avatar">
+        <button class="driver-avatar" id="avatarButton" type="button" aria-label="アバターを選択">
           <img id="sidebarAvatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80" alt="">
-        </div>
+        </button>
+        <span class="avatar-hint">アバター変更</span>
+        <input id="avatarInput" type="file" accept="image/*" hidden>
         <div>
-          <p class="driver-name">山田 太郎</p>
+          <p class="driver-name" id="driverSidebarName">山田 太郎</p>
           <div class="rating">★ 4.9 (256件の評価)</div>
         </div>
         <span class="driver-badge">公式ドライバー</span>
@@ -809,27 +814,34 @@
               <div class="form-grid">
                 <label class="field">
                   <span>氏名</span>
-                  <input type="text" value="山田 太郎">
+                  <input id="driverFullName" type="text" value="山田 太郎">
                 </label>
                 <label class="field">
-                  <span>英字表記</span>
-                  <input type="text" value="Taro Yamada">
+                  <span>国籍</span>
+                  <input id="driverNationality" type="text" value="Japan">
                 </label>
                 <label class="field">
                   <span>電話番号</span>
-                  <input type="tel" value="+84 123 456 789">
+                  <input id="driverPhone" type="tel" value="+84 123 456 789">
                 </label>
                 <label class="field">
                   <span>メールアドレス</span>
-                  <input type="email" value="yamada.driver@example.com">
+                  <input id="driverEmail" type="email" value="yamada.driver@example.com">
                 </label>
                 <label class="field">
-                  <span>対応言語</span>
-                  <input type="text" value="日本語, 英語">
+                  <span>日本語レベル</span>
+                  <select id="driverJapaneseLevel">
+                    <option>N5</option>
+                    <option>N4</option>
+                    <option>N3</option>
+                    <option>N2</option>
+                    <option>N1</option>
+                    <option>Native</option>
+                  </select>
                 </label>
                 <label class="field">
-                  <span>拠点エリア</span>
-                  <input type="text" value="東京都, 横浜">
+                  <span>生年月日</span>
+                  <input id="driverBirthDate" type="date">
                 </label>
               </div>
             </section>
@@ -922,9 +934,9 @@
               <div class="license-card" aria-label="運転免許証画像">
                 <div class="license-head"><span>日本国 運転免許証</span><span>No. 123456789000</span></div>
                 <div class="license-photo"></div>
-                <div class="license-lines">
+                <div class="license-lines" id="licenseLines">
                   <span>氏名</span><strong>山田 太郎</strong>
-                  <span>住所</span><strong>東京都新宿区1-2-3</strong>
+                  <span>免許区分</span><strong>B</strong>
                   <span>生年月日</span><strong>1990年05月12日</strong>
                   <span>交付日</span><strong>2024年03月10日</strong>
                   <span>有効期限</span><strong>2027年03月10日</strong>
@@ -993,11 +1005,11 @@
             <div class="form-grid">
               <label class="field">
                 <span>銀行名</span>
-                <input type="text" value="三菱UFJ銀行">
+                <input id="bankName" type="text" value="三菱UFJ銀行">
               </label>
               <label class="field">
                 <span>支店名</span>
-                <input type="text" value="新宿支店">
+                <input id="bankBranch" type="text" value="新宿支店">
               </label>
               <label class="field">
                 <span>口座種別</span>
@@ -1008,11 +1020,11 @@
               </label>
               <label class="field">
                 <span>口座番号</span>
-                <input type="text" value="1234567">
+                <input id="bankAccountNumber" type="text" value="1234567">
               </label>
               <label class="field full">
                 <span>口座名義</span>
-                <input type="text" value="ヤマダ タロウ">
+                <input id="bankAccountHolder" type="text" value="ヤマダ タロウ">
               </label>
             </div>
           </section>
@@ -1227,6 +1239,8 @@
   <script>
     const toast = document.getElementById('toast');
     const accountButton = document.getElementById('accountButton');
+    const accountDropdown = document.getElementById('accountDropdown');
+    const avatarButton = document.getElementById('avatarButton');
     const avatarInput = document.getElementById('avatarInput');
     const headerAvatar = document.getElementById('headerAvatar');
     const sidebarAvatar = document.getElementById('sidebarAvatar');
@@ -1237,6 +1251,189 @@
     };
     let currentPin = '1234';
     let pendingPin = '';
+    const API_BASE = window.JP_TAXI_API_BASE || 'http://localhost:8080/api';
+    const driverId = new URLSearchParams(window.location.search).get('driverId') || localStorage.getItem('driverId') || '1';
+    let loadedDriver = null;
+    let pendingAvatarUrl = null;
+
+    function formatDateTime(value) {
+      if (!value) return '';
+      return new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date(value));
+    }
+
+    function formatMoney(value) {
+      return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value || 0);
+    }
+
+    function resolveAssetUrl(url) {
+      if (!url) return '';
+      if (url.startsWith('/') && API_BASE.startsWith('http')) {
+        return new URL(url, API_BASE.replace(/\/api\/?$/, '/')).href;
+      }
+      return url;
+    }
+
+    function setAvatarPreview(url) {
+      const displayUrl = resolveAssetUrl(url);
+      headerAvatar.src = displayUrl;
+      sidebarAvatar.src = displayUrl;
+    }
+
+    async function uploadAvatar(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_BASE}/uploads/avatar`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) throw new Error('avatar upload failed');
+      const result = await response.json();
+      return result.url;
+    }
+
+    function splitDriverName(fullName) {
+      const parts = fullName.trim().split(/\s+/).filter(Boolean);
+      if (parts.length <= 1) return { lastName: fullName.trim(), firstName: loadedDriver?.firstName || '' };
+      return { lastName: parts[0], firstName: parts.slice(1).join(' ') };
+    }
+
+    function vehicleName(vehicle) {
+      if (!vehicle) return '未登録';
+      return `${vehicle.brand} (${vehicle.color})`;
+    }
+
+    function vehicleMeta(vehicle) {
+      if (!vehicle) return '車両情報がありません';
+      return `ナンバー プレート: ${vehicle.licensePlate} ・ 座席数: ${vehicle.vehicleType}`;
+    }
+
+    function setDriverForm(profile) {
+      loadedDriver = profile;
+      const fullName = `${profile.lastName || ''} ${profile.firstName || ''}`.trim();
+      document.getElementById('driverSidebarName').textContent = fullName || '未設定';
+      document.getElementById('driverFullName').value = fullName;
+      document.getElementById('driverNationality').value = profile.nationality || '';
+      document.getElementById('driverPhone').value = profile.phone || '';
+      document.getElementById('driverEmail').value = profile.email || '';
+      document.getElementById('driverJapaneseLevel').value = profile.japaneseLevel || 'N5';
+      document.getElementById('driverBirthDate').value = profile.birthDate || '';
+
+      if (profile.avatarUrl) {
+        setAvatarPreview(profile.avatarUrl);
+      }
+
+      selectedVehicle = {
+        name: vehicleName(profile.vehicle),
+        meta: vehicleMeta(profile.vehicle)
+      };
+      document.getElementById('selectedVehicleName').textContent = selectedVehicle.name;
+      document.getElementById('selectedVehicleMeta').textContent = selectedVehicle.meta;
+
+      const vehicleList = document.getElementById('vehicleList');
+      if (vehicleList) {
+        vehicleList.innerHTML = profile.vehicle ? `
+          <button class="card-choice selected-vehicle" type="button" data-name="${selectedVehicle.name}" data-meta="${selectedVehicle.meta}">
+            <span>🚙</span>
+            <span class="row-copy"><strong>${selectedVehicle.name}</strong><span>${selectedVehicle.meta}</span></span>
+            <span class="status-ok">選択中</span>
+          </button>
+        ` : '<article class="card-choice"><span>🚙</span><span class="row-copy"><strong>登録車両がありません</strong><span>-</span></span><span class="status-warn">未登録</span></article>';
+      }
+
+      const license = (profile.licenses || [])[0];
+      document.getElementById('licenseLines').innerHTML = license ? `
+        <span>氏名</span><strong>${fullName}</strong>
+        <span>免許区分</span><strong>${license.licenseType}</strong>
+        <span>生年月日</span><strong>${profile.birthDate || '-'}</strong>
+        <span>交付日</span><strong>${license.issueDate || '-'}</strong>
+        <span>有効期限</span><strong>${license.expiryDate || '-'}</strong>
+      ` : '<span>状態</span><strong>免許情報がありません</strong>';
+
+      if (profile.bankAccount) {
+        document.getElementById('bankName').value = profile.bankAccount.bankName || '';
+        document.getElementById('bankAccountNumber').value = profile.bankAccount.accountNumber || '';
+        document.getElementById('bankAccountHolder').value = profile.bankAccount.accountHolder || '';
+      }
+
+      document.getElementById('tripList').innerHTML = (profile.trips || []).map((trip) => {
+        const status = trip.status === 'completed' ? 'completed' : 'cancelled';
+        const statusClass = trip.status === 'completed' ? 'status-ok' : 'status-danger';
+        const statusLabel = trip.status === 'completed' ? '完了' : 'キャンセル';
+        return `
+          <article class="trip-row" data-status="${status}" data-text="${trip.pickupAddress} ${trip.dropoffAddress}">
+            <span class="row-copy"><strong>${trip.pickupAddress} → ${trip.dropoffAddress}</strong><span>${formatDateTime(trip.startTime)} ・ ${trip.distanceKm || 0} km</span></span>
+            <span class="row-copy"><strong>${formatMoney(trip.finalFareJpy)}</strong><span>${trip.finalFareVnd || 0} VND</span></span>
+            <span class="${statusClass}">${statusLabel}</span>
+          </article>
+        `;
+      }).join('') || '<article class="trip-row" data-status="completed" data-text=""><span class="row-copy"><strong>稼働履歴がありません</strong><span>-</span></span><span></span><span class="status-warn">空</span></article>';
+    }
+
+    async function loadDriverProfile() {
+      try {
+        const response = await fetch(`${API_BASE}/drivers/${driverId}/profile`);
+        if (!response.ok) throw new Error('profile load failed');
+        setDriverForm(await response.json());
+      } catch (error) {
+        showToast('ドライバー情報を取得できませんでした');
+      }
+    }
+
+    async function saveDriverProfile() {
+      const name = splitDriverName(document.getElementById('driverFullName').value);
+      const payload = {
+        lastName: name.lastName,
+        firstName: name.firstName,
+        gender: loadedDriver?.gender || 'Other',
+        birthDate: document.getElementById('driverBirthDate').value || null,
+        phone: document.getElementById('driverPhone').value.trim(),
+        email: document.getElementById('driverEmail').value.trim(),
+        nationality: document.getElementById('driverNationality').value.trim() || 'Unknown',
+        idNumber: loadedDriver?.idNumber || null,
+        japaneseLevel: document.getElementById('driverJapaneseLevel').value,
+        avatarUrl: pendingAvatarUrl || loadedDriver?.avatarUrl || null
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/drivers/${driverId}/profile`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('profile save failed');
+        setDriverForm(await response.json());
+        showToast('ドライバー情報を更新しました');
+      } catch (error) {
+        showToast('保存できませんでした');
+      }
+    }
+
+    async function saveBankAccount() {
+      const payload = {
+        bankName: document.getElementById('bankName').value.trim(),
+        accountNumber: document.getElementById('bankAccountNumber').value.trim(),
+        accountHolder: document.getElementById('bankAccountHolder').value.trim()
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/drivers/${driverId}/bank-account`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('bank save failed');
+        setDriverForm(await response.json());
+        showToast('銀行口座情報を保存しました');
+      } catch (error) {
+        showToast('銀行情報を保存できませんでした');
+      }
+    }
 
     function showToast(message) {
       toast.textContent = message;
@@ -1292,15 +1489,34 @@
 
     accountButton.addEventListener('click', (event) => {
       event.stopPropagation();
-      avatarInput.click();
+      const isOpen = accountDropdown.classList.toggle('open');
+      accountDropdown.setAttribute('aria-hidden', String(!isOpen));
+      accountButton.setAttribute('aria-expanded', String(isOpen));
     });
 
-    avatarInput.addEventListener('change', () => {
+    document.addEventListener('click', (event) => {
+      if (!accountDropdown.contains(event.target) && !accountButton.contains(event.target)) {
+        accountDropdown.classList.remove('open');
+        accountDropdown.setAttribute('aria-hidden', 'true');
+        accountButton.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    avatarButton.addEventListener('click', () => avatarInput.click());
+
+    avatarInput.addEventListener('change', async () => {
       const file = avatarInput.files && avatarInput.files[0];
       if (!file) return;
       const imageUrl = URL.createObjectURL(file);
-      headerAvatar.src = imageUrl;
-      sidebarAvatar.src = imageUrl;
+      setAvatarPreview(imageUrl);
+      try {
+        pendingAvatarUrl = await uploadAvatar(file);
+        if (loadedDriver) loadedDriver = { ...loadedDriver, avatarUrl: pendingAvatarUrl };
+        setAvatarPreview(pendingAvatarUrl);
+      } catch (error) {
+        showToast('Avatar upload failed');
+        return;
+      }
       showToast('アバターを更新しました');
     });
 
@@ -1435,13 +1651,8 @@
       showToast('履歴を絞り込みました');
     });
 
-    document.getElementById('saveProfile').addEventListener('click', () => {
-      showToast('ドライバー情報を更新しました');
-    });
-
-    document.getElementById('saveBank').addEventListener('click', () => {
-      showToast('銀行口座情報を保存しました');
-    });
+    document.getElementById('saveProfile').addEventListener('click', saveDriverProfile);
+    document.getElementById('saveBank').addEventListener('click', saveBankAccount);
 
     document.getElementById('verifyPasswordPin').addEventListener('click', () => {
       const input = document.getElementById('passwordPinInput');
@@ -1500,6 +1711,8 @@
       closeModal(document.getElementById('confirmPinModal'));
       showToast('PINコードを更新しました');
     });
+
+    loadDriverProfile();
   </script>
 </body>
 </html>

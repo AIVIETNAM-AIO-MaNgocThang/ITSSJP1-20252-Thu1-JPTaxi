@@ -632,31 +632,31 @@
               <div class="form-grid">
                 <label class="field">
                   <span>姓</span>
-                  <input type="text" value="山田">
+                  <input id="customerLastName" type="text" value="山田">
                 </label>
                 <label class="field">
                   <span>名</span>
-                  <input type="text" value="太郎">
+                  <input id="customerFirstName" type="text" value="太郎">
                 </label>
                 <label class="field full">
                   <span>メールアドレス</span>
-                  <input type="email" value="yamada@example.com">
+                  <input id="customerEmail" type="email" value="yamada@example.com">
                 </label>
                 <label class="field">
                   <span>性別</span>
-                  <select>
-                    <option>男性</option>
-                    <option>女性</option>
-                    <option>その他</option>
+                  <select id="customerGender">
+                    <option value="Male">男性</option>
+                    <option value="Female">女性</option>
+                    <option value="Other">その他</option>
                   </select>
                 </label>
                 <label class="field">
                   <span>電話番号</span>
-                  <input type="tel" value="+84 123 456 789">
+                  <input id="customerPhone" type="tel" value="+84 123 456 789">
                 </label>
                 <label class="field full">
-                  <span>住所</span>
-                  <input type="text" value="Ba Dinh, Ha Noi">
+                  <span>生年月日</span>
+                  <input id="customerBirthDate" type="date">
                 </label>
               </div>
             </div>
@@ -717,7 +717,7 @@
                 <span class="icon-box">⏱</span>
                 <span class="row-copy">
                   <strong>登録日</strong>
-                  <span>2026年03月10日</span>
+                  <span id="customerCreatedAt">2026年03月10日</span>
                 </span>
                 <span></span>
               </article>
@@ -920,6 +920,104 @@
     const toast = document.getElementById('toast');
     let currentPin = '1234';
     let pendingPin = '';
+    const API_BASE = window.JP_TAXI_API_BASE || 'http://localhost:8080/api';
+    const customerId = new URLSearchParams(window.location.search).get('customerId') || localStorage.getItem('customerId') || '1';
+    let loadedCustomer = null;
+    let pendingAvatarUrl = null;
+
+    function formatDateTime(value) {
+      if (!value) return '';
+      return new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date(value));
+    }
+
+    function resolveAssetUrl(url) {
+      if (!url) return '';
+      if (url.startsWith('/') && API_BASE.startsWith('http')) {
+        return new URL(url, API_BASE.replace(/\/api\/?$/, '/')).href;
+      }
+      return url;
+    }
+
+    function setAvatarPreview(url) {
+      const displayUrl = resolveAssetUrl(url);
+      profileAvatar.src = displayUrl;
+      headerAvatar.src = displayUrl;
+    }
+
+    async function uploadAvatar(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${API_BASE}/uploads/avatar`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) throw new Error('avatar upload failed');
+      const result = await response.json();
+      return result.url;
+    }
+
+    function setCustomerForm(profile) {
+      loadedCustomer = profile;
+      document.getElementById('customerLastName').value = profile.lastName || '';
+      document.getElementById('customerFirstName').value = profile.firstName || '';
+      document.getElementById('customerEmail').value = profile.email || '';
+      document.getElementById('customerGender').value = profile.gender || 'Other';
+      document.getElementById('customerPhone').value = profile.phone || '';
+      document.getElementById('customerBirthDate').value = profile.birthDate || '';
+      document.getElementById('customerCreatedAt').textContent = formatDateTime(profile.createdAt);
+      if (profile.avatarUrl) {
+        setAvatarPreview(profile.avatarUrl);
+      }
+
+      const historyList = document.querySelector('#historyModal .history-list');
+      historyList.innerHTML = (profile.loginHistory || []).map((item, index) => `
+        <article class="history-item">
+          <div><strong>${item.ipAddress || 'Unknown IP'}</strong><span>${formatDateTime(item.loginTime)}</span></div>
+          <span class="badge">${index === 0 ? '現在' : '成功'}</span>
+        </article>
+      `).join('') || '<article class="history-item"><div><strong>ログイン履歴がありません</strong><span>-</span></div><span class="badge">空</span></article>';
+    }
+
+    async function loadCustomerProfile() {
+      try {
+        const response = await fetch(`${API_BASE}/customers/${customerId}/profile`);
+        if (!response.ok) throw new Error('profile load failed');
+        setCustomerForm(await response.json());
+      } catch (error) {
+        showToast('顧客情報を取得できませんでした');
+      }
+    }
+
+    async function saveCustomerProfile() {
+      const payload = {
+        lastName: document.getElementById('customerLastName').value.trim(),
+        firstName: document.getElementById('customerFirstName').value.trim(),
+        gender: document.getElementById('customerGender').value,
+        birthDate: document.getElementById('customerBirthDate').value || null,
+        phone: document.getElementById('customerPhone').value.trim(),
+        email: document.getElementById('customerEmail').value.trim(),
+        avatarUrl: pendingAvatarUrl || (loadedCustomer ? loadedCustomer.avatarUrl : null)
+      };
+
+      try {
+        const response = await fetch(`${API_BASE}/customers/${customerId}/profile`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('profile save failed');
+        setCustomerForm(await response.json());
+        showToast('プロフィールの変更を保存しました');
+      } catch (error) {
+        showToast('保存できませんでした');
+      }
+    }
 
     function showToast(message) {
       toast.textContent = message;
@@ -976,12 +1074,19 @@
     });
 
     avatarButton.addEventListener('click', () => avatarInput.click());
-    avatarInput.addEventListener('change', () => {
+    avatarInput.addEventListener('change', async () => {
       const file = avatarInput.files && avatarInput.files[0];
       if (!file) return;
       const imageUrl = URL.createObjectURL(file);
-      profileAvatar.src = imageUrl;
-      headerAvatar.src = imageUrl;
+      setAvatarPreview(imageUrl);
+      try {
+        pendingAvatarUrl = await uploadAvatar(file);
+        if (loadedCustomer) loadedCustomer = { ...loadedCustomer, avatarUrl: pendingAvatarUrl };
+        setAvatarPreview(pendingAvatarUrl);
+      } catch (error) {
+        showToast('Avatar upload failed');
+        return;
+      }
       showToast('アバターを更新しました');
     });
 
@@ -1063,9 +1168,8 @@
       showToast('PINコードを更新しました');
     });
 
-    document.getElementById('saveProfile').addEventListener('click', () => {
-      showToast('プロフィールの変更を保存しました');
-    });
+    document.getElementById('saveProfile').addEventListener('click', saveCustomerProfile);
+    loadCustomerProfile();
   </script>
 </body>
 </html>
