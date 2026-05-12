@@ -144,6 +144,18 @@ h1 {
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
 }
 
+.driver-register-layout {
+  grid-template-columns: minmax(520px, 1fr) minmax(430px, 520px);
+}
+
+.driver-card {
+  max-width: 520px;
+}
+
+.driver-register-screen h1 {
+  white-space: normal;
+}
+
 .form-logo {
   width: 60px;
   height: 60px;
@@ -171,6 +183,13 @@ form {
   display: grid;
   gap: 16px;
   margin-top: 18px;
+}
+
+.section-title {
+  margin: 4px 0 -2px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .field-grid {
@@ -246,6 +265,83 @@ select:focus {
   background: var(--green-dark);
 }
 
+.button-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+}
+
+.secondary-action {
+  width: 100%;
+  height: 50px;
+  color: #475569;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  background: #eef2f7;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.secondary-action:hover {
+  background: #e2e8f0;
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.upload-box {
+  position: relative;
+  min-height: 118px;
+  place-items: center;
+  padding: 16px;
+  color: var(--muted);
+  text-align: center;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.upload-box:hover {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(0, 143, 117, 0.1);
+}
+
+.upload-box input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.upload-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--green);
+  font-size: 20px;
+  background: #ecfdf5;
+  border-radius: 12px;
+}
+
+.upload-box strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.upload-box small {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .login-note {
   color: var(--muted);
   font-size: 14px;
@@ -278,6 +374,11 @@ select:focus {
 
 @media (max-width: 430px) {
   .field-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .button-row,
+  .upload-grid {
     grid-template-columns: 1fr;
   }
 

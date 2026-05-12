@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JP TAXI - 運転者登録</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="register.css">
+  <style>
+    .topbar {
+      justify-content: space-between;
+    }
+
+    .header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 18px;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .header-actions a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .driver-register-layout {
+      grid-template-columns: minmax(520px, 1fr) minmax(460px, 540px);
+      align-items: center;
+      gap: 46px;
+    }
+
+    .driver-register-layout h1 {
+      white-space: normal;
+    }
+
+    .hero-copy p {
+      max-width: 560px;
+    }
+
+    .driver-card {
+      max-width: 540px;
+    }
+
+    .notice-box {
+      padding: 13px 15px;
+      color: #065f46;
+      font-size: 13px;
+      line-height: 1.7;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      border-radius: 10px;
+    }
+
+    .section-title {
+      margin: 4px 0 -2px;
+      color: #111827;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .upload-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .upload-box {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 112px;
+      padding: 14px;
+      text-align: center;
+      background: #f8fafc;
+      border: 1.5px dashed #cbd5e1;
+      border-radius: 11px;
+      cursor: pointer;
+    }
+
+    .upload-box input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .upload-icon {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      color: var(--green);
+      font-size: 20px;
+      background: #ecfdf5;
+      border-radius: 10px;
+    }
+
+    .upload-box strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .upload-box small {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 132px 1fr;
+      gap: 12px;
+    }
+
+    .secondary-action {
+      width: 100%;
+      height: 50px;
+      color: #475467;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 800;
+      background: #eef2f7;
+      border: 0;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 900px) {
+      .driver-register-layout,
+      .upload-grid,
+      .button-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .header-actions {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="register-screen driver-register-screen">
+    <header class="topbar">
+      <a class="brand" href="login.html" aria-label="JP TAXI">
+        <span class="brand-icon">🚕</span>
+        <span>JP TAXI</span>
+      </a>
+      <nav class="header-actions" aria-label="メインメニュー">
+        <a href="register.html">顧客登録</a>
+        <a href="login.html">ログイン</a>
+      </nav>
+    </header>
+
+    <section class="register-layout driver-register-layout">
+      <div class="intro">
+        <div class="hero-copy">
+          <span class="eyebrow">🚖 ドライバー登録</span>
+          <h1>JP TAXIでドライバーとして働きましょう</h1>
+          <p>運転免許証、本人確認書類、車両情報を登録すると、審査後に配車リクエストを受け取れるようになります。</p>
+        </div>
+
+        <div class="benefits" aria-label="登録の特徴">
+          <article>
+            <h2>オンライン申請</h2>
+            <p>基本情報と必要書類をひとつのフォームで提出できます。</p>
+          </article>
+          <article>
+            <h2>免許情報の管理</h2>
+            <p>免許証番号、有効期限、書類画像をまとめて管理できます。</p>
+          </article>
+          <article>
+            <h2>車両プロフィール</h2>
+            <p>車種、ナンバー、座席数、車検証を登録して審査に進めます。</p>
+          </article>
+        </div>
+      </div>
+
+      <section class="register-card driver-card" aria-labelledby="driver-register-title">
+        <div class="form-logo" aria-hidden="true">🚖</div>
+        <div class="form-heading">
+          <h2 id="driver-register-title">運転者登録</h2>
+          <p>ドライバー申請に必要な情報を入力してください。</p>
+        </div>
+
+        <form>
+          <div class="notice-box">
+            現在の申請状況：<strong>未提出</strong><br>
+            書類の審査には通常1〜2営業日かかります。
+          </div>
+
+          <h3 class="section-title">基本情報</h3>
+          <div class="field-grid two">
+            <label>
+              <span>姓</span>
+              <input type="text" placeholder="山田">
+            </label>
+            <label>
+              <span>名</span>
+              <input type="text" placeholder="太郎">
+            </label>
+          </div>
+
+          <div class="field-grid two">
+            <label>
+              <span>電話番号</span>
+              <input type="tel" placeholder="+84 000 000 000">
+            </label>
+            <label>
+              <span>対応言語</span>
+              <select>
+                <option>日本語</option>
+                <option>日本語・ベトナム語</option>
+                <option>英語・日本語</option>
+              </select>
+            </label>
+          </div>
+
+          <h3 class="section-title">運転免許情報</h3>
+          <div class="field-grid two">
+            <label>
+              <span>免許証番号</span>
+              <input type="text" placeholder="DL-123456789">
+            </label>
+            <label>
+              <span>有効期限</span>
+              <input type="date">
+            </label>
+          </div>
+
+          <div class="upload-grid">
+            <label class="upload-box">
+              <span class="upload-icon">📄</span>
+              <strong>免許証（表）</strong>
+              <small>クリックしてアップロード</small>
+              <input type="file" accept="image/*,.pdf">
+            </label>
+            <label class="upload-box">
+              <span class="upload-icon">🪪</span>
+              <strong>免許証（裏）</strong>
+              <small>クリックしてアップロード</small>
+              <input type="file" accept="image/*,.pdf">
+            </label>
+          </div>
+
+          <h3 class="section-title">車両情報</h3>
+          <div class="field-grid two">
+            <label>
+              <span>車種</span>
+              <input type="text" placeholder="Toyota Vios">
+            </label>
+            <label>
+              <span>ナンバープレート</span>
+              <input type="text" placeholder="30A-123.45">
+            </label>
+            <label>
+              <span>座席数</span>
+              <select>
+                <option>4人乗り</option>
+                <option>7人乗り</option>
+              </select>
+            </label>
+            <label>
+              <span>車両カラー</span>
+              <input type="text" placeholder="白">
+            </label>
+          </div>
+
+          <div class="upload-grid">
+            <label class="upload-box">
+              <span class="upload-icon">🚗</span>
+              <strong>車両写真</strong>
+              <small>外観写真をアップロード</small>
+              <input type="file" accept="image/*">
+            </label>
+            <label class="upload-box">
+              <span class="upload-icon">📘</span>
+              <strong>車検証</strong>
+              <small>登録書類をアップロード</small>
+              <input type="file" accept="image/*,.pdf">
+            </label>
+          </div>
+
+          <label class="terms">
+            <input type="checkbox">
+            <span>提出した情報が正確であり、ドライバー利用規約および審査ポリシーに同意します</span>
+          </label>
+
+          <div class="button-row">
+            <button class="secondary-action" type="button">一時保存</button>
+            <button class="submit-button" type="submit">申請を送信</button>
+          </div>
+
+          <p class="login-note">登録済みですか？ <a href="driver_info.html">ドライバープロフィールへ</a></p>
+        </form>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
