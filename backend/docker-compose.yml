@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jptaxi-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: jptaxi
+    ports:
+      - "5432:5432"
+    volumes:
+      - jptaxi_pgdata:/var/lib/postgresql/data
+      - ../database/DB.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+volumes:
+  jptaxi_pgdata:

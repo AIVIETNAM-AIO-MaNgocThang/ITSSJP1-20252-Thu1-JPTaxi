@@ -174,13 +174,29 @@
       });
     });
 
-    confirmButton.addEventListener('click', () => {
+    confirmButton.addEventListener('click', async () => {
       if (bookingMode === 'proxy') {
         modal.classList.add('open');
         modal.setAttribute('aria-hidden', 'false');
         return;
       }
 
+      const qs = new URLSearchParams(window.location.search);
+      const requestId = qs.get('requestId');
+      const customerId = qs.get('customerId');
+      if (requestId && customerId && window.JPTaxiApi) {
+        try {
+          const res = await window.JPTaxiApi.confirmRideRequest(requestId, customerId, {});
+          toast.textContent = res.messageJa || res.messageVi || '予約を確定しました';
+        } catch (err) {
+          toast.textContent = 'エラー: ' + (err && err.message ? err.message : String(err));
+        }
+        toast.classList.add('show');
+        window.setTimeout(() => toast.classList.remove('show'), 2600);
+        return;
+      }
+
+      toast.textContent = '予約内容を確認しました';
       toast.classList.add('show');
       window.setTimeout(() => toast.classList.remove('show'), 1800);
     });
@@ -214,5 +230,6 @@
       }
     });
   </script>
+  <script src="js/api.js" defer></script>
 </body>
 </html>
