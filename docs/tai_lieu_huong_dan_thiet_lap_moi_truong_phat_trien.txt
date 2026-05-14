@@ -12,7 +12,7 @@ Mục tiêu sprint: Hoàn thành cơ sở dữ liệu, môi trường dev, chứ
 2. Yêu cầu hệ thống (Prerequisites)
 Phần mềm yêu cầu:
     FE: HTML, CSS
-    BE: SpringBoot (Java)
+    BE: NestJS (Node.js / TypeScript)
     DB: PostgreSQL
     Môi trường phát triển: Tuỳ cá nhân (Visual Studio Code, Eclipse IDE)
     Lưu trữ code: GitHub
@@ -40,54 +40,38 @@ Bash
 git clone https://github.com/AIVIETNAM-AIO-MaNgocThang/ITSSJP1-20252-Thu1-JPTaxi.git
 cd ITSSJP1-20252-Thu1-JPTaxi
 Cấu trúc thư mục hiện tại:
-/backend — Code server
-/frontend — Code client
-/database — Script DDL, migration
-/docs — Tài liệu
-/package — Package/config chung (nếu có)
+/backend — API NestJS (TypeScript), cổng mặc định 3000, prefix /api
+/frontend — Giao diện HTML/CSS/JS tĩnh (mở file hoặc dùng Live Server)
+/database — Script DDL / seed (DB.sql, DB_data.sql)
+/docs — Tài liệu hướng dẫn
 
-5. Thiết lập Backend
+5. Thiết lập Backend (NestJS)
 Bước 1: Vào thư mục backend
 Bash
 cd backend
 Bước 2: Cài dependencies
 Bash
 npm install
-# hoặc
-yarn install
-# hoặc pip install -r requirements.txt (nếu Python)
 Bước 3: Tạo file môi trường .env
-Copy file mẫu (nếu có .env.example) và chỉnh sửa:
+Copy .env.example và chỉnh các biến (tên biến phải khớp code):
 env
-PORT=5000
-NODE_ENV=development
-
-# Database
+PORT=3000
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=jptaxi_dev
+DB_NAME=JPTaxi
 DB_USER=postgres
-DB_PASSWORD=yourpassword
-
-# JWT
+DB_PASS=your_password
 JWT_SECRET=your_super_secret_key_here
-JWT_EXPIRES_IN=1d
-
-# Other
-GOOGLE_MAPS_API_KEY=...
-Bước 4: Chạy migration / seed database (sẽ hướng dẫn chi tiết ở phần Database).
-Bước 5: Khởi chạy
+Bước 4: Tạo CSDL PostgreSQL và chạy script trong /database (DB.sql rồi DB_data.sql nếu cần).
+Bước 5: Khởi chạy dev
 Bash
-npm run dev
-# hoặc npm start
+npm run start:dev
+# production build: npm run build && npm run start:prod
 
 6. Thiết lập Frontend
-Bash
-cd ../frontend
-npm install
-# Tạo .env nếu cần (API_URL=http://localhost:5000)
-npm run dev
-Frontend thường chạy ở http://localhost:3000 (Vite/React) hoặc cổng tương ứng.
+Frontend là trang tĩnh: mở trực tiếp file .html trong /frontend hoặc phục vụ bằng bất kỳ static server nào (ví dụ VS Code Live Server).
+URL API mặc định: http://localhost:3000/api (có thể ghi đè bằng window.JP_TAXI_API_BASE trước khi load js/api-config.js).
+Đăng nhập quản trị (sau khi seed DB_data): POST /api/admin/login — tài khoản admin1 / admin123, mod1 / mod123 (chỉ môi trường dev).
 
 7. Thiết lập Database
 Option 1: Dùng Docker (Khuyến nghị)
@@ -119,9 +103,10 @@ Chạy script trong thư mục /database.
 
 8. Chạy Toàn bộ Project
 Cách 1 (Manual):
-Khởi động Database
-Khởi động Backend (cd backend && npm run dev)
-Khởi động Frontend (cd frontend && npm run dev)
+Khởi động PostgreSQL và import /database.
+Khởi động Backend: cd backend && npm run start:dev
+Mở frontend: mở frontend/login.html (hoặc dùng Live Server trỏ vào thư mục frontend).
+
 Cách 2 (Docker Compose - sau này):
 Bash
 docker-compose up --build

@@ -546,6 +546,7 @@
     </section>
   </div>
 
+  <script src="js/api-config.js"></script>
   <script>
     const loginForm = document.getElementById('loginForm');
     const emailInput = document.getElementById('emailInput');
@@ -675,7 +676,7 @@
       if (forgotEmailInput.value.trim()) validateForgotEmail();
     });
 
-    loginForm.addEventListener('submit', (event) => {
+    loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       formStatus.classList.remove('show');
 
@@ -691,8 +692,40 @@
         return;
       }
 
-      formStatus.textContent = 'ログイン情報を確認しました。';
-      formStatus.classList.add('show');
+      const API_BASE = window.JP_TAXI_API_BASE;
+      try {
+        const res = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: emailInput.value.trim(),
+            password: passwordInput.value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg =
+            typeof data.message === 'string'
+              ? data.message
+              : Array.isArray(data.message)
+                ? data.message.join(', ')
+                : 'ログインに失敗しました。';
+          formStatus.textContent = msg;
+          formStatus.classList.add('show');
+          return;
+        }
+        localStorage.setItem('jp_taxi_token', data.token);
+        if (data.user?.customerId != null) {
+          localStorage.setItem('customerId', String(data.user.customerId));
+        }
+        const cid = data.user?.customerId ?? localStorage.getItem('customerId');
+        window.location.href = cid
+          ? `user_info.html?customerId=${encodeURIComponent(cid)}`
+          : 'user_info.html';
+      } catch {
+        formStatus.textContent = '通信エラーが発生しました。';
+        formStatus.classList.add('show');
+      }
     });
 
     forgotForm.addEventListener('submit', (event) => {

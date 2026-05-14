@@ -1236,6 +1236,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="js/api-config.js"></script>
   <script>
     const toast = document.getElementById('toast');
     const accountButton = document.getElementById('accountButton');
@@ -1251,7 +1252,7 @@
     };
     let currentPin = '1234';
     let pendingPin = '';
-    const API_BASE = window.JP_TAXI_API_BASE || 'http://localhost:8080/api';
+    const API_BASE = window.JP_TAXI_API_BASE;
     const driverId = new URLSearchParams(window.location.search).get('driverId') || localStorage.getItem('driverId') || '1';
     let loadedDriver = null;
     let pendingAvatarUrl = null;

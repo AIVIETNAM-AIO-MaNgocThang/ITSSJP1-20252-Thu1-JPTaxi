@@ -390,3 +390,10 @@ select:focus {
     font-size: 30px;
   }
 }
+
+.form-status {
+  min-height: 1.25rem;
+  margin: 8px 0 12px;
+  font-size: 14px;
+  color: #b91c1c;
+}

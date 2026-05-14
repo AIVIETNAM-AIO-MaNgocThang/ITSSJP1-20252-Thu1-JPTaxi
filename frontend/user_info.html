@@ -910,6 +910,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="js/api-config.js"></script>
   <script>
     const accountButton = document.getElementById('accountButton');
     const accountDropdown = document.getElementById('accountDropdown');
@@ -920,7 +921,7 @@
     const toast = document.getElementById('toast');
     let currentPin = '1234';
     let pendingPin = '';
-    const API_BASE = window.JP_TAXI_API_BASE || 'http://localhost:8080/api';
+    const API_BASE = window.JP_TAXI_API_BASE;
     const customerId = new URLSearchParams(window.location.search).get('customerId') || localStorage.getItem('customerId') || '1';
     let loadedCustomer = null;
     let pendingAvatarUrl = null;

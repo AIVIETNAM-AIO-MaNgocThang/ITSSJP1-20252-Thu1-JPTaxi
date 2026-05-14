@@ -1,0 +1,12 @@
+{
+  "name": "itssjp1-jptaxi",
+  "private": true,
+  "description": "JP Taxi — chạy npm từ root sẽ ủy quyền sang backend/",
+  "scripts": {
+    "test:db": "npm run test:db --prefix backend",
+    "build": "npm run build --prefix backend",
+    "start": "npm run start --prefix backend",
+    "start:dev": "npm run start:dev --prefix backend",
+    "start:prod": "npm run start:prod --prefix backend"
+  }
+}

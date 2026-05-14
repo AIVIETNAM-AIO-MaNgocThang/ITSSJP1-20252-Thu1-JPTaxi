@@ -12,7 +12,7 @@
 <body>
   <main class="register-screen">
     <header class="topbar">
-      <a class="brand" href="#" aria-label="JP TAXI">
+      <a class="brand" href="login.html" aria-label="JP TAXI">
         <span class="brand-icon">🚕</span>
         <span>JP TAXI</span>
       </a>
@@ -49,35 +49,35 @@
           <p>必要情報を入力して、新しいアカウントを作成してください。</p>
         </div>
 
-        <form>
+        <form id="registerForm" novalidate>
           <div class="field-grid two">
             <label>
               <span>姓</span>
-              <input type="text" placeholder="姓を入力">
+              <input id="lastNameInput" name="last_name" type="text" placeholder="姓を入力" required>
             </label>
             <label>
               <span>名</span>
-              <input type="text" placeholder="名を入力">
+              <input id="firstNameInput" name="first_name" type="text" placeholder="名を入力" required>
             </label>
           </div>
 
           <label>
             <span>メールアドレス</span>
-            <input type="email" placeholder="example@email.com">
+            <input id="emailInput" name="email" type="email" placeholder="example@email.com" required autocomplete="email">
           </label>
 
           <div class="field-grid two">
             <label>
               <span>電話番号</span>
-              <input type="tel" placeholder="電話番号を入力">
+              <input id="phoneInput" name="phone" type="tel" placeholder="電話番号を入力" required>
             </label>
             <label>
               <span>性別</span>
-              <select>
+              <select id="genderSelect" name="gender" required>
                 <option value="" selected disabled>選択してください</option>
-                <option>男性</option>
-                <option>女性</option>
-                <option>その他</option>
+                <option value="Male">男性</option>
+                <option value="Female">女性</option>
+                <option value="Other">その他</option>
               </select>
             </label>
           </div>
@@ -85,25 +85,89 @@
           <div class="field-grid two">
             <label>
               <span>パスワード</span>
-              <input type="password" placeholder="パスワードを入力">
+              <input id="passwordInput" name="password" type="password" placeholder="パスワードを入力" required minlength="6" autocomplete="new-password">
             </label>
             <label>
               <span>パスワード確認</span>
-              <input type="password" placeholder="もう一度入力">
+              <input id="passwordConfirmInput" type="password" placeholder="もう一度入力" required minlength="6" autocomplete="new-password">
             </label>
           </div>
 
           <label class="terms">
-            <input type="checkbox">
+            <input id="termsCheckbox" type="checkbox" required>
             <span>利用規約およびプライバシーポリシーに同意します</span>
           </label>
 
+          <div class="form-status" id="registerStatus" role="status" aria-live="polite"></div>
+
           <button class="submit-button" type="submit">登録</button>
 
-          <p class="login-note">すでにアカウントをお持ちですか？ <a href="#">ログイン</a></p>
+          <p class="login-note">すでにアカウントをお持ちですか？ <a href="login.html">ログイン</a></p>
         </form>
       </section>
     </section>
   </main>
+
+  <script src="js/api-config.js"></script>
+  <script>
+    const registerForm = document.getElementById('registerForm');
+    const registerStatus = document.getElementById('registerStatus');
+
+    registerForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      registerStatus.textContent = '';
+
+      const lastName = document.getElementById('lastNameInput').value.trim();
+      const firstName = document.getElementById('firstNameInput').value.trim();
+      const email = document.getElementById('emailInput').value.trim();
+      const phone = document.getElementById('phoneInput').value.trim();
+      const gender = document.getElementById('genderSelect').value;
+      const password = document.getElementById('passwordInput').value;
+      const password2 = document.getElementById('passwordConfirmInput').value;
+      const terms = document.getElementById('termsCheckbox').checked;
+
+      if (!terms) {
+        registerStatus.textContent = '利用規約に同意してください。';
+        return;
+      }
+      if (password !== password2) {
+        registerStatus.textContent = 'パスワードが一致しません。';
+        return;
+      }
+
+      const API_BASE = window.JP_TAXI_API_BASE;
+      try {
+        const res = await fetch(`${API_BASE}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_name: firstName,
+            last_name: lastName,
+            email,
+            password,
+            phone,
+            gender: gender || undefined,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg =
+            typeof data.message === 'string'
+              ? data.message
+              : Array.isArray(data.message)
+                ? data.message.join(', ')
+                : '登録に失敗しました。';
+          registerStatus.textContent = msg;
+          return;
+        }
+        registerStatus.textContent = '登録が完了しました。ログインへ移動します…';
+        window.setTimeout(() => {
+          window.location.href = 'login.html';
+        }, 800);
+      } catch {
+        registerStatus.textContent = '通信エラーが発生しました。';
+      }
+    });
+  </script>
 </body>
 </html>
