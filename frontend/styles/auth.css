@@ -1,0 +1,279 @@
+.auth-screen {
+  min-height: calc(100vh - 94px);
+  overflow: visible;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.52) 54%, rgba(255, 255, 255, 0.98) 72%),
+    url("https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1600&q=80") center / cover;
+}
+
+.auth-layout {
+  display: grid;
+  grid-template-columns: minmax(520px, 1fr) 430px;
+  align-items: center;
+  gap: 52px;
+  min-height: calc(100vh - 158px);
+  padding: 24px 64px 48px;
+}
+
+.intro {
+  max-width: 760px;
+}
+
+.eyebrow {
+  color: var(--green);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.intro h1 {
+  max-width: 660px;
+  margin: 18px 0 0;
+  font-size: 46px;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.intro p {
+  max-width: 510px;
+  margin: 16px 0 0;
+  color: #334155;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.benefits {
+  display: grid;
+  gap: 14px;
+  max-width: 430px;
+  margin-top: 28px;
+}
+
+.benefits article {
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+}
+
+.benefits h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.benefits p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 430px;
+  justify-self: center;
+  padding: 28px;
+  background: var(--panel);
+  border: 1px solid #eef2f7;
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+}
+
+.form-logo {
+  width: 60px;
+  height: 60px;
+  margin: -4px auto 14px;
+  font-size: 26px;
+}
+
+.form-heading {
+  text-align: center;
+}
+
+.form-heading h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.form-heading p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.field-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.field-grid.two {
+  grid-template-columns: 1fr 1fr;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.remember {
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.remember input,
+.terms input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green);
+}
+
+.forgot-button {
+  padding: 0;
+  color: var(--green);
+  font-weight: 800;
+  background: transparent;
+  border: 0;
+}
+
+.note-link {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.note-link a {
+  color: var(--green);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.login-register-links {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.driver-register-link {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.driver-register-link:hover,
+.note-link a:hover {
+  text-decoration: underline;
+}
+
+.terms {
+  grid-template-columns: 18px 1fr;
+  align-items: start;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.terms input {
+  margin: 2px 0 0;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.modal-backdrop.open {
+  display: grid;
+}
+
+.forgot-modal {
+  width: min(100%, 430px);
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.modal-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: #64748b;
+  font-size: 22px;
+  background: #f1f5f9;
+  border: 0;
+  border-radius: 9px;
+}
+
+.modal-copy {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+@media (max-width: 900px) {
+  .auth-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 10px 20px 36px;
+  }
+
+  .intro,
+  .benefits {
+    max-width: none;
+  }
+
+  .auth-card {
+    max-width: 460px;
+  }
+}
+
+@media (max-width: 560px) {
+  .field-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .intro h1 {
+    font-size: 30px;
+  }
+}
