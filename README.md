@@ -6,7 +6,7 @@ POT: Yotsuba · DevT: 67
 
 | Thư mục | Nội dung |
 |--------|----------|
-| `frontend/` | Giao diện tĩnh (HTML/CSS/JS). API mặc định: `http://localhost:5173/login` (`js/api-config.js`; có thể ghi đè `window.JP_TAXI_API_BASE`). |
+| `frontend/` | React + Vite. Mặc định `http://localhost:8080/api` nếu không cấu hình `.env`. |
 | `database/` | `DB.sql`, `DB_data.sql` |
 | `backend/` | NestJS: auth, profile khách/tài xế, upload avatar, admin (JWT + role), ước giá cước |
 
@@ -15,7 +15,7 @@ POT: Yotsuba · DevT: 67
 1. PostgreSQL: tạo DB, chạy `database/DB.sql` rồi `database/DB_data.sql` (seed; mật khẩu admin dev xem dòng comment trong `DB_data.sql`).
 2. `cd backend && cp .env.example .env` — chỉnh `DB_*`, `JWT_SECRET`.
 3. `npm install && npm run start:dev` (cổng mặc định **3000**).
-4. Mở `frontend/login.html` (hoặc Live Server trên thư mục `frontend/`).
+4. Mở `cd frontend` rồi `npm install` và `npm run dev`
 
 ## API chính (prefix `/api`)
 
