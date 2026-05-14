@@ -1,3 +1,4 @@
+//Xử lý Controller chung cho CRUD -> admin sửa/xoá/xem tài khoản
 const Customer = require('../models/Customer');
 const Driver = require('../models/Driver');
 

@@ -1,3 +1,5 @@
+//Xử lý Logic Auth & CRUD
+
 const Customer = require('../models/Customer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');

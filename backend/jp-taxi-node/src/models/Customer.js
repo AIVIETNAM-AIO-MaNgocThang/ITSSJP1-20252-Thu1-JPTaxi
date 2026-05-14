@@ -1,3 +1,4 @@
+//Khai báo Model Customer
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 

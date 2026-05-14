@@ -1,3 +1,5 @@
+//khai báo model admin
+
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 
