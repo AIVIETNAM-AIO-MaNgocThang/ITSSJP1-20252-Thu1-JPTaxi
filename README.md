@@ -6,7 +6,7 @@ POT: Yotsuba · DevT: 67
 
 | Thư mục | Nội dung |
 |--------|----------|
-| `frontend/` | Giao diện tĩnh (HTML/CSS/JS). API mặc định: `http://localhost:3000/api` (`js/api-config.js`; có thể ghi đè `window.JP_TAXI_API_BASE`). |
+| `frontend/` | Giao diện tĩnh (HTML/CSS/JS). API mặc định: `http://localhost:5173/login` (`js/api-config.js`; có thể ghi đè `window.JP_TAXI_API_BASE`). |
 | `database/` | `DB.sql`, `DB_data.sql` |
 | `backend/` | NestJS: auth, profile khách/tài xế, upload avatar, admin (JWT + role), ước giá cước |
 
