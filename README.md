@@ -6,7 +6,7 @@ POT: Yotsuba · DevT: 67
 
 | Thư mục | Nội dung |
 |--------|----------|
-| `frontend/` | Frontend React + Vite. Các màn hình nằm trong `pages/`, component dùng chung nằm trong `components/`, entrypoint là `src/main.jsx`. Gọi API qua `VITE_API_BASE_URL`, mặc định `http://localhost:8080/api` nếu không cấu hình `.env`. |
+| `frontend/` | React + Vite. Các màn hình nằm trong `pages/`, component dùng chung nằm trong `components/`, entrypoint là `src/main.jsx`. Gọi API qua `VITE_API_BASE_URL`, mặc định `http://localhost:8080/api` nếu không cấu hình `.env`. |
 | `database/` | `DB.sql`, `DB_data.sql` |
 | `backend/` | NestJS: auth, profile khách/tài xế, upload avatar, admin (JWT + role), ước giá cước |
 
