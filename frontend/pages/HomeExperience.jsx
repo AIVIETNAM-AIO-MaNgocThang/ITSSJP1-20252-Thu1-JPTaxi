@@ -20,7 +20,7 @@ const userHome = {
   quickItems: [
     { icon: '🕒', title: '職場', copy: '123 Duong ABC' },
     { icon: '🏠', title: '自宅', copy: '456 Duong XYZ' },
-    { icon: '⭐', title: 'お気に', copy: 'もっと見る', to: '/advance-booking' },
+    { icon: '⭐', title: 'お気に', copy: 'もっと見る', to: '/location-search' },
   ],
   fastTo: '/location-search',
   fastTitle: '今すぐタクシーを呼ぶ',

@@ -38,7 +38,7 @@ export default function ReservationSummaryPage() {
                 <div className="fare-row total"><span>合計</span><strong>¥5,200</strong></div>
               </div>
               <Link className="submit-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/search-car">予約を確定する</Link>
-              <Link className="secondary-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/advance-booking">修正する</Link>
+              <Link className="secondary-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/location-search">修正する</Link>
             </aside>
           </div>
         </section>
