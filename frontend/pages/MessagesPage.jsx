@@ -13,6 +13,7 @@ export default function MessagesPage() {
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || audience === 'customer';
   const homePath = isDriver ? '/driver-home' : '/home';
   const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
+  const messagePath = isDriver ? '/messages/customer' : '/messages/driver';
   const activeChat = isDriver
     ? { initial: '佐', name: '佐藤 お客様', status: '乗車地点で待機中' }
     : { initial: '田', name: '田中 ドライバー', status: '走行中 (あと3分で到着)' };
@@ -20,7 +21,7 @@ export default function MessagesPage() {
   return (
     <PageShell>
       <main className="messages-window">
-        <Topbar brandTo={homePath} actions={<><Link to={homePath}>ホーム</Link><Link to="/messages" className="active-header-link">メッセージ</Link><Link to={accountPath}>アカウント</Link></>} />
+        <Topbar brandTo={homePath} actions={<><Link to={homePath}>ホーム</Link><Link to={messagePath} className="active-header-link">メッセージ</Link><Link to={accountPath}>アカウント</Link></>} />
 
         <section className="zip-chat-container">
           <aside className="zip-chat-sidebar">
