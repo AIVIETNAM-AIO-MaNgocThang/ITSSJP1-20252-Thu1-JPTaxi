@@ -2,9 +2,12 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import AdvanceBookingPage from '../pages/AdvanceBookingPage.jsx';
 import BillConfirmPage from '../pages/BillConfirmPage.jsx';
 import DriverAvailablePage from '../pages/DriverAvailablePage.jsx';
+import DriverDispatchPage from '../pages/DriverDispatchPage.jsx';
+import DriverHomePage from '../pages/DriverHomePage.jsx';
 import DriverInfoPage from '../pages/DriverInfoPage.jsx';
 import DriverRegisterPage from '../pages/DriverRegisterPage.jsx';
 import DriverReviewPage from '../pages/DriverReviewPage.jsx';
+import DriverRideStatusPage from '../pages/DriverRideStatusPage.jsx';
 import HomePage from '../pages/HomePage.jsx';
 import InvoicePage from '../pages/InvoicePage.jsx';
 import LocationSearchPage from '../pages/LocationSearchPage.jsx';
@@ -23,7 +26,13 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/home" element={<HomePage />} />
+      <Route path="/driver-home" element={<DriverHomePage />} />
+      <Route path="/driver_home.html" element={<Navigate to="/driver-home" replace />} />
+      <Route path="/xacnhancuocxe" element={<DriverDispatchPage />} />
+      <Route path="/driver-ride-status" element={<DriverRideStatusPage />} />
+      <Route path="/driver-invoice" element={<InvoicePage />} />
       <Route path="/messages" element={<MessagesPage />} />
+      <Route path="/messages/:audience" element={<MessagesPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/login.html" element={<Navigate to="/login" replace />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -32,9 +41,11 @@ export default function App() {
       <Route path="/driver_register.html" element={<Navigate to="/driver-register" replace />} />
       <Route path="/driver-available" element={<DriverAvailablePage />} />
       <Route path="/driver_available.html" element={<Navigate to="/driver-available" replace />} />
-      <Route path="/user-info" element={<UserInfoPage />} />
+      <Route path="/user-info" element={<Navigate to="/user-info/profile" replace />} />
+      <Route path="/user-info/:section" element={<UserInfoPage />} />
       <Route path="/user_info.html" element={<Navigate to="/user-info" replace />} />
-      <Route path="/driver-info" element={<DriverInfoPage />} />
+      <Route path="/driver-info" element={<Navigate to="/driver-info/basic" replace />} />
+      <Route path="/driver-info/:section" element={<DriverInfoPage />} />
       <Route path="/driver_info.html" element={<Navigate to="/driver-info" replace />} />
       <Route path="/bill-confirm" element={<BillConfirmPage />} />
       <Route path="/bill_confirm.html" element={<Navigate to="/bill-confirm" replace />} />
@@ -49,7 +60,7 @@ export default function App() {
       <Route path="/reservation-summary" element={<ReservationSummaryPage />} />
       <Route path="/test1.html" element={<Navigate to="/reservation-summary" replace />} />
       <Route path="/ride-confirm" element={<RideConfirmPage />} />
-      <Route path="/Xacnhancuocxe.html" element={<Navigate to="/ride-confirm" replace />} />
+      <Route path="/Xacnhancuocxe.html" element={<Navigate to="/xacnhancuocxe" replace />} />
       <Route path="/ride-status" element={<RideStatusPage />} />
       <Route path="/trangthaicho.html" element={<Navigate to="/ride-status" replace />} />
       <Route path="/payment" element={<PaymentPage />} />
