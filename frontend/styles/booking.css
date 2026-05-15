@@ -289,7 +289,7 @@
 .action-row,
 .modal-actions {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 18px;
 }
 
@@ -382,7 +382,7 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 200;
   display: none;
   place-items: center;
   padding: 24px;
@@ -423,8 +423,8 @@
 .toast {
   position: fixed;
   right: 28px;
-  bottom: 28px;
-  z-index: 30;
+  bottom: 104px;
+  z-index: 210;
   padding: 14px 18px;
   color: #fff;
   font-weight: 800;

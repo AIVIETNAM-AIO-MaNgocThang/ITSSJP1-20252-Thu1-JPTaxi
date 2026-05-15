@@ -17,22 +17,29 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
-  font-family: Inter, Arial, Helvetica, sans-serif;
+  font-family: "Noto Sans JP", Arial, Helvetica, sans-serif;
   background: #f8fafc;
 }
 
 .page-shell {
   display: flex;
   flex-direction: column;
+  width: 100%;
   min-height: 100vh;
+  overflow-x: hidden;
+  background: #fff;
 }
 
 .page-shell.has-footer {
-  padding-bottom: 94px;
+  padding-bottom: 78px;
 }
 
 .page-shell > main {
   flex: 1;
+}
+
+.plain-shell {
+  min-height: 100vh;
 }
 
 button,
@@ -54,42 +61,45 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
-  padding: 0 40px;
+  height: 78px;
+  padding: 0 34px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  min-height: 40px;
-  padding: 6px 14px 6px 8px;
+  gap: 14px;
+  min-height: 48px;
+  padding: 0;
   color: var(--green);
-  font-size: 20px;
-  font-weight: 800;
+  font-size: 28px;
+  font-weight: 900;
   text-decoration: none;
-  background: #fff;
+  background: transparent;
 }
 
 .brand-icon,
 .form-logo {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 48px;
+  height: 48px;
   color: #fff;
   background: var(--green);
-  border-radius: 50%;
-  font-size: 15px;
+  border-radius: 14px;
+  font-size: 24px;
   line-height: 1;
 }
 
 .header-actions {
   display: inline-flex;
   align-items: center;
-  gap: 18px;
-  font-size: 13px;
-  font-weight: 800;
+  gap: 38px;
+  color: #374151;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .header-actions a {
@@ -254,5 +264,9 @@ input.input-error {
 
   .header-actions {
     display: none;
+  }
+
+  .page-shell.has-footer {
+    padding-bottom: 64px;
   }
 }
