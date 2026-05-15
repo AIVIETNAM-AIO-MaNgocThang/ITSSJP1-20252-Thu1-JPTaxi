@@ -6,6 +6,7 @@ export default function Footer() {
   const isDriver =
     localStorage.getItem('jpTaxiRole') === 'driver' ||
     location.pathname.startsWith('/driver') ||
+    location.pathname === '/messages/customer' ||
     location.pathname === '/xacnhancuocxe';
   const homePath = isDriver ? '/driver-home' : '/home';
   const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
