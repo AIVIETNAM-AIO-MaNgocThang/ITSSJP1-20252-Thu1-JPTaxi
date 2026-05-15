@@ -72,10 +72,8 @@ export default function RegisterPage() {
               </label>
             </div>
 
-            <div className="field-grid two">
-              <PasswordField label="パスワード" placeholder="パスワードを入力" />
-              <PasswordField label="パスワード確認" placeholder="もう一度入力" />
-            </div>
+            <PasswordField label="パスワード" placeholder="パスワードを入力" />
+            <PasswordField label="パスワード確認" placeholder="もう一度入力" />
 
             <label className="terms">
               <input type="checkbox" />

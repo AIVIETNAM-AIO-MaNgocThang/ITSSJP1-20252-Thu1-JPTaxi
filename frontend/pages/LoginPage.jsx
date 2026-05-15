@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useRef, useState } from 'react';
 import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
@@ -15,7 +15,13 @@ const loginMessages = {
   success: 'ログイン情報を確認しました。',
 };
 
+function detectRoleByEmail(email) {
+  const normalizedEmail = email.trim().toLowerCase();
+  return normalizedEmail.includes('driver') || normalizedEmail.includes('taxi') ? 'driver' : 'user';
+}
+
 export default function LoginPage() {
+  const navigate = useNavigate();
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
   const [email, setEmail] = useState('');
@@ -24,7 +30,11 @@ export default function LoginPage() {
   const [errors, setErrors] = useState({ email: '', password: '' });
   const [status, setStatus] = useState('');
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState('email');
   const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotCode, setForgotCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [forgotError, setForgotError] = useState('');
   const [forgotStatus, setForgotStatus] = useState('');
 
@@ -110,11 +120,19 @@ export default function LoginPage() {
       localStorage.removeItem('jpTaxiLoginEmail');
     }
 
+    const role = detectRoleByEmail(email);
+    localStorage.setItem('jpTaxiRole', role);
+    localStorage.setItem('jpTaxiUserEmail', email.trim());
     setStatus(loginMessages.success);
+    navigate(role === 'driver' ? '/driver-home' : '/home');
   }
 
   function openForgotModal() {
     setForgotEmail(email.trim());
+    setForgotStep('email');
+    setForgotCode('');
+    setNewPassword('');
+    setConfirmPassword('');
     setForgotError('');
     setForgotStatus('');
     setForgotOpen(true);
@@ -122,22 +140,49 @@ export default function LoginPage() {
 
   function handleForgotSubmit(event) {
     event.preventDefault();
+    setForgotError('');
+    setForgotStatus('');
+
+    if (forgotStep === 'code') {
+      if (!forgotCode.trim()) {
+        setForgotError('確認コードを入力してください。');
+        return;
+      }
+
+      setForgotStep('password');
+      return;
+    }
+
+    if (forgotStep === 'password') {
+      if (newPassword.length < 6) {
+        setForgotError('パスワードは6文字以上で入力してください。');
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        setForgotError('確認用パスワードが一致しません。');
+        return;
+      }
+
+      setForgotStatus('新しいパスワードを設定しました。');
+      window.setTimeout(() => setForgotOpen(false), 1000);
+      return;
+    }
+
     const trimmedEmail = forgotEmail.trim();
 
     if (!trimmedEmail) {
       setForgotError(loginMessages.emailRequired);
-      setForgotStatus('');
       return;
     }
 
     if (!emailPattern.test(trimmedEmail)) {
       setForgotError(loginMessages.emailInvalid);
-      setForgotStatus('');
       return;
     }
 
-    setForgotError('');
-    setForgotStatus('再設定手順を送信しました。');
+    setForgotStep('code');
+    setForgotStatus('確認コードを送信しました。');
   }
 
   return (
@@ -232,29 +277,79 @@ export default function LoginPage() {
         </section>
 
         <Modal open={forgotOpen} title="パスワード再設定" onClose={() => setForgotOpen(false)}>
-          <p className="modal-copy">登録済みのメールアドレスを入力してください。該当するアカウントがある場合、再設定手順を送信します。</p>
+          <p className="modal-copy">
+            {forgotStep === 'email' && '登録済みのメールアドレスを入力してください。確認コードを送信します。'}
+            {forgotStep === 'code' && 'メールに届いた確認コードを入力してください。'}
+            {forgotStep === 'password' && '新しいパスワードを入力してください。'}
+          </p>
           <form className="auth-form" onSubmit={handleForgotSubmit} noValidate>
-            <label>
-              <span>メールアドレス</span>
-              <input
-                type="email"
-                className={forgotError ? 'input-error' : ''}
-                placeholder="example@email.com"
-                autoComplete="email"
-                value={forgotEmail}
-                onChange={(event) => {
-                  setForgotEmail(event.target.value);
-                  setForgotError('');
-                  setForgotStatus('');
-                }}
-                aria-invalid={String(Boolean(forgotError))}
-              />
-              <span className="field-error" aria-live="polite">{forgotError}</span>
-            </label>
+            {forgotStep === 'email' && (
+              <label>
+                <span>メールアドレス</span>
+                <input
+                  type="email"
+                  className={forgotError ? 'input-error' : ''}
+                  placeholder="example@email.com"
+                  autoComplete="email"
+                  value={forgotEmail}
+                  onChange={(event) => {
+                    setForgotEmail(event.target.value);
+                    setForgotError('');
+                    setForgotStatus('');
+                  }}
+                  aria-invalid={String(Boolean(forgotError))}
+                />
+              </label>
+            )}
+
+            {forgotStep === 'code' && (
+              <label>
+                <span>確認コード</span>
+                <input
+                  className={forgotError ? 'input-error' : ''}
+                  inputMode="numeric"
+                  maxLength="6"
+                  placeholder="123456"
+                  value={forgotCode}
+                  onChange={(event) => {
+                    setForgotCode(event.target.value);
+                    setForgotError('');
+                  }}
+                />
+              </label>
+            )}
+
+            {forgotStep === 'password' && (
+              <>
+                <PasswordField
+                  label="新しいパスワード"
+                  placeholder="新しいパスワード"
+                  value={newPassword}
+                  onChange={(event) => {
+                    setNewPassword(event.target.value);
+                    setForgotError('');
+                  }}
+                />
+                <PasswordField
+                  label="新しいパスワード確認"
+                  placeholder="もう一度入力"
+                  value={confirmPassword}
+                  onChange={(event) => {
+                    setConfirmPassword(event.target.value);
+                    setForgotError('');
+                  }}
+                />
+              </>
+            )}
+            <span className="field-error" aria-live="polite">{forgotError}</span>
             <div className={`form-status ${forgotStatus ? 'show' : ''}`} role="status" aria-live="polite">
               {forgotStatus}
             </div>
-            <button className="submit-button" type="submit">送信する</button>
+            <button className="submit-button" type="submit">
+              {forgotStep === 'email' && 'コードを送信する'}
+              {forgotStep === 'code' && 'コードを確認する'}
+              {forgotStep === 'password' && 'パスワードを更新する'}
+            </button>
           </form>
         </Modal>
       </main>

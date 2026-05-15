@@ -1,77 +1,250 @@
+import { Link, NavLink, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
 
+const driverMenu = [
+  { id: 'basic', icon: '👤', label: 'プロフィール設定', to: '/driver-info/basic' },
+  { id: 'vehicle', icon: '🚗', label: '車両・免許情報', to: '/driver-info/vehicle' },
+  { id: 'history', icon: '📈', label: '稼働履歴', to: '/driver-info/history' },
+  { id: 'payout', icon: '💰', label: 'お支払い・振込', to: '/driver-info/payout' },
+  { id: 'logout', icon: '🚪', label: 'ログアウト', to: '/driver-info/logout' },
+];
+
 export default function DriverInfoPage() {
-  return (
-    <PageShell>
-      <main className="app-screen">
-        <Topbar />
-        <section className="app-shell driver-layout">
-          <aside className="driver-sidebar">
-            <section className="panel">
-              <div className="driver-avatar-large">
-                <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80" alt="" />
-              </div>
-              <h2 className="panel-title">山田 太郎</h2>
-              <span className="driver-badge">公式ドライバー</span>
-            </section>
-            <button className="driver-side-card" type="button">基本情報</button>
-            <button className="driver-side-card" type="button">車両・免許情報</button>
-            <button className="driver-side-card" type="button">稼働履歴</button>
-            <button className="driver-side-card" type="button">支払い・銀行振込</button>
-          </aside>
+  const { section } = useParams();
+  const activeSection = driverMenu.some((item) => item.id === section) ? section : 'basic';
+  const [online, setOnline] = useState(true);
+  const [modal, setModal] = useState(null);
 
-          <div>
-            <div className="profile-header">
+  const modalTitle = {
+    account: 'アカウント情報を編集',
+    vehicle: '車両情報を追加',
+    password: 'パスワード変更',
+    saved: '保存しました',
+  }[modal] || '詳細設定';
+
+  function renderTab() {
+    if (activeSection === 'vehicle') {
+      return (
+        <div className="profile-grid">
+          <section className="panel zip-profile-panel">
+            <h2 className="panel-title">登録車両情報</h2>
+            <div className="driver-info-card">
+              <span>🚗</span>
               <div>
-                <h1>ドライバープロフィール</h1>
-                <p>基本情報、車両、稼働履歴、振込先を管理します。</p>
+                <strong>Toyota Vios <small>(白)</small></strong>
+                <p>ナンバープレート: 30A-123.45 / 座席数: 4</p>
               </div>
-              <button className="submit-button" type="button">保存</button>
+              <em>認証済み</em>
             </div>
-
-            <div className="profile-grid">
-              <section className="panel">
-                <h2 className="panel-title">基本情報</h2>
-                <div className="form-grid">
-                  <label><span>氏名</span><input defaultValue="山田 太郎" /></label>
-                  <label><span>国籍</span><input defaultValue="Japan" /></label>
-                  <label><span>電話番号</span><input defaultValue="+84 123 456 789" /></label>
-                  <label><span>メール</span><input defaultValue="yamada.driver@example.com" /></label>
-                  <label><span>日本語レベル</span><select defaultValue="N3"><option>N5</option><option>N4</option><option>N3</option><option>N2</option></select></label>
-                  <label><span>生年月日</span><input type="date" /></label>
-                </div>
-              </section>
-
-              <aside>
-                <section className="panel">
-                  <h2 className="panel-title">登録車両情報</h2>
-                  <div className="setting-list">
-                    <article className="account-card"><strong>Toyota Crown</strong><span>30A-123.45 / White</span></article>
-                    <article className="account-card"><strong>座席</strong><span>4人乗り</span></article>
-                  </div>
-                </section>
-                <section className="panel stack">
-                  <h2 className="panel-title">本人確認・書類状況</h2>
-                  <div className="setting-list">
-                    <article className="account-card"><strong>運転免許証</strong><span>確認済み</span></article>
-                    <article className="account-card"><strong>車検証</strong><span>確認済み</span></article>
-                  </div>
-                </section>
-              </aside>
+            <div className="vehicle-actions">
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal('vehicle')}>車両を追加</button>
+              <button className="secondary-button profile-save-button" type="button" onClick={() => setModal('vehicle')}>編集</button>
             </div>
+          </section>
 
-            <section className="panel stack">
-              <h2 className="panel-title">稼働履歴</h2>
-              <div className="trip-summary">
-                <article><span>本日の乗車</span><strong>8件</strong></article>
-                <article><span>評価</span><strong>4.9</strong></article>
-                <article><span>売上</span><strong>¥12,800</strong></article>
+          <aside className="panel zip-profile-panel">
+            <h2 className="panel-title">本人確認・書類状況</h2>
+            <div className="license-preview-card">
+              <span className="license-preview-title">運転免許証</span>
+              <div className="license-preview-frame">
+                <span>LICENSE IMAGE</span>
               </div>
-            </section>
+            </div>
+            <div className="doc-list">
+              <button type="button" onClick={() => setModal('license')}>運転免許証 <strong>承認済み</strong></button>
+              <button type="button" onClick={() => setModal('inspection')}>車検証 <strong>承認済み</strong></button>
+              <button className="warning" type="button" onClick={() => setModal('insurance')}>任意保険証 <strong>更新が必要</strong></button>
+            </div>
+          </aside>
+        </div>
+      );
+    }
+
+    if (activeSection === 'history') {
+      return (
+        <section className="panel zip-profile-panel">
+          <h2 className="panel-title">稼働履歴</h2>
+          <div className="trip-summary">
+            <article><span>本日の乗車</span><strong>8件</strong></article>
+            <article><span>評価</span><strong>4.9</strong></article>
+            <article><span>売上</span><strong>¥12,800</strong></article>
+          </div>
+          <div className="modal-list history-list">
+            <span>18:20 Hoan Kiem Lake → Lotte Hotel / ¥680</span>
+            <span>16:05 Noi Bai Airport → Ba Dinh / ¥2,400</span>
+            <span>13:40 Old Quarter → Tay Ho / ¥1,100</span>
           </div>
         </section>
+      );
+    }
+
+    if (activeSection === 'payout') {
+      return (
+        <section className="panel zip-profile-panel narrow-panel">
+          <h2 className="panel-title">お支払い・振込</h2>
+          <div className="setting-list">
+            <article className="account-card"><strong>今週の振込予定</strong><span>¥48,500</span></article>
+            <button className="account-card" type="button" onClick={() => setModal('bank')}><strong>振込先銀行</strong><span>Vietcombank **** 0291</span></button>
+            <button className="submit-button profile-save-button" type="button" onClick={() => setModal('payout')}>明細を見る</button>
+          </div>
+        </section>
+      );
+    }
+
+    if (activeSection === 'logout') {
+      return (
+        <section className="panel zip-profile-panel narrow-panel">
+          <h2 className="panel-title">ログアウト</h2>
+          <p className="muted-copy">ドライバーアカウントからログアウトします。</p>
+          <button className="submit-button profile-save-button" type="button" onClick={() => setModal('logout')}>ログアウト</button>
+        </section>
+      );
+    }
+
+    return (
+      <div className="driver-reference-grid">
+        <div>
+          <label className="status-toggle">
+            <span>
+              <strong>{online ? '現在オンライン' : '現在オフライン'}</strong>
+              <small>{online ? '配車リクエストを受け取れる状態です' : '配車リクエストを停止しています'}</small>
+            </span>
+            <span className="switch"><input type="checkbox" checked={online} onChange={(event) => setOnline(event.target.checked)} /><span></span></span>
+          </label>
+
+          <section className="panel zip-profile-panel">
+            <h2 className="panel-title">基本情報</h2>
+            <div className="form-grid">
+              <label><span>氏名</span><input defaultValue="山田 太郎 (Taro Yamada)" /></label>
+              <label><span>電話番号</span><input defaultValue="+84 123 456 789" /></label>
+              <label><span>対応言語</span><input defaultValue="日本語, 英語" /></label>
+              <label><span>メールアドレス</span><input defaultValue="yamada.driver@example.com" /></label>
+            </div>
+          </section>
+
+          <section className="panel zip-profile-panel stack">
+            <h2 className="panel-title">登録車両情報</h2>
+            <div className="driver-info-card">
+              <span>🚗</span>
+              <div>
+                <strong>Toyota Vios <small>(白)</small></strong>
+                <p>ナンバープレート: 30A-123.45 • 座席数: 4</p>
+              </div>
+              <em>✓ 認証済み</em>
+            </div>
+          </section>
+        </div>
+
+        <div>
+          <section className="panel zip-profile-panel">
+            <h2 className="panel-title">本人確認・書類状況</h2>
+            <div className="doc-list">
+              <button type="button" onClick={() => setModal('license')}>🪪 運転免許証 <strong>承認済み</strong></button>
+              <button type="button" onClick={() => setModal('inspection')}>📘 車検証 <strong>承認済み</strong></button>
+              <button className="warning" type="button" onClick={() => setModal('insurance')}>📋 任意保険証 <strong>更新が必要</strong></button>
+            </div>
+            <p className="muted-copy">有効期限: 2027年03月10日まで</p>
+          </section>
+
+          <section className="panel zip-profile-panel stack">
+            <h2 className="panel-title">アカウント安全</h2>
+            <div className="security-list">
+              <article className="security-item">
+                <strong>パスワード</strong>
+                <button className="link-btn" type="button" onClick={() => setModal('password')}>変更する</button>
+              </article>
+              <article className="security-item">
+                <strong>二段階認証</strong>
+                <span>有効化されています</span>
+                <button className="link-btn" type="button" onClick={() => setModal('twoFactor')}>確認する</button>
+              </article>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <PageShell>
+      <main className="app-screen zip-profile-screen">
+        <div className="profile-window">
+          <Topbar brandTo="/driver-home" actions={<><Link to="/driver-home">売上管理</Link><Link to="/messages/customer">通知</Link><img className="topbar-avatar driver-avatar-top" src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
+          <section className="profile-page-shell zip-profile-shell">
+            <aside className="profile-sidebar">
+              <section className="profile-card zip-profile-card driver-profile-card">
+                <div className="profile-avatar">山田</div>
+                <strong>山田 太郎</strong>
+                <span>⭐ 4.9 (256件の評価)</span>
+                <em>公式ドライバー</em>
+              </section>
+              <nav className="side-menu" aria-label="ドライバーメニュー">
+                {driverMenu.map((tab) => (
+                  <NavLink className={({ isActive }) => `side-item ${isActive || activeSection === tab.id ? 'active' : ''}`} to={tab.to} key={tab.id}>
+                    <span>{tab.icon}</span>
+                    <span>{tab.label}</span>
+                  </NavLink>
+                ))}
+              </nav>
+            </aside>
+
+            <section className="profile-content">
+              <div className="profile-header zip-profile-header">
+                <div>
+                  <h1>ドライバープロフィール</h1>
+                  <p>あなたの公開情報と車両設定を管理します。</p>
+                </div>
+                <button className="submit-button profile-save-button" type="button" onClick={() => setModal('saved')}>情報を更新する</button>
+              </div>
+              {renderTab()}
+            </section>
+          </section>
+        </div>
+
+        <Modal open={Boolean(modal)} title={modalTitle} onClose={() => setModal(null)}>
+          {modal === 'account' && (
+            <div className="modal-form zip-modal-form">
+              <label><span>ログインID</span><input defaultValue="driver_yamada" /></label>
+              <label><span>メールアドレス</span><input type="email" defaultValue="yamada.driver@example.com" /></label>
+              <label><span>電話番号</span><input defaultValue="+84 123 456 789" /></label>
+              <label><span>表示名</span><input defaultValue="山田 太郎" /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>保存</button>
+            </div>
+          )}
+          {modal === 'vehicle' && (
+            <div className="modal-form zip-modal-form">
+              <div className="form-grid">
+                <label><span>メーカー</span><input defaultValue="Toyota" /></label>
+                <label><span>車種</span><input defaultValue="Vios" /></label>
+                <label><span>色</span><input defaultValue="White" /></label>
+                <label><span>座席数</span><select defaultValue="4"><option value="4">4</option><option value="7">7</option></select></label>
+                <label><span>ナンバープレート</span><input defaultValue="30A-123.45" /></label>
+                <label><span>車検有効期限</span><input type="date" defaultValue="2027-05-14" /></label>
+              </div>
+              <label><span>車両メモ</span><textarea defaultValue="禁煙車、空港送迎対応" /></label>
+              <div className="license-preview-card">
+                <span className="license-preview-title">運転免許証画像</span>
+                <div className="license-preview-frame large">
+                  <span>画像プレビュー</span>
+                </div>
+                <input type="file" accept="image/*" />
+              </div>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>保存</button>
+            </div>
+          )}
+          {modal === 'password' && (
+            <div className="modal-form zip-modal-form">
+              <label><span>現在のパスワード</span><input type="password" /></label>
+              <label><span>新しいパスワード</span><input type="password" /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>保存</button>
+            </div>
+          )}
+          {modal && !['account', 'vehicle', 'password'].includes(modal) && <p className="modal-copy">選択した項目の詳細確認・編集用ポップアップです。</p>}
+        </Modal>
       </main>
     </PageShell>
   );

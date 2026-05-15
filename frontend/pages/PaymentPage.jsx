@@ -1,52 +1,78 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import PageShell from '../components/PageShell.jsx';
-import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
 
 export default function PaymentPage() {
-  return (
-    <PageShell>
-      <main className="app-screen">
-        <Topbar />
-        <section className="app-shell">
-          <div className="profile-header">
-            <div>
-              <h1>支払い</h1>
-              <p>乗車が完了しました。料金を確認して支払いへ進みます。</p>
-            </div>
-          </div>
+  const navigate = useNavigate();
+  const [method, setMethod] = useState('クレジットカード (**** 4821)');
+  const [methodOpen, setMethodOpen] = useState(false);
+  const methods = ['クレジットカード (**** 4821)', '現金', 'PayPay', 'Apple Pay'];
 
-          <div className="two-column-layout">
-            <section className="ticket-card">
-              <h2 className="panel-title">今回の乗車</h2>
-              <div className="route-line-card">
-                <div className="route-step"><span className="step-dot">A</span><div><strong>ホアンキエム周辺</strong><span className="muted-small">14:05 出発</span></div></div>
-                <div className="route-step"><span className="step-dot dark">B</span><div><strong>ノイバイ国際空港</strong><span className="muted-small">14:43 到着</span></div></div>
+  function confirmPayment() {
+    setMethodOpen(false);
+    navigate('/driver-review');
+  }
+
+  return (
+    <PageShell withFooter={false}>
+      <main className="payment-complete-screen">
+        <section className="receipt-card">
+          <header className="receipt-header">
+            <span>Arrived Safely</span>
+            <h1>目的地に到着</h1>
+            <p>乗車記録と料金の確認</p>
+          </header>
+
+          <div className="receipt-body">
+            <section className="receipt-route">
+              <div>
+                <span className="route-dot green"></span>
+                <div><strong>ホアンキエム湖</strong><small>18:30 出発</small></div>
               </div>
-              <div className="stat-grid stack">
-                <div className="stat-box"><span>距離</span><strong>28.4 km</strong></div>
-                <div className="stat-box"><span>時間</span><strong>38分</strong></div>
-                <div className="stat-box"><span>支払い</span><strong>現金</strong></div>
+              <div>
+                <span className="route-dot dark"></span>
+                <div><strong>ロッテホテル ハノイ</strong><small>18:42 到着</small></div>
               </div>
             </section>
 
-            <aside className="panel">
-              <h2 className="panel-title">料金明細</h2>
-              <div className="fare-table">
-                <div className="fare-row"><span>基本料金</span><strong>¥1,200</strong></div>
-                <div className="fare-row"><span>距離料金</span><strong>¥3,600</strong></div>
-                <div className="fare-row"><span>時間料金</span><strong>¥500</strong></div>
-                <div className="fare-row total"><span>合計</span><strong>¥5,300</strong></div>
-              </div>
-              <Link className="submit-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/invoice">
-                領収書を発行
-              </Link>
-              <Link className="secondary-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/driver-review">
-                ドライバーを評価
-              </Link>
-            </aside>
+            <section className="receipt-billing">
+              <div><span>運賃 (4.8 km)</span><strong>¥620</strong></div>
+              <div><span>予約・サービス料</span><strong>¥60</strong></div>
+              <div className="receipt-total"><span>お支払い合計</span><strong>¥680</strong></div>
+            </section>
+
+            <section className="payment-preview">
+              <div><span>💳</span><strong>{method}</strong></div>
+              <button type="button" onClick={() => setMethodOpen(true)}>変更 〉</button>
+            </section>
+
+            <div className="receipt-actions">
+              <button className="pay-confirm" type="button" onClick={confirmPayment}>お支払いを確定する</button>
+              <Link className="invoice-link" to="/invoice"><span>📄</span> 領収書を発行する</Link>
+              <Link className="support-link" to="/messages/driver">お問い合わせはこちら</Link>
+            </div>
           </div>
         </section>
+
+        <div className={`payment-method-backdrop ${methodOpen ? 'open' : ''}`} onClick={() => setMethodOpen(false)}>
+          <section className="payment-method-modal" role="dialog" aria-modal="true" aria-labelledby="payment-method-title" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <h2 id="payment-method-title">支払い方法を選択</h2>
+              <button type="button" aria-label="閉じる" onClick={() => setMethodOpen(false)}>×</button>
+            </header>
+            <div className="payment-method-list">
+              {methods.map((item) => (
+                <button className={method === item ? 'selected' : ''} type="button" key={item} onClick={() => setMethod(item)}>
+                  <span>{item === '現金' ? '💵' : '💳'}</span>
+                  <strong>{item}</strong>
+                  <em>{method === item ? '選択中' : '選択'}</em>
+                </button>
+              ))}
+            </div>
+            <button className="payment-method-confirm" type="button" onClick={() => setMethodOpen(false)}>この方法にする</button>
+          </section>
+        </div>
       </main>
     </PageShell>
   );

@@ -20,47 +20,15 @@ export default function AdvanceBookingPage() {
             <section className="panel">
               <h2 className="panel-title">予約内容</h2>
               <div className="form-grid">
-                <label>
-                  <span>予約日</span>
-                  <input type="date" defaultValue="2026-05-15" />
-                </label>
-                <label>
-                  <span>出発時刻</span>
-                  <input type="time" defaultValue="09:30" />
-                </label>
-                <label className="field full">
-                  <span>乗車地</span>
-                  <input defaultValue="ハノイ・ホアンキエム周辺" />
-                </label>
-                <label className="field full">
-                  <span>目的地</span>
-                  <input defaultValue="ノイバイ国際空港" />
-                </label>
-                <label>
-                  <span>人数</span>
-                  <select defaultValue="2">
-                    <option>1</option>
-                    <option>2</option>
-                    <option>3</option>
-                    <option>4</option>
-                  </select>
-                </label>
-                <label>
-                  <span>車種</span>
-                  <select defaultValue="standard">
-                    <option value="standard">スタンダード</option>
-                    <option value="large">大型車</option>
-                    <option value="premium">プレミアム</option>
-                  </select>
-                </label>
-                <label className="field full">
-                  <span>メモ</span>
-                  <textarea placeholder="荷物、待ち合わせ場所など" />
-                </label>
+                <label><span>予約日</span><input type="date" defaultValue="2026-05-15" /></label>
+                <label><span>出発時刻</span><input type="time" defaultValue="09:30" /></label>
+                <label className="field full"><span>乗車地</span><input defaultValue="ハノイ・ホアンキエム周辺" /></label>
+                <label className="field full"><span>目的地</span><input defaultValue="ノイバイ国際空港" /></label>
+                <label><span>人数</span><select defaultValue="2"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+                <label><span>車種</span><select defaultValue="standard"><option value="standard">スタンダード</option><option value="large">大型車</option><option value="premium">プレミアム</option></select></label>
+                <label className="field full"><span>メモ</span><textarea placeholder="荷物、待ち合わせ場所など" /></label>
               </div>
-              <Link className="submit-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/reservation-summary">
-                予約内容を確認
-              </Link>
+              <Link className="submit-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/reservation-summary">予約内容を確認</Link>
             </section>
 
             <aside className="panel">

@@ -1,52 +1,69 @@
+import { Link, useParams } from 'react-router-dom';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
 
 const conversations = [
-  { name: '田中 ドライバー', text: 'あと3分で到着します。', active: true },
-  { name: 'JP TAXI サポート', text: 'ご予約内容を確認しました。' },
-  { name: '山本 ドライバー', text: '前回のご利用ありがとうございました。' },
+  { initial: '田', name: '田中 ドライバー', time: '14:02', text: 'ありがとうございます。黒色のトヨタ・ヴィオスです。', active: true },
+  { initial: 'サ', name: 'サポートセンター', time: '昨日', text: 'お問い合わせの件につきまして、担当者が確認中です。' },
 ];
 
 export default function MessagesPage() {
+  const { audience } = useParams();
+  const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || audience === 'customer';
+  const homePath = isDriver ? '/driver-home' : '/home';
+  const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
+  const activeChat = isDriver
+    ? { initial: '佐', name: '佐藤 お客様', status: '乗車地点で待機中' }
+    : { initial: '田', name: '田中 ドライバー', status: '走行中 (あと3分で到着)' };
+
   return (
     <PageShell>
-      <main className="app-screen">
-        <Topbar />
-        <section className="app-shell">
-          <div className="profile-header">
-            <div>
-              <h1>メッセージ</h1>
-              <p>ドライバーやサポートとの連絡を確認できます。</p>
-            </div>
-          </div>
+      <main className="messages-window">
+        <Topbar brandTo={homePath} actions={<><Link to={homePath}>ホーム</Link><Link to="/messages" className="active-header-link">メッセージ</Link><Link to={accountPath}>アカウント</Link></>} />
 
-          <div className="messages-layout">
-            <aside className="message-list">
+        <section className="zip-chat-container">
+          <aside className="zip-chat-sidebar">
+            <h1>メッセージ</h1>
+            <div className="zip-chat-list">
               {conversations.map((item) => (
-                <button className={`message-item ${item.active ? 'active' : ''}`} type="button" key={item.name}>
-                  <strong>{item.name}</strong>
-                  <span>{item.text}</span>
+                <button className={`zip-chat-item ${item.active ? 'active' : ''}`} type="button" key={item.name}>
+                  <span className="zip-avatar">{item.initial}</span>
+                  <span className="zip-chat-info">
+                    <span><strong>{item.name}</strong><small>{item.time}</small></span>
+                    <em>{item.text}</em>
+                  </span>
                 </button>
               ))}
-            </aside>
+            </div>
+          </aside>
 
-            <section className="chat-panel">
-              <div className="chat-header">
-                <strong>田中 ドライバー</strong>
-                <p>トヨタ・クラウン / 30A-123.45</p>
+          <section className="zip-main-chat">
+            <header className="zip-chat-header">
+              <div>
+                <span className="zip-avatar small">{activeChat.initial}</span>
+                <span><strong>{activeChat.name}</strong><small>{activeChat.status}</small></span>
               </div>
-              <div className="chat-body">
-                <p className="bubble">ご予約ありがとうございます。現在向かっています。</p>
-                <p className="bubble me">ホアンキエム湖の入口で待っています。</p>
-                <p className="bubble">承知しました。あと3分で到着します。</p>
+              <button type="button" aria-label="電話">📞</button>
+            </header>
+
+            <div className="zip-messages-viewport">
+              <p className="msg received">こんにちは、田中です。現在向かっています。<span>14:00</span></p>
+              <p className="msg sent">承知いたしました。ホテルのロビー入り口で待っています。<span>14:01</span></p>
+              <p className="msg received">ありがとうございます。黒色のトヨタ・ヴィオス、ナンバー「30A-123.45」です。まもなく到着します。<span>14:02</span></p>
+            </div>
+
+            <footer className="zip-input-area">
+              <div className="quick-replies">
+                {['今どこですか？', '着きました！', '少し遅れます', '了解です'].map((reply) => <button type="button" key={reply}>{reply}</button>)}
               </div>
-              <div className="chat-input">
-                <input type="text" placeholder="メッセージを入力" />
-                <button className="submit-button" type="button">送信</button>
+              <div className="zip-input-box">
+                <span>📎</span>
+                <input type="text" placeholder="メッセージを入力..." />
+                <button type="button">➤</button>
               </div>
-            </section>
-          </div>
+            </footer>
+          </section>
         </section>
       </main>
     </PageShell>

@@ -39,7 +39,7 @@ export default function SearchCarPage() {
               <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/home">
                 キャンセル
               </Link>
-              <Link className="submit-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-confirm">
+              <Link className="submit-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-status">
                 ドライバー確認へ
               </Link>
             </div>

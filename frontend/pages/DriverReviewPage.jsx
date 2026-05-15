@@ -1,50 +1,45 @@
 import { Link } from 'react-router-dom';
 import PageShell from '../components/PageShell.jsx';
-import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
+
+const tags = ['丁寧な対応', '安全運転', '車内が清潔', 'ルートが最適', '日本語が堪能'];
 
 export default function DriverReviewPage() {
   return (
-    <PageShell>
-      <main className="app-screen">
-        <Topbar />
-        <section className="app-shell">
-          <div className="profile-header">
-            <div>
-              <h1>ドライバー評価</h1>
-              <p>サービス向上のため、今回の乗車を評価してください。</p>
-            </div>
-          </div>
+    <PageShell withFooter={false}>
+      <main className="review-screen">
+        <section className="rating-window">
+          <header className="review-topbar">
+            <Link to="/home">×</Link>
+            <strong>フィードバック</strong>
+            <Link to="/home">送信</Link>
+          </header>
 
-          <section className="panel" style={{ maxWidth: 680, margin: '0 auto' }}>
-            <div className="driver-row">
-              <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80" alt="driver" />
-              <div>
-                <strong>田中 太郎</strong>
-                <span className="muted-small">JP-248 / トヨタ Prius</span>
+          <div className="review-content">
+            <div className="driver-avatar-ring">
+              <div className="review-driver-avatar">田</div>
+            </div>
+            <h1>田中 ドライバー</h1>
+            <p>Toyota Vios • 30A-123.45</p>
+
+            <section className="review-rating">
+              <strong>今回の乗車はいかがでしたか？</strong>
+              <div className="review-stars" aria-label="5 stars">
+                {[1, 2, 3, 4, 5].map((star) => <button type="button" key={star}>★</button>)}
               </div>
-            </div>
+              <span>素晴らしい!</span>
+            </section>
 
-            <div className="rating-stars" aria-label="rating">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button type="button" key={star}>★</button>
-              ))}
-            </div>
+            <section className="review-tags">
+              <strong>良かった点（複数選択可）</strong>
+              <div>
+                {tags.map((tag, index) => <button className={index < 2 ? 'selected' : ''} type="button" key={tag}>{tag}</button>)}
+              </div>
+            </section>
 
-            <label>
-              <span>コメント</span>
-              <textarea placeholder="運転、対応、車内の清潔さなど" />
-            </label>
-
-            <div className="card-actions">
-              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/invoice">
-                スキップ
-              </Link>
-              <Link className="submit-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/home">
-                送信する
-              </Link>
-            </div>
-          </section>
+            <textarea className="review-comment" placeholder="ドライバーへのメッセージ（任意）" />
+            <Link className="review-submit" to="/home">評価を送信する</Link>
+          </div>
         </section>
       </main>
     </PageShell>

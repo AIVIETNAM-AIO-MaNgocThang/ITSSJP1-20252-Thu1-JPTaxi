@@ -3,74 +3,71 @@ import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
 
-const destinations = [
-  { icon: '🏨', title: 'ハノイ旧市街ホテル', meta: 'Hoan Kiem - 約12分' },
-  { icon: '✈️', title: 'ノイバイ国際空港', meta: '高速道路利用 - 約38分' },
-  { icon: '🏛️', title: 'ホアンキエム湖', meta: '観光スポット - 約8分' },
-  { icon: '🏢', title: 'VNU 工科大学', meta: 'Cau Giay - 約22分' },
+const historyItems = [
+  { icon: '🕘', name: 'ロッテホテル ハノイ', address: '54 Liễu Giai, Ba Đình, Hà Nội', time: '昨日' },
+  { icon: '🕘', name: 'チャンティエンプラザ', address: '24 Hai Bà Trưng, Hoàn Kiếm, Hà Nội', time: '2日前' },
+  { icon: '🕘', name: '日本レストラン 山田', address: 'Đống Đa, Hà Nội', time: '先週' },
+  { icon: '⭐', name: 'お気に入りの場所', address: '保存した目的地を表示', time: '保存済み' },
 ];
 
 export default function LocationSearchPage() {
   return (
     <PageShell>
-      <main className="app-screen">
-        <Topbar />
-        <section className="app-shell">
-          <div className="profile-header">
-            <div>
-              <h1>目的地を検索</h1>
-              <p>乗車地と目的地を選んで、タクシー予約へ進みます。</p>
-            </div>
-            <Link className="secondary-button" style={{ width: 160 }} to="/home">戻る</Link>
-          </div>
+      <main className="location-window">
+        <Topbar actions={<><Link to="/home">ホーム</Link><Link to="/user-info">アカウント</Link><img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
 
-          <div className="two-column-layout">
-            <section className="panel">
-              <h2 className="panel-title">ルート情報</h2>
-              <div className="form-grid">
-                <label className="field full">
-                  <span>現在地</span>
-                  <input value="ハノイ・ホアンキエム周辺" readOnly />
-                </label>
-                <label className="field full">
-                  <span>目的地</span>
-                  <input placeholder="ホテル、駅、住所を入力" />
-                </label>
+        <section className="zip-location-main">
+          <section className="zip-location-left">
+            <h1>目的地を検索</h1>
+            <p>目的地を入力するか、履歴から選択してください。</p>
+
+            <label className="zip-search-box">
+              <span>🔍</span>
+              <input type="text" placeholder="目的地・住所を入力" />
+            </label>
+
+            <section className="zip-route-card">
+              <div className="zip-route-points">
+                <span className="route-start"></span>
+                <span className="route-line"></span>
+                <span className="route-end"></span>
               </div>
-
-              <h2 className="panel-title stack">おすすめ</h2>
-              <div className="search-list">
-                {destinations.map((item) => (
-                  <Link className="search-result" to="/bill-confirm" key={item.title}>
-                    <span className="icon-box" aria-hidden="true">{item.icon}</span>
-                    <span>
-                      <strong>{item.title}</strong>
-                      <span className="muted-small">{item.meta}</span>
-                    </span>
-                    <strong>選択</strong>
-                  </Link>
-                ))}
+              <div className="zip-route-fields">
+                <div><span>出発地</span><strong>ホアンキエム湖</strong></div>
+                <div><span>目的地</span><strong>目的地を選択してください</strong></div>
               </div>
             </section>
 
-            <aside className="panel">
-              <h2 className="panel-title">予約の流れ</h2>
-              <div className="timeline">
-                <div className="timeline-item">
-                  <span className="timeline-dot">1</span>
-                  <div><strong>目的地検索</strong><span className="muted-small">候補から行き先を選択</span></div>
-                </div>
-                <div className="timeline-item pending">
-                  <span className="timeline-dot">2</span>
-                  <div><strong>料金確認</strong><span className="muted-small">車種と支払い方法を確認</span></div>
-                </div>
-                <div className="timeline-item pending">
-                  <span className="timeline-dot">3</span>
-                  <div><strong>配車</strong><span className="muted-small">近くのドライバーを検索</span></div>
-                </div>
-              </div>
-            </aside>
-          </div>
+            <h2>最近の履歴</h2>
+            <div className="zip-history-list">
+              {historyItems.map((item) => (
+                <Link className="zip-history-item" to="/bill-confirm" key={item.name}>
+                  <span className="zip-history-icon">{item.icon}</span>
+                  <span className="zip-history-text"><strong>{item.name}</strong><small>{item.address}</small></span>
+                  <span className="zip-history-time">{item.time}</span>
+                </Link>
+              ))}
+            </div>
+
+            <Link className="zip-continue-button" to="/bill-confirm">この目的地で続ける</Link>
+          </section>
+
+          <aside className="zip-location-map">
+            <span className="loc-label label1">ホアンキエム湖</span>
+            <span className="loc-label label2">チャンティエンプラザ</span>
+            <span className="loc-label label3">ハノイ大教会</span>
+            <span className="loc-label label4">クアフエ通り</span>
+            <span className="loc-label label5">チャンフンダオ通り</span>
+            <span className="loc-pin-start"></span>
+            <span className="loc-pin-end"></span>
+            <span className="loc-route-path"></span>
+            <div className="zip-map-card">
+              <strong>ルート情報</strong>
+              <div><span>予想所要時間</span><b>12分</b></div>
+              <div><span>距離</span><b>4.8 km</b></div>
+              <div><span>概算料金</span><b>¥680</b></div>
+            </div>
+          </aside>
         </section>
       </main>
     </PageShell>

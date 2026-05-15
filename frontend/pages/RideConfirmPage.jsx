@@ -26,13 +26,11 @@ export default function RideConfirmPage() {
                   <span className="muted-small">認証済みドライバー / 評価 4.9</span>
                 </div>
               </div>
-
               <div className="stat-grid stack">
                 <div className="stat-box"><span>車両番号</span><strong>JP-248</strong></div>
                 <div className="stat-box"><span>車種</span><strong>Prius</strong></div>
                 <div className="stat-box"><span>色</span><strong>白</strong></div>
               </div>
-
               <div className="notice-box stack">乗車前に車両番号とドライバー名が一致していることを確認してください。</div>
             </section>
 
@@ -42,12 +40,8 @@ export default function RideConfirmPage() {
                 <div className="route-step"><span className="step-dot">A</span><div><strong>ホアンキエム周辺</strong><span className="muted-small">乗車地</span></div></div>
                 <div className="route-step"><span className="step-dot dark">B</span><div><strong>ノイバイ国際空港</strong><span className="muted-small">目的地</span></div></div>
               </div>
-              <Link className="submit-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-status">
-                乗車を開始
-              </Link>
-              <Link className="secondary-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/messages">
-                ドライバーに連絡
-              </Link>
+              <Link className="submit-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-status">乗車を開始</Link>
+              <Link className="secondary-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/messages/driver">ドライバーに連絡</Link>
             </aside>
           </div>
         </section>

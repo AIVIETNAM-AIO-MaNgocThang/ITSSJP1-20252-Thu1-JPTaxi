@@ -1,40 +1,56 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import PageShell from '../components/PageShell.jsx';
-import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
 
 export default function InvoicePage() {
+  const location = useLocation();
+  const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || location.pathname.startsWith('/driver');
+  const closePath = isDriver ? '/driver-home' : '/driver-review';
+  const closeLabel = isDriver ? '閉じる' : 'ドライバー評価へ';
+
   return (
-    <PageShell>
-      <main className="app-screen">
-        <Topbar />
-        <section className="app-shell">
-          <div className="profile-header">
-            <div>
-              <h1>電子領収書</h1>
-              <p>乗車明細を確認できます。</p>
+    <PageShell withFooter={false}>
+      <main className="invoice-screen">
+        <section className="zip-invoice-container">
+          <div className="zip-invoice-paper">
+            <header>
+              <div className="invoice-brand">🚕 JP TAXI</div>
+              <div>
+                <h1>電子領収書</h1>
+                <p>NO. JPT-2026-0328</p>
+              </div>
+            </header>
+
+            <div className="invoice-details-grid">
+              <article><span>利用日時</span><strong>2026年3月28日 18:42</strong></article>
+              <article><span>決済方法</span><strong>VISA (**** 4821)</strong></article>
+              <article><span>乗車場所</span><strong>ホアンキエム湖</strong></article>
+              <article><span>降車場所</span><strong>ロッテホテル</strong></article>
             </div>
-            <Link className="secondary-button" style={{ width: 160, display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/payment">
-              戻る
-            </Link>
+
+            <table className="zip-invoice-table">
+              <thead><tr><th>項目</th><th>金額</th></tr></thead>
+              <tbody>
+                <tr><td>タクシー運賃 (4.8 km)</td><td>¥618</td></tr>
+                <tr><td>予約・配車手数料</td><td>¥62</td></tr>
+              </tbody>
+            </table>
+
+            <div className="invoice-summary">
+              <div className="qr-code" aria-hidden="true"><span></span></div>
+              <div>
+                <span>領収金額 (税込)</span>
+                <strong>¥680</strong>
+                <small>（内消費税10%：¥62）</small>
+              </div>
+            </div>
           </div>
 
-          <section className="ticket-card" style={{ maxWidth: 760, margin: '0 auto' }}>
-            <h2 style={{ marginTop: 0 }}>JP TAXI RECEIPT</h2>
-            <span className="muted-small">Receipt No. JP-20260514-0248</span>
-            <div className="invoice-table stack">
-              <div className="invoice-row"><span>乗車日時</span><strong>2026/05/14 14:05</strong></div>
-              <div className="invoice-row"><span>乗車地</span><strong>ホアンキエム周辺</strong></div>
-              <div className="invoice-row"><span>目的地</span><strong>ノイバイ国際空港</strong></div>
-              <div className="invoice-row"><span>ドライバー</span><strong>田中 太郎</strong></div>
-              <div className="invoice-row"><span>車両番号</span><strong>JP-248</strong></div>
-              <div className="invoice-row"><span>支払い方法</span><strong>現金</strong></div>
-              <div className="invoice-row total"><span>合計金額</span><strong>¥5,300</strong></div>
-            </div>
-            <Link className="submit-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/home">
-              ホームへ戻る
-            </Link>
-          </section>
+          <div className="invoice-actions">
+            <button type="button">📄 PDF保存</button>
+            <button type="button">📧 メールで送信</button>
+          </div>
+          <Link className="invoice-close" to={closePath}>{closeLabel}</Link>
         </section>
       </main>
     </PageShell>
