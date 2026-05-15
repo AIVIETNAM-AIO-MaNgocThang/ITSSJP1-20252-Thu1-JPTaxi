@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import AdvanceBookingPage from '../pages/AdvanceBookingPage.jsx';
 import BillConfirmPage from '../pages/BillConfirmPage.jsx';
 import DriverAvailablePage from '../pages/DriverAvailablePage.jsx';
 import DriverDispatchPage from '../pages/DriverDispatchPage.jsx';
@@ -55,8 +54,6 @@ export default function App() {
       <Route path="/timxe.html" element={<Navigate to="/search-car" replace />} />
       <Route path="/location-search" element={<LocationSearchPage />} />
       <Route path="/timkiemvachondiadiem.html" element={<Navigate to="/location-search" replace />} />
-      <Route path="/advance-booking" element={<AdvanceBookingPage />} />
-      <Route path="/dattruoc.html" element={<Navigate to="/advance-booking" replace />} />
       <Route path="/reservation-summary" element={<ReservationSummaryPage />} />
       <Route path="/test1.html" element={<Navigate to="/reservation-summary" replace />} />
       <Route path="/ride-confirm" element={<RideConfirmPage />} />
