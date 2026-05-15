@@ -1,13 +1,40 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Driver } from '../../entities/driver.entity';
+import { Driver, DriverJapaneseLevelEnum, DriverStatusType } from '../../entities/driver.entity';
 import { Vehicle } from '../../entities/vehicle.entity';
 import { DriverLicense } from '../../entities/driver-license.entity';
 import { DriverBankAccount } from '../../entities/driver-bank-account.entity';
 import { Trip, TripStatusType } from '../../entities/trip.entity';
 import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
+import { DriverSearchSort, SearchDriversQueryDto } from './dto/search-drivers.query.dto';
+import {
+  buildNoDriversNotification,
+  DriverSearchNotification,
+} from './driver-search.messages';
+
+const JAPANESE_LEVEL_RANK: Record<DriverJapaneseLevelEnum, number> = {
+  [DriverJapaneseLevelEnum.N5]: 1,
+  [DriverJapaneseLevelEnum.N4]: 2,
+  [DriverJapaneseLevelEnum.N3]: 3,
+  [DriverJapaneseLevelEnum.N2]: 4,
+  [DriverJapaneseLevelEnum.N1]: 5,
+  [DriverJapaneseLevelEnum.Native]: 6,
+};
+
+/** Khoảng cách (km) từ điểm tìm kiếm tới vị trí mới nhất của tài xế (Haversine). */
+const HAVERSINE_KM_SQL = `(
+  6371.0088 * acos(
+    LEAST(1.0::double precision, GREATEST(-1.0::double precision,
+      cos(radians(:searchLat::double precision))
+      * cos(radians(latest.lat::double precision))
+      * cos(radians(latest.lng::double precision) - radians(:searchLng::double precision))
+      + sin(radians(:searchLat::double precision))
+      * sin(radians(latest.lat::double precision))
+    ))
+  )
+)`;
 
 @Injectable()
 export class DriversService {
@@ -124,5 +151,153 @@ export class DriversService {
     }
     await this.banks.save(row);
     return this.getProfile(driverId);
+  }
+
+  private createDriverSearchQuery(
+    q: SearchDriversQueryDto,
+    radiusKm: number,
+    maxAgeMin: number,
+    applyOptionalFilters: boolean,
+  ) {
+    const qb = this.drivers
+      .createQueryBuilder('d')
+      .innerJoin(
+        `(SELECT DISTINCT ON (driver_id) driver_id,
+            latitude::double precision AS lat,
+            longitude::double precision AS lng,
+            recorded_at
+          FROM driver_location_history
+          ORDER BY driver_id, recorded_at DESC)`,
+        'latest',
+        'latest.driver_id = d.driver_id',
+      )
+      .innerJoin('vehicle', 'v', 'v.driver_id = d.driver_id')
+      .leftJoin(
+        `(SELECT t.driver_id, AVG(r.score)::float AS avg_score, COUNT(*)::int AS rating_cnt
+          FROM trip t
+          INNER JOIN rating r ON r.trip_id = t.trip_id
+          WHERE t.status = 'completed'
+          GROUP BY t.driver_id)`,
+        'rt',
+        'rt.driver_id = d.driver_id',
+      )
+      .where('d.status = :approved', { approved: DriverStatusType.approved })
+      .andWhere(
+        `latest.recorded_at >= NOW() - (INTERVAL '1 minute' * CAST(:maxAgeMin AS integer))`,
+        { maxAgeMin },
+      )
+      .andWhere(`${HAVERSINE_KM_SQL} <= :radiusKm`, { radiusKm })
+      .setParameters({ searchLat: q.lat, searchLng: q.lng });
+
+    if (applyOptionalFilters) {
+      if (q.vehicleType != null) {
+        qb.andWhere('v.vehicle_type = :vehicleType', { vehicleType: q.vehicleType });
+      }
+
+      if (q.minJapaneseLevel != null) {
+        qb.andWhere(
+          `(CASE d.driver_japanese_level
+            WHEN 'N5' THEN 1 WHEN 'N4' THEN 2 WHEN 'N3' THEN 3
+            WHEN 'N2' THEN 4 WHEN 'N1' THEN 5 WHEN 'Native' THEN 6
+          END) >= :minJapaneseRank`,
+          { minJapaneseRank: JAPANESE_LEVEL_RANK[q.minJapaneseLevel] },
+        );
+      }
+
+      if (q.minRating != null) {
+        qb.andWhere('rt.avg_score IS NOT NULL AND rt.avg_score >= :minRating', {
+          minRating: q.minRating,
+        });
+      }
+    }
+
+    return qb;
+  }
+
+  /**
+   * Tìm tài xế đã duyệt, có phương tiện và có ít nhất một bản ghi vị trí gần đây,
+   * trong bán kính km quanh (lat, lng), kèm lọc tùy chọn.
+   */
+  async searchDrivers(q: SearchDriversQueryDto) {
+    const radiusKm = q.radiusKm ?? 10;
+    const maxAgeMin = q.maxLocationAgeMinutes ?? 30;
+    const limit = Math.min(q.limit ?? 20, 50);
+    const sort = q.sort ?? DriverSearchSort.distance;
+
+    const qb = this.createDriverSearchQuery(q, radiusKm, maxAgeMin, true);
+
+    qb.select([
+      'd.driver_id AS "driverId"',
+      'd.last_name AS "lastName"',
+      'd.first_name AS "firstName"',
+      'd.avatar_url AS "avatarUrl"',
+      'd.driver_japanese_level AS "japaneseLevel"',
+      'v.vehicle_type AS "vehicleType"',
+      'v.brand AS "vehicleBrand"',
+      'v.color AS "vehicleColor"',
+      'v.license_plate AS "licensePlate"',
+      'latest.lat AS "latitude"',
+      'latest.lng AS "longitude"',
+      'latest.recorded_at AS "locationRecordedAt"',
+      `${HAVERSINE_KM_SQL} AS "distanceKm"`,
+      'rt.avg_score AS "averageRating"',
+      'rt.rating_cnt AS "ratingCount"',
+    ]);
+
+    if (sort === DriverSearchSort.rating) {
+      qb.orderBy('rt.avg_score', 'DESC', 'NULLS LAST').addOrderBy(HAVERSINE_KM_SQL, 'ASC');
+    } else {
+      qb.orderBy(HAVERSINE_KM_SQL, 'ASC');
+    }
+
+    qb.limit(limit);
+
+    const rows = await qb.getRawMany<
+      Record<string, string | number | Date | null>
+    >();
+
+    const drivers = rows.map((row) => ({
+      driverId: Number(row.driverId),
+      lastName: String(row.lastName ?? ''),
+      firstName: String(row.firstName ?? ''),
+      avatarUrl: row.avatarUrl != null ? String(row.avatarUrl) : null,
+      japaneseLevel: String(row.japaneseLevel ?? ''),
+      vehicle: {
+        vehicleType: String(row.vehicleType ?? ''),
+        brand: String(row.vehicleBrand ?? ''),
+        color: String(row.vehicleColor ?? ''),
+        licensePlate: String(row.licensePlate ?? ''),
+      },
+      location: {
+        latitude: Number(row.latitude),
+        longitude: Number(row.longitude),
+        recordedAt: row.locationRecordedAt,
+      },
+      distanceKm: row.distanceKm != null ? Math.round(Number(row.distanceKm) * 1000) / 1000 : null,
+      averageRating:
+        row.averageRating != null ? Math.round(Number(row.averageRating) * 100) / 100 : null,
+      ratingCount: row.ratingCount != null ? Number(row.ratingCount) : 0,
+    }));
+
+    const count = drivers.length;
+    const hasResults = count > 0;
+
+    let notification: DriverSearchNotification | null = null;
+    if (!hasResults) {
+      const driversInArea = await this.createDriverSearchQuery(
+        q,
+        radiusKm,
+        maxAgeMin,
+        false,
+      ).getCount();
+      notification = buildNoDriversNotification(q, driversInArea);
+    }
+
+    return {
+      drivers,
+      count,
+      hasResults,
+      notification,
+    };
   }
 }

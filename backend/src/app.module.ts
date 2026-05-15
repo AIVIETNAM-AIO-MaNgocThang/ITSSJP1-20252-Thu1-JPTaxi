@@ -11,6 +11,8 @@ import { DriverLicense } from './entities/driver-license.entity';
 import { Trip } from './entities/trip.entity';
 import { RideRequest } from './entities/ride-request.entity';
 import { LoginHistory } from './entities/login-history.entity';
+import { DriverLocationHistory } from './entities/driver-location-history.entity';
+import { Rating } from './entities/rating.entity';
 import { AuthModule } from './modules/auth/auth.module';
 import { RideModule } from './modules/ride/ride.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -47,6 +49,8 @@ import { UploadsModule } from './modules/uploads/uploads.module';
           Trip,
           RideRequest,
           LoginHistory,
+          DriverLocationHistory,
+          Rating,
         ],
         synchronize: false,
         logging: false,
