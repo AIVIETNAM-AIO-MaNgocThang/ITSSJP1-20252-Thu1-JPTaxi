@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/booking.css';
@@ -180,14 +181,8 @@ export default function BillConfirmPage() {
             </div>
           </section>
 
-          <section className="map-panel" aria-label="ルートマップ">
-            <div className="map-label pickup-label">ホアンキエム湖</div>
-            <div className="map-label destination-label">ロッテホテル</div>
-            <svg className="route-svg" viewBox="0 0 420 760" preserveAspectRatio="none" aria-hidden="true">
-              <path d="M142 230 C260 342 292 452 264 612" />
-            </svg>
-            <span className="map-pin pickup-pin"></span>
-            <span className="map-pin destination-pin"></span>
+          <section className="map-panel booking-route-map" aria-label="ルートマップ">
+            <InteractiveRouteMap />
           </section>
         </section>
 
