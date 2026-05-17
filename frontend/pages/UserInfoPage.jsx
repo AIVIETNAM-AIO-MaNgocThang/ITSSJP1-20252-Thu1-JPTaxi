@@ -103,8 +103,8 @@ export default function UserInfoPage() {
             <span>表示言語</span>
             <select defaultValue="ja">
               <option value="ja">日本語</option>
-              <option value="vi">Tiếng Việt</option>
-              <option value="en">English</option>
+              <option value="vi">ベトナム語</option>
+              <option value="en">英語</option>
             </select>
           </label>
         </section>
@@ -132,7 +132,7 @@ export default function UserInfoPage() {
               <label className="field full"><span>メールアドレス</span><input defaultValue="yamada@example.com" /></label>
               <label><span>性別</span><select defaultValue="male"><option value="male">男性</option><option value="female">女性</option></select></label>
               <label><span>電話番号</span><input defaultValue="+84 123 456 789" /></label>
-              <label className="field full"><span>住所</span><input defaultValue="Ba Dinh, Ha Noi" /></label>
+              <label className="field full"><span>住所</span><input defaultValue="ハノイ市バーディン区" /></label>
             </div>
           </section>
 

@@ -14,11 +14,11 @@ export default function SearchCarPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [searchStatus, setSearchStatus] = useState('Đang gửi yêu cầu đặt xe...');
+  const [searchStatus, setSearchStatus] = useState('配車リクエストを送信しています...');
   const [isCancelling, setIsCancelling] = useState(false);
   const cancelledMessage =
     location.state?.cancelledMessage ||
-    (searchParams.get('tripCancelled') === '1' ? 'Chuyến xe đã bị tài xế hủy.' : '');
+    (searchParams.get('tripCancelled') === '1' ? 'ドライバーにより乗車がキャンセルされました。' : '');
 
   useEffect(() => {
     let isMounted = true;
@@ -29,13 +29,13 @@ export default function SearchCarPage() {
         if (isMounted) {
           setSearchStatus(
             cancelledMessage
-              ? 'Chuyến trước đã hủy. Đang tiếp tục tìm tài xế mới...'
-              : 'Đang chờ tài xế nhận chuyến...',
+              ? '前回の乗車はキャンセルされました。新しいドライバーを探しています...'
+              : 'ドライバーの承認を待っています...',
           );
         }
       } catch {
         if (isMounted) {
-          setSearchStatus('Đang thử kết nối lại database để gửi yêu cầu đặt xe...');
+          setSearchStatus('配車リクエスト送信のため、データベースへ再接続しています...');
         }
       }
     }
@@ -58,12 +58,12 @@ export default function SearchCarPage() {
 
         setSearchStatus(
           cancelledMessage
-            ? 'Chuyến trước đã hủy. Đang tiếp tục tìm tài xế mới...'
-            : 'Đang chờ tài xế nhận chuyến...',
+            ? '前回の乗車はキャンセルされました。新しいドライバーを探しています...'
+            : 'ドライバーの承認を待っています...',
         );
       } catch {
         if (isMounted) {
-          setSearchStatus('Đang thử kết nối lại database để kiểm tra tài xế...');
+          setSearchStatus('ドライバー確認のため、データベースへ再接続しています...');
         }
       }
     }
@@ -90,13 +90,13 @@ export default function SearchCarPage() {
     <PageShell>
       <main className="search-screen">
         <Topbar>
-          <div className="location-chip" aria-label="Vị trí hiện tại">
+          <div className="location-chip" aria-label="現在地">
             <span className="location-dot"></span>
-            <span>Hà Nội - khu vực Hoàn Kiếm</span>
+            <span>ハノイ・ホアンキエム周辺</span>
           </div>
         </Topbar>
 
-        <section className="map-stage" aria-label="Bản đồ đặt xe">
+        <section className="map-stage" aria-label="配車マップ">
           <div className="taxi-live taxi-one" aria-hidden="true">🚖</div>
           <div className="taxi-live taxi-two" aria-hidden="true">🚖</div>
           <div className="taxi-live taxi-three" aria-hidden="true">🚖</div>
@@ -112,7 +112,7 @@ export default function SearchCarPage() {
             <div className="status-info">
               <div className="spinner" aria-hidden="true"></div>
               <div className="text-group">
-                <h1 id="search-title">Đang tìm tài xế</h1>
+                <h1 id="search-title">ドライバーを検索中</h1>
                 <p>{searchStatus}</p>
                 {cancelledMessage && (
                   <div className="cancelled-alert" role="status">
@@ -129,10 +129,10 @@ export default function SearchCarPage() {
                 onClick={cancelSearch}
                 disabled={isCancelling}
               >
-                {isCancelling ? 'Đang hủy...' : 'Hủy tìm xe'}
+                {isCancelling ? 'キャンセル中...' : '検索をキャンセル'}
               </button>
               <button className="submit-button" type="button" disabled>
-                Chờ tài xế nhận
+                承認待ち
               </button>
             </div>
           </section>

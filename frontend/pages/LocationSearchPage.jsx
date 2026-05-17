@@ -4,9 +4,9 @@ import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
 
 const historyItems = [
-  { icon: '🕘', name: 'ロッテホテル ハノイ', address: '54 Liễu Giai, Ba Đình, Hà Nội', time: '昨日' },
-  { icon: '🕘', name: 'チャンティエンプラザ', address: '24 Hai Bà Trưng, Hoàn Kiếm, Hà Nội', time: '2日前' },
-  { icon: '🕘', name: '日本レストラン 山田', address: 'Đống Đa, Hà Nội', time: '先週' },
+  { icon: '🕘', name: 'ロッテホテル ハノイ', address: 'ハノイ市バーディン区リエウザイ通り54番地', time: '昨日' },
+  { icon: '🕘', name: 'チャンティエンプラザ', address: 'ハノイ市ホアンキエム区ハイバーチュン通り24番地', time: '2日前' },
+  { icon: '🕘', name: '日本レストラン 山田', address: 'ハノイ市ドンダー区', time: '先週' },
   { icon: '⭐', name: 'お気に入りの場所', address: '保存した目的地を表示', time: '保存済み' },
 ];
 

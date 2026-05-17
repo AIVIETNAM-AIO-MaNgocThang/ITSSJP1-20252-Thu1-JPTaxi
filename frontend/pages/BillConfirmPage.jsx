@@ -9,7 +9,6 @@ export default function BillConfirmPage() {
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver';
   const homePath = isDriver ? '/driver-home' : '/home';
   const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
-  const chatPath = isDriver ? '/messages/customer' : '/messages/driver';
   const [bookingMode, setBookingMode] = useState('self');
   const [accountOpen, setAccountOpen] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
@@ -169,11 +168,6 @@ export default function BillConfirmPage() {
               <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to={homePath}>
                 戻る
               </Link>
-              {isDriver && (
-                <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to={chatPath}>
-                  連絡
-                </Link>
-              )}
               <button className="primary-button" type="button" onClick={confirmBooking}>
                 予約を確定する
               </button>
