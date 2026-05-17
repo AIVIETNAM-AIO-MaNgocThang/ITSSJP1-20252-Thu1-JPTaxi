@@ -382,11 +382,15 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 5000;
   display: none;
   place-items: center;
   padding: 24px;
   background: rgba(15, 23, 42, 0.38);
+}
+
+.booking-screen .modal-backdrop {
+  z-index: 5000 !important;
 }
 
 .modal-backdrop.open {
@@ -394,6 +398,8 @@
 }
 
 .proxy-modal {
+  position: relative;
+  z-index: 5001;
   width: min(100%, 680px);
   padding: 22px 26px 26px;
   background: #fff;
@@ -424,7 +430,7 @@
   position: fixed;
   right: 28px;
   bottom: 104px;
-  z-index: 210;
+  z-index: 2010;
   padding: 14px 18px;
   color: #fff;
   font-weight: 800;

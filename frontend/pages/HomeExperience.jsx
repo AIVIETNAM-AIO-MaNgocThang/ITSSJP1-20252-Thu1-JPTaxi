@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
@@ -60,6 +61,18 @@ export default function HomeExperience({ mode = 'user' }) {
         <Topbar brandTo={content.brandTo} actions={content.actions} />
 
         <section className="zip-home-hero">
+          <InteractiveRouteMap
+            className="home-background-map"
+            fitToRoute={false}
+            interactive
+            showControls
+            showCurrentLocation
+            showDetails={false}
+            showDriver={false}
+            showMarkers={false}
+            showRoute={false}
+          />
+
           <div className="zip-home-panel">
             <h1>{content.heading}</h1>
             <p className="zip-home-question">{content.question}</p>
@@ -99,12 +112,6 @@ export default function HomeExperience({ mode = 'user' }) {
             </Link>
           </div>
 
-          <span className="home-map-label label1">Hoan Kiem Lake</span>
-          <span className="home-map-label label2">Trang Tien Plaza</span>
-          <span className="home-map-label label3">St. Joseph Cathedral</span>
-          <span className="home-map-label label4">Cua Hue</span>
-          <span className="home-map-label label5">Tran Hung Dao</span>
-          <span className="home-map-pin"></span>
           <span className="home-car car-main">🚗</span>
           <span className="home-car car-1">🚘</span>
           <span className="home-car car-2">🚘</span>

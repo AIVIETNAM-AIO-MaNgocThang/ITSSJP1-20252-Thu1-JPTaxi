@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
@@ -19,8 +20,7 @@ export default function RideStatusPage() {
         />
 
         <section className="user-tracking-map">
-          <span className="tracking-user-marker">📍</span>
-          <span className="tracking-car-marker">🚕</span>
+          <InteractiveRouteMap className="tracking-route-map" compact />
 
           <section className="tracking-card">
             <div className="tracking-eta-header">
