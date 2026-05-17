@@ -1,0 +1,272 @@
+:root {
+  --green: #008f75;
+  --green-soft: #10b981;
+  --green-dark: #006d5b;
+  --ink: #111827;
+  --muted: #64748b;
+  --line: #e5e7eb;
+  --panel: rgba(255, 255, 255, 0.94);
+  --soft: #f6f8fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: "Noto Sans JP", Arial, Helvetica, sans-serif;
+  background: #f8fafc;
+}
+
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #fff;
+}
+
+.page-shell.has-footer {
+  padding-bottom: 78px;
+}
+
+.page-shell > main {
+  flex: 1;
+}
+
+.plain-shell {
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 78px;
+  padding: 0 34px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 0;
+  color: var(--green);
+  font-size: 28px;
+  font-weight: 900;
+  text-decoration: none;
+  background: transparent;
+}
+
+.brand-icon,
+.form-logo {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  color: #fff;
+  background: var(--green);
+  border-radius: 14px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 38px;
+  color: #374151;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.header-actions a {
+  color: #334155;
+  text-decoration: none;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+}
+
+label span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+  color: #1f2937;
+  background: #fff;
+  border: 1px solid #dbe3ef;
+  border-radius: 11px;
+  outline: none;
+}
+
+input,
+select {
+  height: 48px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+textarea {
+  min-height: 78px;
+  padding: 14px;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(0, 143, 117, 0.16);
+}
+
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 54px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: #475467;
+  font-size: 15px;
+  background: #f1f5f9;
+  border: 0;
+  border-radius: 8px;
+  transform: translateY(-50%);
+}
+
+.password-toggle:hover {
+  color: var(--green);
+  background: #ecfdf5;
+}
+
+.submit-button,
+.secondary-button {
+  width: 100%;
+  height: 50px;
+  font-size: 16px;
+  font-weight: 800;
+  border: 0;
+  border-radius: 12px;
+}
+
+.submit-button {
+  color: #fff;
+  background: var(--green);
+  box-shadow: 0 12px 24px rgba(0, 143, 117, 0.24);
+}
+
+.submit-button:hover {
+  background: var(--green-dark);
+}
+
+.secondary-button {
+  color: #475467;
+  background: #eef2f7;
+}
+
+.field-error {
+  min-height: 16px;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+input.input-error {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.form-status {
+  display: none;
+  padding: 11px 12px;
+  color: #065f46;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+}
+
+.form-status.show {
+  display: block;
+}
+
+.placeholder-page {
+  min-height: 100vh;
+  background: var(--soft);
+}
+
+.placeholder-shell {
+  width: min(100% - 40px, 960px);
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+.placeholder-shell h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.placeholder-shell p {
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    padding: 0 20px;
+  }
+
+  .header-actions {
+    display: none;
+  }
+
+  .page-shell.has-footer {
+    padding-bottom: 64px;
+  }
+}
