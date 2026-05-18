@@ -2037,7 +2037,8 @@
 .driver-dispatch-screen,
 .user-tracking-screen,
 .driver-tracking-screen {
-  min-height: 100vh;
+  height: calc(100vh - 78px);
+  overflow: hidden;
   background: #f1f1f1;
 }
 
@@ -2221,7 +2222,8 @@
 .driver-tracking-map {
   position: relative;
   overflow: hidden;
-  min-height: 720px;
+  height: calc(100vh - 156px);
+  min-height: calc(100vh - 156px);
   background:
     linear-gradient(rgba(255,255,255,0.12), rgba(255,255,255,0.16)),
     url("https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1800&q=80") center / cover;
@@ -2247,6 +2249,7 @@
   right: 35px;
   bottom: 35px;
   left: 35px;
+  z-index: 1000;
   padding: 25px;
   background: rgba(255,255,255,0.98);
   border: 1px solid rgba(255,255,255,0.5);
@@ -2319,6 +2322,7 @@
   position: absolute;
   bottom: 40px;
   left: 40px;
+  z-index: 1000;
   width: min(480px, calc(100% - 80px));
   padding: 26px;
   background: rgba(255,255,255,0.98);
