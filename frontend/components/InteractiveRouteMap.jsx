@@ -6,32 +6,32 @@ import 'leaflet/dist/leaflet.css';
 const routePoints = [
   {
     key: 'pickup',
-    label: 'Hoan Kiem Lake',
-    meta: 'Pickup',
+    label: 'ホアンキエム湖',
+    meta: '出発地',
     time: '18:30',
     position: [21.02878, 105.85204],
     type: 'pickup',
   },
   {
     key: 'turn-1',
-    label: 'Trang Tien Street',
-    meta: 'Go straight 1.1 km',
-    time: '+4 min',
+    label: 'チャンティエン通り',
+    meta: '直進 1.1 km',
+    time: '+4分',
     position: [21.02482, 105.85672],
     type: 'waypoint',
   },
   {
     key: 'turn-2',
-    label: 'Kim Ma Street',
-    meta: 'Turn right, continue 2.7 km',
-    time: '+8 min',
+    label: 'キムマー通り',
+    meta: '右折して 2.7 km 進む',
+    time: '+8分',
     position: [21.03162, 105.82084],
     type: 'waypoint',
   },
   {
     key: 'destination',
-    label: 'Lotte Hotel Hanoi',
-    meta: 'Destination',
+    label: 'ロッテホテル ハノイ',
+    meta: '目的地',
     time: '18:42',
     position: [21.03205, 105.81283],
     type: 'destination',
@@ -117,13 +117,12 @@ function FixedMapView({ centerPosition, zoom }) {
   return null;
 }
 
-function MapInteractionLock({ disabled }) {
+function MapInteractionLock({ disabled, scrollWheelZoom }) {
   const map = useMap();
 
   useEffect(() => {
     const handlers = [
       map.dragging,
-      map.scrollWheelZoom,
       map.doubleClickZoom,
       map.boxZoom,
       map.keyboard,
@@ -138,19 +137,49 @@ function MapInteractionLock({ disabled }) {
         handler.enable();
       }
     });
-  }, [disabled, map]);
+
+    if (map.scrollWheelZoom) {
+      if (disabled || !scrollWheelZoom) {
+        map.scrollWheelZoom.disable();
+      } else {
+        map.scrollWheelZoom.enable();
+      }
+    }
+  }, [disabled, map, scrollWheelZoom]);
 
   return null;
 }
 
-function RouteControls({ positions }) {
+function RouteControls({ currentLocationPosition, fitCurrentLocation, mapZoom, positions }) {
   const map = useMap();
+  const handleFit = () => {
+    if (fitCurrentLocation) {
+      map.setView(currentLocationPosition, mapZoom, { animate: true });
+      return;
+    }
+
+    map.fitBounds(positions, { padding: [44, 44] });
+  };
+
+  useEffect(() => {
+    if (!fitCurrentLocation) return undefined;
+
+    const originalFitBounds = map.fitBounds.bind(map);
+    map.fitBounds = () => {
+      map.setView(currentLocationPosition, mapZoom, { animate: true });
+      return map;
+    };
+
+    return () => {
+      map.fitBounds = originalFitBounds;
+    };
+  }, [currentLocationPosition, fitCurrentLocation, map, mapZoom]);
 
   return (
-    <div className="route-map-controls leaflet-route-controls" aria-label="Map controls">
-      <button type="button" aria-label="Zoom in" onClick={() => map.zoomIn()}>+</button>
-      <button type="button" aria-label="Zoom out" onClick={() => map.zoomOut()}>-</button>
-      <button type="button" aria-label="Reset map" onClick={() => map.fitBounds(positions, { padding: [44, 44] })}>Fit</button>
+    <div className="route-map-controls leaflet-route-controls" aria-label="地図操作">
+      <button type="button" aria-label="拡大" onClick={() => map.zoomIn()}>+</button>
+      <button type="button" aria-label="縮小" onClick={() => map.zoomOut()}>-</button>
+      <button type="button" aria-label="地図を戻す" onClick={() => map.fitBounds(positions, { padding: [44, 44] })}>Fit</button>
     </div>
   );
 }
@@ -170,20 +199,48 @@ export default function InteractiveRouteMap({
   mapCenter = center,
   mapZoom = 14,
   nearbyDrivers = [],
+  currentLocation = null,
+  centerOnCurrentLocation = false,
+  scrollWheelZoom = interactive,
 }) {
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [routeHovered, setRouteHovered] = useState(false);
+  const [browserLocation, setBrowserLocation] = useState(currentPosition);
   const positions = useMemo(() => route.map((point) => point.position), [route]);
+  const currentLocationPosition = currentLocation ?? browserLocation;
+  const fitControlPositions = showCurrentLocation
+    ? [
+        [currentLocationPosition[0] - 0.002, currentLocationPosition[1] - 0.002],
+        [currentLocationPosition[0] + 0.002, currentLocationPosition[1] + 0.002],
+      ]
+    : positions;
+  const resolvedMapCenter = centerOnCurrentLocation ? currentLocationPosition : mapCenter;
   const isRouteHighlighted = routeHovered || hoveredPoint !== null;
 
+  useEffect(() => {
+    if (!showCurrentLocation || currentLocation || !navigator.geolocation) {
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setBrowserLocation([position.coords.latitude, position.coords.longitude]);
+      },
+      () => {
+        setBrowserLocation(currentPosition);
+      },
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
+    );
+  }, [currentLocation, showCurrentLocation]);
+
   return (
-    <div className={`interactive-route-map leaflet-route-map ${isRouteHighlighted ? 'route-highlighted' : ''} ${className}`} aria-label="OpenStreetMap route map">
+    <div className={`interactive-route-map leaflet-route-map ${isRouteHighlighted ? 'route-highlighted' : ''} ${className}`} aria-label="ルートマップ">
       <MapContainer
         center={center}
         className="leaflet-map-canvas"
         zoom={14}
         zoomControl={false}
-        scrollWheelZoom={interactive}
+        scrollWheelZoom={scrollWheelZoom}
         wheelPxPerZoomLevel={80}
         dragging={interactive}
         keyboard={interactive}
@@ -239,12 +296,12 @@ export default function InteractiveRouteMap({
             icon={createDriverIcon(hoveredPoint === 'driver')}
             position={driverPosition}
           >
-            <Tooltip direction="top" offset={[0, -15]} opacity={1}>Driver location</Tooltip>
+            <Tooltip direction="top" offset={[0, -15]} opacity={1}>ドライバー位置</Tooltip>
           </Marker>
         )}
         {nearbyDrivers.map((driver) => {
           const driverKey = driver.driverId ?? driver.id ?? `${driver.position?.[0]}-${driver.position?.[1]}`;
-          const label = driver.label || driver.name || 'Nearby taxi';
+          const label = driver.label || driver.name || '近くのタクシー';
           const distance = typeof driver.distanceKm === 'number' ? `${driver.distanceKm.toFixed(1)} km` : null;
 
           return (
@@ -264,20 +321,27 @@ export default function InteractiveRouteMap({
           );
         })}
         {showCurrentLocation && (
-          <Marker icon={createCurrentLocationIcon()} position={currentPosition}>
-            <Tooltip direction="top" offset={[0, -13]} opacity={1}>Current location</Tooltip>
+          <Marker icon={createCurrentLocationIcon()} position={currentLocationPosition}>
+            <Tooltip direction="top" offset={[0, -13]} opacity={1}>現在位置</Tooltip>
           </Marker>
         )}
-        {fitToRoute ? <RouteBounds positions={positions} /> : <FixedMapView centerPosition={mapCenter} zoom={mapZoom} />}
-        <MapInteractionLock disabled={!interactive} />
-        {showControls && <RouteControls positions={positions} />}
+        {fitToRoute ? <RouteBounds positions={positions} /> : <FixedMapView centerPosition={resolvedMapCenter} zoom={mapZoom} />}
+        <MapInteractionLock disabled={!interactive} scrollWheelZoom={scrollWheelZoom} />
+        {showControls && (
+          <RouteControls
+            currentLocationPosition={currentLocationPosition}
+            fitCurrentLocation={showCurrentLocation}
+            mapZoom={mapZoom}
+            positions={fitControlPositions}
+          />
+        )}
       </MapContainer>
 
       {showDetails && (
         <aside className={`route-detail-panel ${compact ? 'compact' : ''}`}>
           <div className="route-detail-header">
-            <span>Route details</span>
-            <strong>4.8 km - 12 min</strong>
+            <span>ルート詳細</span>
+            <strong>4.8 km - 12分</strong>
           </div>
           <ol className="route-detail-list">
             {route.map((point, index) => (

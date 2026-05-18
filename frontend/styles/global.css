@@ -397,19 +397,19 @@ input.input-error {
 .leaflet-current-location {
   display: grid;
   place-items: center;
-  background: rgba(34,197,94,0.18);
+  background: rgba(139, 0, 0, 0.3);
   border-radius: 50%;
-  box-shadow: 0 0 0 10px rgba(34,197,94,0.12);
+  box-shadow: 0 0 0 15px rgba(139, 0, 0, 0.24), 0 14px 34px rgba(45, 0, 0, 0.52);
 }
 
 .leaflet-current-location span {
   display: block;
-  width: 14px;
-  height: 14px;
-  background: #16a34a;
-  border: 3px solid #fff;
+  width: 23px;
+  height: 23px;
+  background: #8b0000;
+  border: 5px solid #fff;
   border-radius: 50%;
-  box-shadow: 0 8px 18px rgba(15,23,42,0.22);
+  box-shadow: 0 0 0 4px rgba(45, 0, 0, 0.36), 0 10px 24px rgba(15,23,42,0.36);
 }
 
 .leaflet-route-map .leaflet-tooltip {

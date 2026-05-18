@@ -1134,25 +1134,34 @@
   background: #fff;
 }
 
+.home-window {
+  min-height: calc(100vh - 78px);
+}
+
+.location-window {
+  min-height: calc(100vh - 78px);
+}
+
 .zip-home-hero {
   position: relative;
   flex: 1;
-  min-height: calc(100vh - 78px);
+  min-height: calc(100vh - 156px);
   overflow: hidden;
   background: #dbe7df;
 }
 
 .zip-home-hero::after {
   position: absolute;
-  inset: 0;
-  z-index: 1;
+  inset: 0 auto 0 0;
+  z-index: 3;
+  width: min(700px, 54vw);
   content: "";
   pointer-events: none;
-  background: linear-gradient(90deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.9) 28%, rgba(255,255,255,0.48) 52%, rgba(255,255,255,0.16) 72%, rgba(255,255,255,0) 100%);
+  background: linear-gradient(90deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.94) 48%, rgba(255,255,255,0.42) 82%, rgba(255,255,255,0) 100%);
 }
 
 .home-background-map {
-  z-index: 0;
+  z-index: 2;
 }
 
 .home-background-map .leaflet-container {
@@ -1170,9 +1179,9 @@
 
 .zip-home-panel {
   position: relative;
-  z-index: 2;
+  z-index: 4;
   width: 620px;
-  padding: 62px 0 72px 96px;
+  padding: clamp(34px, 6vh, 62px) 0 clamp(34px, 6vh, 72px) 96px;
 }
 
 .zip-home-panel h1 {
@@ -1369,50 +1378,56 @@
 .zip-location-main {
   display: grid;
   grid-template-columns: 520px 1fr;
-  min-height: 650px;
+  height: calc(100vh - 156px);
+  min-height: calc(100vh - 156px);
+  overflow: hidden;
   background: #f9fafb;
 }
 
 .zip-location-left {
-  padding: 34px 28px 28px;
+  padding: 24px 24px 22px;
+  overflow: hidden;
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
   border-right: 1px solid #e5e7eb;
 }
 
 .zip-location-left h1 {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   color: #111827;
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 800;
+  line-height: 1.18;
 }
 
 .zip-location-left p {
-  margin: 0 0 24px;
+  margin: 0 0 14px;
   color: #6b7280;
-  font-size: 15px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .zip-search-box {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 20px;
-  padding: 16px 18px;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
   background: #fff;
   border: 2px solid #d1fae5;
-  border-radius: 18px;
+  border-radius: 14px;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
 }
 
 .zip-search-box span {
   color: #047857;
-  font-size: 24px;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .zip-search-box input {
   height: auto;
   padding: 0;
-  font-size: 17px;
+  font-size: 15px;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -1422,11 +1437,11 @@
 .zip-route-card {
   display: flex;
   gap: 12px;
-  margin-bottom: 22px;
-  padding: 18px;
+  margin-bottom: 14px;
+  padding: 14px;
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 18px;
+  border-radius: 14px;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
 }
 
@@ -1450,48 +1465,50 @@
 
 .zip-route-points .route-line {
   width: 2px;
-  height: 32px;
+  height: 26px;
   background: #d1d5db;
 }
 
 .zip-route-fields {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .zip-route-fields span {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   color: #6b7280;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .zip-route-fields strong {
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 1.25;
 }
 
 .zip-location-left h2 {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   color: #111827;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .zip-history-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .zip-history-item {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
+  gap: 12px;
+  min-height: 58px;
+  padding: 9px 12px;
   color: #111827;
   text-decoration: none;
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 16px;
+  border-radius: 13px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
@@ -1499,24 +1516,33 @@
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   color: #047857;
-  font-size: 20px;
+  font-size: 11px;
+  font-weight: 800;
   background: #ecfdf5;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .zip-history-text {
   display: grid;
   flex: 1;
-  gap: 3px;
+  min-width: 0;
+  gap: 2px;
+}
+
+.zip-history-text strong,
+.zip-history-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .zip-history-text small,
 .zip-history-time {
   color: #6b7280;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .zip-history-time {
@@ -1528,10 +1554,10 @@
   display: grid;
   place-items: center;
   width: 100%;
-  margin-top: 22px;
-  padding: 18px 20px;
+  margin-top: 14px;
+  padding: 14px 18px;
   color: #fff;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   text-decoration: none;
   background: linear-gradient(90deg, #0f8c6b 0%, #138c6f 100%);
@@ -1542,9 +1568,15 @@
 .zip-location-map {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(rgba(255,255,255,0.18), rgba(255,255,255,0.18)),
-    url("https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1800&q=80") center / cover no-repeat;
+  background: #dbe7df;
+}
+
+.location-search-route-map {
+  z-index: 0;
+}
+
+.location-search-route-map .leaflet-control-attribution {
+  display: none;
 }
 
 .loc-label,
@@ -1593,6 +1625,7 @@
 .zip-map-card {
   right: 28px;
   bottom: 28px;
+  z-index: 2;
   width: 300px;
   padding: 18px;
   background: rgba(255,255,255,0.96);
@@ -2041,6 +2074,11 @@
   background: #f1f1f1;
 }
 
+.user-tracking-screen,
+.driver-tracking-screen {
+  min-height: calc(100vh - 78px);
+}
+
 .driver-dispatch-main {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
@@ -2227,6 +2265,16 @@
     url("https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1800&q=80") center / cover;
 }
 
+.user-tracking-map,
+.driver-tracking-map {
+  min-height: calc(100vh - 156px);
+}
+
+.user-tracking-map .tracking-route-map,
+.driver-tracking-map .tracking-route-map {
+  z-index: 0;
+}
+
 .dispatch-map-label {
   position: absolute;
   padding: 8px 16px;
@@ -2317,6 +2365,7 @@
 .tracking-card,
 .driver-tracking-card {
   position: absolute;
+  z-index: 6;
   bottom: 40px;
   left: 40px;
   width: min(480px, calc(100% - 80px));
@@ -2943,5 +2992,34 @@
     bottom: 20px;
     left: 20px;
     width: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .home-window {
+    min-height: calc(100vh - 64px);
+  }
+
+  .location-window {
+    min-height: calc(100vh - 64px);
+  }
+
+  .zip-home-hero {
+    min-height: calc(100vh - 142px);
+  }
+
+  .zip-location-main {
+    height: calc(100vh - 142px);
+    min-height: calc(100vh - 142px);
+  }
+
+  .user-tracking-screen,
+  .driver-tracking-screen {
+    min-height: calc(100vh - 64px);
+  }
+
+  .user-tracking-map,
+  .driver-tracking-map {
+    min-height: calc(100vh - 142px);
   }
 }

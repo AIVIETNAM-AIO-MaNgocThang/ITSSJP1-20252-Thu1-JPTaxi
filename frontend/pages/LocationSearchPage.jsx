@@ -1,13 +1,14 @@
 import { Link } from 'react-router-dom';
+import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
 
 const historyItems = [
-  { icon: '🕘', name: 'ロッテホテル ハノイ', address: '54 Liễu Giai, Ba Đình, Hà Nội', time: '昨日' },
-  { icon: '🕘', name: 'チャンティエンプラザ', address: '24 Hai Bà Trưng, Hoàn Kiếm, Hà Nội', time: '2日前' },
-  { icon: '🕘', name: '日本レストラン 山田', address: 'Đống Đa, Hà Nội', time: '先週' },
-  { icon: '⭐', name: 'お気に入りの場所', address: '保存した目的地を表示', time: '保存済み' },
+  { icon: '履歴', name: 'ロッテホテル ハノイ', address: '54 Liễu Giai, Ba Đình, Hà Nội', time: '昨日' },
+  { icon: '履歴', name: 'チャンティエンプラザ', address: '24 Hai Bà Trưng, Hoàn Kiếm, Hà Nội', time: '2日前' },
+  { icon: '履歴', name: '日本レストラン 山田', address: 'Đống Đa, Hà Nội', time: '先週' },
+  { icon: '保存', name: 'お気に入りの場所', address: '保存した目的地を表示', time: '保存済み' },
 ];
 
 export default function LocationSearchPage() {
@@ -22,7 +23,7 @@ export default function LocationSearchPage() {
             <p>目的地を入力するか、履歴から選択してください。</p>
 
             <label className="zip-search-box">
-              <span>🔍</span>
+              <span>検索</span>
               <input type="text" placeholder="目的地・住所を入力" />
             </label>
 
@@ -53,14 +54,14 @@ export default function LocationSearchPage() {
           </section>
 
           <aside className="zip-location-map">
-            <span className="loc-label label1">ホアンキエム湖</span>
-            <span className="loc-label label2">チャンティエンプラザ</span>
-            <span className="loc-label label3">ハノイ大教会</span>
-            <span className="loc-label label4">クアフエ通り</span>
-            <span className="loc-label label5">チャンフンダオ通り</span>
-            <span className="loc-pin-start"></span>
-            <span className="loc-pin-end"></span>
-            <span className="loc-route-path"></span>
+            <InteractiveRouteMap
+              className="location-search-route-map"
+              interactive
+              scrollWheelZoom
+              showControls
+              showCurrentLocation
+              showDetails={false}
+            />
             <div className="zip-map-card">
               <strong>ルート情報</strong>
               <div><span>予想所要時間</span><b>12分</b></div>
