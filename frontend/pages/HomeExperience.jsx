@@ -63,8 +63,11 @@ export default function HomeExperience({ mode = 'user' }) {
         <section className="zip-home-hero">
           <InteractiveRouteMap
             className="home-background-map"
+            centerOnCurrentLocation
             fitToRoute={false}
             interactive
+            mapZoom={15}
+            scrollWheelZoom
             showControls
             showCurrentLocation
             showDetails={false}

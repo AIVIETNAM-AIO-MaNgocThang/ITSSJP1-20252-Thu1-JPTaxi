@@ -14,6 +14,9 @@ import {
   DriverSearchNotification,
 } from './driver-search.messages';
 
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ApplyDriverDto } from './dto/apply-driver.dto';
+
 const JAPANESE_LEVEL_RANK: Record<DriverJapaneseLevelEnum, number> = {
   [DriverJapaneseLevelEnum.N5]: 1,
   [DriverJapaneseLevelEnum.N4]: 2,
@@ -299,5 +302,55 @@ export class DriversService {
       hasResults,
       notification,
     };
+  }
+
+  // ==================== LOGIC XÉT DUYỆT TÀI XẾ ====================
+  async applyToBeDriver(userId: string, dto: ApplyDriverDto) {
+    const driver = await this.drivers.findOne({ 
+      where: { userId } 
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver profile not found');
+    }
+
+    // Kiểm tra điều kiện bắt buộc
+    if (!dto.licenseNumber || !dto.vehiclePlate || !dto.vehicleType) {
+      throw new BadRequestException('Missing required fields: licenseNumber, vehiclePlate, vehicleType');
+    }
+
+    driver.licenseNumber = dto.licenseNumber;
+    driver.licenseType = dto.licenseType || driver.licenseType;
+    driver.vehiclePlate = dto.vehiclePlate;
+    driver.vehicleType = dto.vehicleType;
+    driver.vehicleBrand = dto.vehicleBrand;
+    driver.hasInsurance = dto.hasInsurance ?? false;
+    driver.status = 'pending';
+    driver.applicationDate = new Date();
+
+    return await this.drivers.save(driver);
+  }
+
+  async approveDriver(
+    driverId: string, 
+    status: 'approved' | 'rejected', 
+    reason?: string
+  ) {
+    const driver = await this.drivers.findOne({ 
+      where: { id: driverId }   // hoặc driverId tùy theo entity
+    });
+
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    driver.status = status;
+    driver.reviewedDate = new Date();
+    
+    if (status === 'rejected' && reason) {
+      driver.rejectionReason = reason;
+    }
+
+    return await this.drivers.save(driver);
   }
 }

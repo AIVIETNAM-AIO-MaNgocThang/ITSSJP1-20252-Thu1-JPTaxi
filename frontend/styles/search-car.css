@@ -1,5 +1,5 @@
 .search-screen {
-  height: calc(100vh - 78px);
+  min-height: calc(100vh - 78px);
   overflow: hidden;
   background: var(--soft);
 }
@@ -51,21 +51,21 @@
 }
 
 .search-background-map .leaflet-current-location {
-  background: rgba(239, 68, 68, 0.16);
-  box-shadow: 0 0 0 10px rgba(239, 68, 68, 0.12);
+  background: rgba(139, 0, 0, 0.3);
+  box-shadow: 0 0 0 15px rgba(139, 0, 0, 0.24), 0 14px 34px rgba(45, 0, 0, 0.52);
 }
 
 .search-background-map .leaflet-current-location::before {
   position: absolute;
   inset: -18px;
   content: "";
-  border: 2px solid rgba(239, 68, 68, 0.45);
+  border: 2px solid rgba(139, 0, 0, 0.58);
   border-radius: 50%;
   animation: search-location-pulse 2.8s infinite ease-out;
 }
 
 .search-background-map .leaflet-current-location span {
-  background: #ef4444;
+  background: #8b0000;
 }
 
 @keyframes search-location-pulse {
@@ -135,21 +135,10 @@
   50% { transform: translate(118px, -44px) rotate(10deg); }
 }
 
-.radar-center {
-  position: fixed;
-  top: calc(47vh + 41px);
-  left: 50%;
-  z-index: 30;
-  display: grid;
-  place-items: center;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
 .pulse {
   position: absolute;
-  width: 260px;
-  height: 260px;
+  width: min(260px, 42vh);
+  height: min(260px, 42vh);
   border: 2px solid rgba(239, 68, 68, 0.62);
   border-radius: 50%;
   opacity: 0;
@@ -177,37 +166,17 @@
   }
 }
 
-.user-pin {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  color: #fff;
-  font-size: 0;
-  background: #ef4444;
-  border: 5px solid #fff;
-  border-radius: 50%;
-  box-shadow: 0 0 0 10px rgba(239, 68, 68, 0.14), 0 14px 30px rgba(15, 23, 42, 0.24);
-  pointer-events: none;
-}
-
-.user-pin span {
-  display: none;
-}
-
 .status-card {
   position: absolute;
-  right: 28px;
-  bottom: 28px;
-  left: 28px;
+  right: 24px;
+  bottom: 20px;
+  left: 24px;
   z-index: 10;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 20px;
+  gap: 16px;
   align-items: center;
-  padding: 20px 22px;
+  padding: 16px 18px;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(229, 234, 240, 0.94);
   border-radius: 12px;
@@ -219,13 +188,13 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 16px;
+  gap: 14px;
 }
 
 .spinner {
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border: 4px solid #e5eaf0;
   border-top-color: var(--green-soft);
   border-radius: 50%;
@@ -238,15 +207,22 @@
 
 .text-group h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 21px;
   line-height: 1.18;
 }
 
 .text-group p {
-  margin: 7px 0 0;
+  margin: 5px 0 0;
   color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.status-card .secondary-button,
+.status-card .submit-button {
+  height: 46px;
   font-size: 14px;
-  line-height: 1.6;
+  border-radius: 11px;
 }
 
 .cancel-button {
@@ -265,6 +241,15 @@
 }
 
 @media (max-width: 720px) {
+  .search-screen {
+    min-height: calc(100vh - 64px);
+  }
+
+  .map-stage {
+    height: calc(100vh - 142px);
+    min-height: calc(100vh - 142px);
+  }
+
   .location-chip {
     max-width: 48vw;
     overflow: hidden;
@@ -273,10 +258,11 @@
 
   .status-card {
     grid-template-columns: 1fr;
-    right: 18px;
-    bottom: 18px;
-    left: 18px;
-    padding: 18px;
+    right: 14px;
+    bottom: 12px;
+    left: 14px;
+    gap: 12px;
+    padding: 14px;
   }
 
   .status-info {
