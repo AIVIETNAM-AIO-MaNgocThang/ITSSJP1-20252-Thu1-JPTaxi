@@ -13,6 +13,13 @@ import { RideRequest } from './entities/ride-request.entity';
 import { LoginHistory } from './entities/login-history.entity';
 import { DriverLocationHistory } from './entities/driver-location-history.entity';
 import { Rating } from './entities/rating.entity';
+import { PricingRule } from './entities/pricing-rule.entity';
+import { RideRequestDispatch } from './entities/ride-request-dispatch.entity';
+import { PaymentTransaction } from './entities/payment-transaction.entity';
+import { DriverPayout } from './entities/driver-payout.entity';
+import { SearchHistory } from './entities/search-history.entity';
+import { UserLink } from './entities/user-link.entity';
+import { AuditLog } from './entities/audit-log.entity';
 import { AuthModule } from './modules/auth/auth.module';
 import { RideModule } from './modules/ride/ride.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -51,6 +58,13 @@ import { UploadsModule } from './modules/uploads/uploads.module';
           LoginHistory,
           DriverLocationHistory,
           Rating,
+          PricingRule,
+          RideRequestDispatch,
+          PaymentTransaction,
+          DriverPayout,
+          SearchHistory,
+          UserLink,
+          AuditLog,
         ],
         synchronize: false,
         logging: false,
