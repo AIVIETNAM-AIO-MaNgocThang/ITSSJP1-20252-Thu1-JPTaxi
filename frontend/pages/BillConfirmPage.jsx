@@ -182,7 +182,7 @@ export default function BillConfirmPage() {
           </section>
 
           <section className="map-panel booking-route-map" aria-label="ルートマップ">
-            <InteractiveRouteMap />
+            <InteractiveRouteMap scrollWheelZoom showCurrentLocation />
           </section>
         </section>
 

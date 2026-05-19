@@ -123,46 +123,40 @@ export default function SearchCarPage() {
     <PageShell>
       <main className="search-screen">
         <Topbar>
-          <div className="location-chip" aria-label="Current location">
+          <div className="location-chip" aria-label="現在位置">
             <span className="location-dot"></span>
-            <span>Current pickup area</span>
+            <span>ハノイ・ホアンキエム周辺</span>
           </div>
         </Topbar>
 
-        <section className="map-stage" aria-label="Dispatch map">
+        <section className="map-stage" aria-label="配車マップ">
           <InteractiveRouteMap
             className="search-background-map"
             fitToRoute={false}
             interactive
+            currentLocation={mapCenter}
             mapCenter={mapCenter}
             mapZoom={15}
             nearbyDrivers={drivers}
-            showControls={false}
-            showCurrentLocation={false}
+            scrollWheelZoom
+            showControls
+            showCurrentLocation
             showDetails={false}
             showDriver={false}
             showMarkers={false}
             showRoute={false}
           />
-
-          <div className="radar-center" aria-hidden="true">
-            <div className="pulse"></div>
-            <div className="pulse"></div>
-            <div className="pulse"></div>
-            <div className="user-pin"><span></span></div>
-          </div>
-
           <section className="status-card" aria-labelledby="search-title">
             <div className="status-info">
               <div className="spinner" aria-hidden="true"></div>
               <div className="text-group">
-                <h1 id="search-title">Searching for a taxi</h1>
+                <h1 id="search-title">タクシーを呼び出し中</h1>
                 <p>
                   {isLoadingDrivers ? (
-                    'Checking nearby available vehicles...'
+                    '近くの車両を確認しています...'
                   ) : (
                     <>
-                      Nearby taxis found: <strong>{driverCount}</strong>. Waiting for driver response.
+                      近くに <strong>{driverCount}台</strong> の車両が見つかりました。ドライバーの応答を待っています。
                     </>
                   )}
                 </p>
@@ -171,10 +165,10 @@ export default function SearchCarPage() {
 
             <div className="card-actions">
               <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/home">
-                Cancel
+                キャンセル
               </Link>
               <Link className="submit-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-status">
-                Confirm driver
+                ドライバー確認へ
               </Link>
             </div>
           </section>

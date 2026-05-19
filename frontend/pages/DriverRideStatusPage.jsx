@@ -20,7 +20,7 @@ export default function DriverRideStatusPage() {
         />
 
         <section className="driver-tracking-map">
-          <InteractiveRouteMap className="tracking-route-map" compact />
+          <InteractiveRouteMap className="tracking-route-map" compact scrollWheelZoom showCurrentLocation showDetails={false} />
 
           <section className="driver-tracking-card">
             <div className="tracking-eta-header">

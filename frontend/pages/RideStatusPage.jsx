@@ -20,7 +20,7 @@ export default function RideStatusPage() {
         />
 
         <section className="user-tracking-map">
-          <InteractiveRouteMap className="tracking-route-map" compact />
+          <InteractiveRouteMap className="tracking-route-map" compact scrollWheelZoom showCurrentLocation showDetails={false} />
 
           <section className="tracking-card">
             <div className="tracking-eta-header">
