@@ -38,6 +38,7 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^20.17.10",
     "@types/passport-jwt": "^4.0.1",
+    "socket.io-client": "^4.8.3",
     "typescript": "^5.7.2"
   }
 }
