@@ -6,11 +6,20 @@ import {
   ParseIntPipe,
   Put,
   Query,
+  Req,
+  UseGuards,
+  Post,
 } from '@nestjs/common';
 import { DriversService } from './drivers.service';
 import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
 import { SearchDriversQueryDto } from './dto/search-drivers.query.dto';
+import { ApplyDriverDto } from './dto/apply-driver.dto';
+
+
+import { RolesGuard } from 'src/common/roles.guard';
+import { Roles } from 'src/common/roles.decorator';
+import { JwtAuthGuard } from 'src/common/jwt-auth.guard';
 
 @Controller('drivers')
 export class DriversController {
@@ -42,4 +51,28 @@ export class DriversController {
   ) {
     return this.drivers.updateBankAccount(driverId, dto);
   }
+
+// Logic kiểm tra điều kiện bắt buộc và gửi đơn xét duyệt
+  @Post('apply')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('driver')
+  async applyToBeDriver(
+    @Req() req: { user: { id: number } },
+    @Body() applyDto: ApplyDriverDto,
+  ) {
+    return this.drivers.applyToBeDriver(req.user.id, applyDto);
+  }
+
+  @Post('admin/approve/:driverId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async approveDriver(
+    @Param('driverId', ParseIntPipe) driverId: number,
+    @Body('status') status: 'approved' | 'rejected',
+    @Body('reason') reason?: string,
+  ) {
+    return this.drivers.approveDriver(driverId, status, reason);
+  }
 }
+
+
