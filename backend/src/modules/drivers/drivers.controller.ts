@@ -23,7 +23,6 @@ import { JwtAuthGuard } from 'src/common/jwt-auth.guard';
 
 @Controller('drivers')
 export class DriversController {
-  driversService: any;
   constructor(private readonly drivers: DriversService) {}
 
   /** Tìm tài xế theo vị trí (lat/lng) và bộ lọc. Phải khai báo trước route `:driverId`. */
@@ -56,23 +55,23 @@ export class DriversController {
 // Logic kiểm tra điều kiện bắt buộc và gửi đơn xét duyệt
   @Post('apply')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('customer')
+  @Roles('driver')
   async applyToBeDriver(
-    @Req() req: any,
+    @Req() req: { user: { id: number } },
     @Body() applyDto: ApplyDriverDto,
   ) {
-    return this.driversService.applyToBeDriver(req.user.id, applyDto);
+    return this.drivers.applyToBeDriver(req.user.id, applyDto);
   }
 
   @Post('admin/approve/:driverId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async approveDriver(
-    @Param('driverId') driverId: string,
+    @Param('driverId', ParseIntPipe) driverId: number,
     @Body('status') status: 'approved' | 'rejected',
     @Body('reason') reason?: string,
   ) {
-    return this.driversService.approveDriver(driverId, status, reason);
+    return this.drivers.approveDriver(driverId, status, reason);
   }
 }
 

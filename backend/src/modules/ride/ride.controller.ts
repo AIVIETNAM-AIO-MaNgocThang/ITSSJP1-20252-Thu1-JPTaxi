@@ -99,9 +99,9 @@ export class RideController {
       throw new ForbiddenException('Chỉ có khách hàng mới có quyền thực hiện thanh toán.');
     }
     return this.rideService.processPayment(req.user.id, dto);
+  }
 
-
-// API MỚI: LẤY TỌA ĐỘ LỘ TRÌNH TỪ ĐIỂM XUẤT PHÁT ĐẾN ĐÍCH
+  /** Tọa độ lộ trình từ điểm xuất phát đến đích (mock polyline). */
   @Post('route')
   getRoute(@Body() body: RouteDto) {
     const { startLat, startLng, endLat, endLng } = body;

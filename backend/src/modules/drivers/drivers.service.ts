@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Driver, DriverJapaneseLevelEnum, DriverStatusType } from '../../entities/driver.entity';
@@ -14,8 +14,9 @@ import {
   DriverSearchNotification,
 } from './driver-search.messages';
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ApplyDriverDto } from './dto/apply-driver.dto';
+import { LicenseTypeEnum } from '../../entities/driver-license.entity';
+import { VehicleTypeEnum } from '../../entities/vehicle.entity';
 
 const JAPANESE_LEVEL_RANK: Record<DriverJapaneseLevelEnum, number> = {
   [DriverJapaneseLevelEnum.N5]: 1,
@@ -305,52 +306,81 @@ export class DriversService {
   }
 
   // ==================== LOGIC XÉT DUYỆT TÀI XẾ ====================
-  async applyToBeDriver(userId: string, dto: ApplyDriverDto) {
-    const driver = await this.drivers.findOne({ 
-      where: { userId } 
-    });
-
+  async applyToBeDriver(driverId: number, dto: ApplyDriverDto) {
+    const driver = await this.drivers.findOne({ where: { driverId } });
     if (!driver) {
       throw new NotFoundException('Driver profile not found');
     }
 
-    // Kiểm tra điều kiện bắt buộc
     if (!dto.licenseNumber || !dto.vehiclePlate || !dto.vehicleType) {
-      throw new BadRequestException('Missing required fields: licenseNumber, vehiclePlate, vehicleType');
+      throw new BadRequestException(
+        'Missing required fields: licenseNumber, vehiclePlate, vehicleType',
+      );
     }
 
-    driver.licenseNumber = dto.licenseNumber;
-    driver.licenseType = dto.licenseType || driver.licenseType;
-    driver.vehiclePlate = dto.vehiclePlate;
-    driver.vehicleType = dto.vehicleType;
-    driver.vehicleBrand = dto.vehicleBrand;
-    driver.hasInsurance = dto.hasInsurance ?? false;
-    driver.status = 'pending';
-    driver.applicationDate = new Date();
+    const vehicleType = dto.vehicleType as VehicleTypeEnum;
+    if (!Object.values(VehicleTypeEnum).includes(vehicleType)) {
+      throw new BadRequestException('Invalid vehicleType');
+    }
 
-    return await this.drivers.save(driver);
+    const licenseType = dto.licenseType as LicenseTypeEnum;
+    if (!Object.values(LicenseTypeEnum).includes(licenseType)) {
+      throw new BadRequestException('Invalid licenseType');
+    }
+
+    let vehicle = await this.vehicles.findOne({ where: { driverId } });
+    if (!vehicle) {
+      vehicle = this.vehicles.create({
+        driverId,
+        vehicleType,
+        licensePlate: dto.vehiclePlate,
+        brand: dto.vehicleBrand ?? '',
+        color: '',
+        manufactureYear: new Date().getFullYear(),
+      });
+    } else {
+      vehicle.vehicleType = vehicleType;
+      vehicle.licensePlate = dto.vehiclePlate;
+      if (dto.vehicleBrand) vehicle.brand = dto.vehicleBrand;
+    }
+    await this.vehicles.save(vehicle);
+
+    const today = new Date().toISOString().slice(0, 10);
+    let license = await this.licenses.findOne({ where: { driverId } });
+    if (!license) {
+      license = this.licenses.create({
+        driverId,
+        licenseType,
+        issueDate: today,
+        expiryDate: today,
+        issuePlace: dto.licenseNumber,
+      });
+    } else {
+      license.licenseType = licenseType;
+      license.issuePlace = dto.licenseNumber;
+    }
+    await this.licenses.save(license);
+
+    driver.status = DriverStatusType.pending;
+    return this.drivers.save(driver);
   }
 
   async approveDriver(
-    driverId: string, 
-    status: 'approved' | 'rejected', 
-    reason?: string
+    driverId: number,
+    status: 'approved' | 'rejected',
+    _reason?: string,
   ) {
-    const driver = await this.drivers.findOne({ 
-      where: { id: driverId }   // hoặc driverId tùy theo entity
-    });
-
+    const driver = await this.drivers.findOne({ where: { driverId } });
     if (!driver) {
       throw new NotFoundException('Driver not found');
     }
 
-    driver.status = status;
-    driver.reviewedDate = new Date();
-    
-    if (status === 'rejected' && reason) {
-      driver.rejectionReason = reason;
+    driver.status =
+      status === 'approved' ? DriverStatusType.approved : DriverStatusType.rejected;
+    if (status === 'approved') {
+      driver.approvedAt = new Date();
     }
 
-    return await this.drivers.save(driver);
+    return this.drivers.save(driver);
   }
 }
