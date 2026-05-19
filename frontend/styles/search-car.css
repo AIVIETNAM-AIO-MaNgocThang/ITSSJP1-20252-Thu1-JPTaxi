@@ -223,6 +223,7 @@
   height: 46px;
   font-size: 14px;
   border-radius: 11px;
+  white-space: nowrap;
 }
 
 .cancel-button {

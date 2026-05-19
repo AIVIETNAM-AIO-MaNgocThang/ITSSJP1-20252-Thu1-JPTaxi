@@ -48,6 +48,7 @@ export default function PaymentPage() {
             </section>
 
             <div className="receipt-actions">
+              <Link className="payment-back-link" to="/ride-status">戻る</Link>
               <button className="pay-confirm" type="button" onClick={confirmPayment}>お支払いを確定する</button>
               <Link className="invoice-link" to="/invoice"><span>📄</span> 領収書を発行する</Link>
               <Link className="support-link" to="/messages/driver">お問い合わせはこちら</Link>

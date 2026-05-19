@@ -101,6 +101,7 @@ function RouteBounds({ positions }) {
   const map = useMap();
 
   useEffect(() => {
+    if (!positions.length) return;
     map.fitBounds(positions, { padding: [44, 44] });
   }, [map, positions]);
 
@@ -123,7 +124,6 @@ function MapInteractionLock({ disabled, scrollWheelZoom }) {
   useEffect(() => {
     const handlers = [
       map.dragging,
-      map.doubleClickZoom,
       map.boxZoom,
       map.keyboard,
       map.touchZoom,
@@ -201,19 +201,26 @@ export default function InteractiveRouteMap({
   nearbyDrivers = [],
   currentLocation = null,
   centerOnCurrentLocation = false,
+  routePath = routeLine,
+  alternateRoutePath = alternateRoute,
+  routeSummary = null,
   scrollWheelZoom = interactive,
 }) {
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [routeHovered, setRouteHovered] = useState(false);
   const [browserLocation, setBrowserLocation] = useState(currentPosition);
   const positions = useMemo(() => route.map((point) => point.position), [route]);
+  const routeBoundsPositions = useMemo(
+    () => (routePath?.length ? routePath : positions),
+    [positions, routePath],
+  );
   const currentLocationPosition = currentLocation ?? browserLocation;
   const fitControlPositions = showCurrentLocation
     ? [
         [currentLocationPosition[0] - 0.002, currentLocationPosition[1] - 0.002],
         [currentLocationPosition[0] + 0.002, currentLocationPosition[1] + 0.002],
       ]
-    : positions;
+    : routeBoundsPositions;
   const resolvedMapCenter = centerOnCurrentLocation ? currentLocationPosition : mapCenter;
   const isRouteHighlighted = routeHovered || hoveredPoint !== null;
 
@@ -246,7 +253,7 @@ export default function InteractiveRouteMap({
         keyboard={interactive}
         touchZoom={interactive}
         boxZoom={interactive}
-        doubleClickZoom={interactive}
+        doubleClickZoom={false}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -254,14 +261,18 @@ export default function InteractiveRouteMap({
         />
         {showRoute && (
           <>
-            <Polyline positions={alternateRoute} pathOptions={{ color: '#64748b', weight: 5, opacity: 0.52, dashArray: '8 9' }} />
-            <Polyline positions={routeLine} pathOptions={{ color: '#2563eb', weight: isRouteHighlighted ? 14 : 8, opacity: isRouteHighlighted ? 0.34 : 0.24 }} />
+            {alternateRoutePath?.length ? (
+              <Polyline positions={alternateRoutePath} pathOptions={{ color: '#64748b', weight: 5, opacity: 0.52, dashArray: '8 9' }} />
+            ) : null}
+            {routePath?.length ? (
+              <Polyline positions={routePath} pathOptions={{ color: '#2563eb', weight: isRouteHighlighted ? 14 : 8, opacity: isRouteHighlighted ? 0.34 : 0.24 }} />
+            ) : null}
             <Polyline
               eventHandlers={{
                 mouseover: () => setRouteHovered(true),
                 mouseout: () => setRouteHovered(false),
               }}
-              positions={routeLine}
+              positions={routePath}
               pathOptions={{ color: isRouteHighlighted ? '#1d4ed8' : '#2563eb', weight: isRouteHighlighted ? 8 : 5, opacity: 0.95 }}
             />
           </>
@@ -325,7 +336,7 @@ export default function InteractiveRouteMap({
             <Tooltip direction="top" offset={[0, -13]} opacity={1}>現在位置</Tooltip>
           </Marker>
         )}
-        {fitToRoute ? <RouteBounds positions={positions} /> : <FixedMapView centerPosition={resolvedMapCenter} zoom={mapZoom} />}
+        {fitToRoute ? <RouteBounds positions={routeBoundsPositions} /> : <FixedMapView centerPosition={resolvedMapCenter} zoom={mapZoom} />}
         <MapInteractionLock disabled={!interactive} scrollWheelZoom={scrollWheelZoom} />
         {showControls && (
           <RouteControls
@@ -341,7 +352,7 @@ export default function InteractiveRouteMap({
         <aside className={`route-detail-panel ${compact ? 'compact' : ''}`}>
           <div className="route-detail-header">
             <span>ルート詳細</span>
-            <strong>4.8 km - 12分</strong>
+            <strong>{routeSummary ?? '4.8 km - 12分'}</strong>
           </div>
           <ol className="route-detail-list">
             {route.map((point, index) => (
