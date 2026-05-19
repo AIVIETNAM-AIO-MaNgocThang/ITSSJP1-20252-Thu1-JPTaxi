@@ -5,6 +5,60 @@ import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/booking.css';
 
+const fallbackRoute = {
+  destination: {
+    name: 'ロッテホテル ハノイ',
+    address: '54 Liễu Giai, Ba Đình, Hà Nội',
+    position: [21.03205, 105.81283],
+  },
+  pickup: {
+    name: 'ホアンキエム湖',
+    position: [21.02878, 105.85204],
+  },
+  routeMetrics: {
+    duration: '12分',
+    distance: '4.8 km',
+    fare: '¥680',
+  },
+  routePath: [
+    [21.02878, 105.85204],
+    [21.02812, 105.85046],
+    [21.02672, 105.84817],
+    [21.02482, 105.85672],
+    [21.02621, 105.84666],
+    [21.02942, 105.83628],
+    [21.03162, 105.82084],
+    [21.03205, 105.81283],
+  ],
+};
+
+function readSelectedRoute() {
+  try {
+    const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
+    if (!rawRoute) return fallbackRoute;
+
+    const parsedRoute = JSON.parse(rawRoute);
+    const destinationPosition = parsedRoute.destination?.position;
+    const pickupPosition = parsedRoute.pickup?.position;
+
+    if (!Array.isArray(destinationPosition) || !Array.isArray(pickupPosition)) {
+      return fallbackRoute;
+    }
+
+    return {
+      ...fallbackRoute,
+      ...parsedRoute,
+      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
+      routeMetrics: {
+        ...fallbackRoute.routeMetrics,
+        ...parsedRoute.routeMetrics,
+      },
+    };
+  } catch {
+    return fallbackRoute;
+  }
+}
+
 export default function BillConfirmPage() {
   const navigate = useNavigate();
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver';
@@ -15,7 +69,29 @@ export default function BillConfirmPage() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
   const [toast, setToast] = useState('');
+  const [selectedRoute] = useState(readSelectedRoute);
   const accountRef = useRef(null);
+  const displayDistance = selectedRoute.routeMetrics.distance;
+  const routeSummary = `${displayDistance} - ${selectedRoute.routeMetrics.duration}`;
+
+  const routePoints = [
+    {
+      key: 'pickup',
+      label: selectedRoute.pickup.name,
+      meta: '出発地',
+      time: '現在',
+      position: selectedRoute.pickup.position,
+      type: 'pickup',
+    },
+    {
+      key: 'destination',
+      label: selectedRoute.destination.name,
+      meta: selectedRoute.destination.address,
+      time: `約${selectedRoute.routeMetrics.duration}`,
+      position: selectedRoute.destination.position,
+      type: 'destination',
+    },
+  ];
 
   useEffect(() => {
     function closeAccount(event) {
@@ -79,7 +155,7 @@ export default function BillConfirmPage() {
                   <span className="point-dot"></span>
                   <div>
                     <span>出発地</span>
-                    <strong>ホアンキエム湖</strong>
+                    <strong>{selectedRoute.pickup.name}</strong>
                   </div>
                 </div>
                 <div className="route-line"></div>
@@ -87,7 +163,7 @@ export default function BillConfirmPage() {
                   <span className="point-dot"></span>
                   <div>
                     <span>目的地</span>
-                    <strong>ロッテホテル ハノイ</strong>
+                    <strong>{selectedRoute.destination.name}</strong>
                   </div>
                 </div>
               </div>
@@ -95,15 +171,15 @@ export default function BillConfirmPage() {
               <div className="trip-summary">
                 <article>
                   <span>乗車予定</span>
-                  <strong>18:30</strong>
+                  <strong>現在</strong>
                 </article>
                 <article>
                   <span>所要時間</span>
-                  <strong>12分</strong>
+                  <strong>{selectedRoute.routeMetrics.duration}</strong>
                 </article>
                 <article>
                   <span>走行距離</span>
-                  <strong>4.8 km</strong>
+                  <strong>{displayDistance}</strong>
                 </article>
               </div>
             </section>
@@ -116,7 +192,7 @@ export default function BillConfirmPage() {
                   <strong>スタンダード</strong>
                   <span>快適なセダン・禁煙車</span>
                 </div>
-                <strong className="vehicle-price">¥680</strong>
+                <strong className="vehicle-price">{selectedRoute.routeMetrics.fare}</strong>
               </div>
             </section>
 
@@ -136,7 +212,7 @@ export default function BillConfirmPage() {
                 </div>
                 <div>
                   <dt>距離加算</dt>
-                  <dd>¥120</dd>
+                  <dd>{selectedRoute.routeMetrics.distance === fallbackRoute.routeMetrics.distance ? '¥120' : '自動計算'}</dd>
                 </div>
                 <div>
                   <dt>予約手数料</dt>
@@ -145,7 +221,7 @@ export default function BillConfirmPage() {
               </dl>
               <div className="total-row">
                 <span>合計金額</span>
-                <strong>¥680</strong>
+                <strong>{selectedRoute.routeMetrics.fare}</strong>
               </div>
             </section>
 
@@ -167,7 +243,7 @@ export default function BillConfirmPage() {
             </div>
 
             <div className="action-row">
-              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to={homePath}>
+              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/location-search">
                 戻る
               </Link>
               {isDriver && (
@@ -182,7 +258,15 @@ export default function BillConfirmPage() {
           </section>
 
           <section className="map-panel booking-route-map" aria-label="ルートマップ">
-            <InteractiveRouteMap scrollWheelZoom showCurrentLocation />
+            <InteractiveRouteMap
+              alternateRoutePath={[]}
+              currentLocation={selectedRoute.pickup.position}
+              route={routePoints}
+              routePath={selectedRoute.routePath}
+              routeSummary={routeSummary}
+              scrollWheelZoom
+              showCurrentLocation={false}
+            />
           </section>
         </section>
 

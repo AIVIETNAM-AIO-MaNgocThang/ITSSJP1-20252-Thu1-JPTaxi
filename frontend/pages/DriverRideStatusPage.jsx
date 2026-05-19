@@ -1,10 +1,84 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
 
+const fallbackRoute = {
+  destination: {
+    name: 'ロッテホテル ハノイ',
+    address: '54 Liễu Giai, Ba Đình, Hà Nội',
+    position: [21.03205, 105.81283],
+  },
+  pickup: {
+    name: 'ホアンキエム湖',
+    position: [21.02878, 105.85204],
+  },
+  routeMetrics: {
+    duration: '12分',
+    distance: '4.8 km',
+  },
+  routePath: [
+    [21.02878, 105.85204],
+    [21.02812, 105.85046],
+    [21.02672, 105.84817],
+    [21.02482, 105.85672],
+    [21.02621, 105.84666],
+    [21.02942, 105.83628],
+    [21.03162, 105.82084],
+    [21.03205, 105.81283],
+  ],
+};
+
+function readSelectedRoute() {
+  try {
+    const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
+    if (!rawRoute) return fallbackRoute;
+
+    const parsedRoute = JSON.parse(rawRoute);
+    const pickupPosition = parsedRoute.pickup?.position;
+    const destinationPosition = parsedRoute.destination?.position;
+
+    if (!Array.isArray(pickupPosition) || !Array.isArray(destinationPosition)) {
+      return fallbackRoute;
+    }
+
+    return {
+      ...fallbackRoute,
+      ...parsedRoute,
+      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
+      routeMetrics: {
+        ...fallbackRoute.routeMetrics,
+        ...parsedRoute.routeMetrics,
+      },
+    };
+  } catch {
+    return fallbackRoute;
+  }
+}
+
 export default function DriverRideStatusPage() {
+  const [selectedRoute] = useState(readSelectedRoute);
+  const routePoints = [
+    {
+      key: 'pickup',
+      label: selectedRoute.pickup.name,
+      meta: '乗車地',
+      time: '現在',
+      position: selectedRoute.pickup.position,
+      type: 'pickup',
+    },
+    {
+      key: 'destination',
+      label: selectedRoute.destination.name,
+      meta: selectedRoute.destination.address,
+      time: `約${selectedRoute.routeMetrics.duration}`,
+      position: selectedRoute.destination.position,
+      type: 'destination',
+    },
+  ];
+
   return (
     <PageShell>
       <main className="driver-tracking-screen">
@@ -20,22 +94,33 @@ export default function DriverRideStatusPage() {
         />
 
         <section className="driver-tracking-map">
-          <InteractiveRouteMap className="tracking-route-map" compact scrollWheelZoom showCurrentLocation showDetails={false} />
+          <InteractiveRouteMap
+            alternateRoutePath={[]}
+            className="tracking-route-map"
+            compact
+            currentLocation={selectedRoute.pickup.position}
+            route={routePoints}
+            routePath={selectedRoute.routePath}
+            routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
+            scrollWheelZoom
+            showCurrentLocation={false}
+            showDetails={false}
+          />
 
           <section className="driver-tracking-card">
             <div className="tracking-eta-header">
               <div>
                 <span>到着予定時間</span>
-                <strong>あと 3 分</strong>
+                <strong>あと {selectedRoute.routeMetrics.duration}</strong>
               </div>
-              <em>0.8 km</em>
+              <em>{selectedRoute.routeMetrics.distance}</em>
             </div>
 
             <div className="tracking-passenger-row">
               <span>👤</span>
               <div>
                 <strong>JPTX-9821 様</strong>
-                <small>ホアンキエム湖で待機中</small>
+                <small>{selectedRoute.pickup.name}で待機中</small>
                 <em>090-1234-5678</em>
               </div>
             </div>

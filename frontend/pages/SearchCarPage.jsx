@@ -11,6 +11,34 @@ const defaultUserLocation = {
   longitude: 105.85204,
 };
 
+const fallbackSelectedRoute = {
+  hasRoute: false,
+  destination: {
+    name: 'ロッテホテル ハノイ',
+    address: '54 Liễu Giai, Ba Đình, Hà Nội',
+    position: [21.03205, 105.81283],
+  },
+  pickup: {
+    name: '現在位置',
+    position: [21.02878, 105.85204],
+  },
+  routeMetrics: {
+    duration: '12分',
+    distance: '4.8 km',
+    fare: '¥680',
+  },
+  routePath: [
+    [21.02878, 105.85204],
+    [21.02812, 105.85046],
+    [21.02672, 105.84817],
+    [21.02482, 105.85672],
+    [21.02621, 105.84666],
+    [21.02942, 105.83628],
+    [21.03162, 105.82084],
+    [21.03205, 105.81283],
+  ],
+};
+
 const fallbackDrivers = [
   {
     driverId: 'demo-1',
@@ -55,12 +83,48 @@ function normalizeDriver(driver) {
   };
 }
 
+function readSelectedRoute() {
+  try {
+    const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
+    if (!rawRoute) return fallbackSelectedRoute;
+
+    const parsedRoute = JSON.parse(rawRoute);
+    const pickupPosition = parsedRoute.pickup?.position;
+    const destinationPosition = parsedRoute.destination?.position;
+
+    if (!Array.isArray(pickupPosition) || !Array.isArray(destinationPosition)) {
+      return fallbackSelectedRoute;
+    }
+
+    return {
+      ...fallbackSelectedRoute,
+      ...parsedRoute,
+      hasRoute: true,
+      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackSelectedRoute.routePath,
+      routeMetrics: {
+        ...fallbackSelectedRoute.routeMetrics,
+        ...parsedRoute.routeMetrics,
+      },
+    };
+  } catch {
+    return fallbackSelectedRoute;
+  }
+}
+
 export default function SearchCarPage() {
-  const [userLocation, setUserLocation] = useState(defaultUserLocation);
+  const [selectedRoute] = useState(readSelectedRoute);
+  const [userLocation, setUserLocation] = useState({
+    latitude: selectedRoute.pickup.position[0],
+    longitude: selectedRoute.pickup.position[1],
+  });
   const [drivers, setDrivers] = useState(fallbackDrivers);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(true);
 
   useEffect(() => {
+    if (selectedRoute.hasRoute) {
+      return;
+    }
+
     if (!navigator.geolocation) {
       return;
     }
@@ -77,7 +141,7 @@ export default function SearchCarPage() {
       },
       { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
     );
-  }, []);
+  }, [selectedRoute.hasRoute]);
 
   useEffect(() => {
     let ignore = false;
@@ -117,6 +181,24 @@ export default function SearchCarPage() {
     () => [userLocation.latitude, userLocation.longitude],
     [userLocation.latitude, userLocation.longitude],
   );
+  const routePoints = useMemo(() => [
+    {
+      key: 'pickup',
+      label: selectedRoute.pickup.name,
+      meta: '出発地',
+      time: '現在',
+      position: mapCenter,
+      type: 'pickup',
+    },
+    {
+      key: 'destination',
+      label: selectedRoute.destination.name,
+      meta: selectedRoute.destination.address,
+      time: `約${selectedRoute.routeMetrics.duration}`,
+      position: selectedRoute.destination.position,
+      type: 'destination',
+    },
+  ], [mapCenter, selectedRoute]);
   const driverCount = drivers.length;
 
   return (
@@ -132,19 +214,23 @@ export default function SearchCarPage() {
         <section className="map-stage" aria-label="配車マップ">
           <InteractiveRouteMap
             className="search-background-map"
-            fitToRoute={false}
+            fitToRoute={selectedRoute.hasRoute}
             interactive
+            alternateRoutePath={[]}
             currentLocation={mapCenter}
             mapCenter={mapCenter}
             mapZoom={15}
             nearbyDrivers={drivers}
+            route={routePoints}
+            routePath={selectedRoute.hasRoute ? selectedRoute.routePath : []}
+            routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
             scrollWheelZoom
             showControls
-            showCurrentLocation
+            showCurrentLocation={!selectedRoute.hasRoute}
             showDetails={false}
             showDriver={false}
-            showMarkers={false}
-            showRoute={false}
+            showMarkers={selectedRoute.hasRoute}
+            showRoute={selectedRoute.hasRoute}
           />
           <section className="status-card" aria-labelledby="search-title">
             <div className="status-info">
@@ -164,7 +250,7 @@ export default function SearchCarPage() {
             </div>
 
             <div className="card-actions">
-              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/home">
+              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/bill-confirm">
                 キャンセル
               </Link>
               <Link className="submit-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-status">

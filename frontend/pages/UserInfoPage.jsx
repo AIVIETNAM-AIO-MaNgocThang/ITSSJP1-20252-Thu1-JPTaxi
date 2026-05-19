@@ -4,6 +4,7 @@ import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
+import { readSavedPlaces, writeSavedPlaces } from '../utils/savedPlaces.js';
 
 const userMenu = [
   { id: 'profile', icon: '👤', label: 'プロフィール', to: '/user-info/profile' },
@@ -18,6 +19,7 @@ export default function UserInfoPage() {
   const { section } = useParams();
   const activeSection = userMenu.some((item) => item.id === section) ? section : 'profile';
   const [modal, setModal] = useState(null);
+  const [savedPlaces, setSavedPlaces] = useState(readSavedPlaces);
 
   const modalTitle = {
     account: 'アカウント情報を編集',
@@ -29,6 +31,21 @@ export default function UserInfoPage() {
     logout: 'ログアウト確認',
     saved: '保存しました',
   }[modal];
+
+  function updateSavedPlace(key, value) {
+    setSavedPlaces((current) => ({
+      ...current,
+      [key]: {
+        ...current[key],
+        address: value,
+      },
+    }));
+  }
+
+  function saveProfile() {
+    writeSavedPlaces(savedPlaces);
+    setModal('saved');
+  }
 
   function renderContent() {
     if (activeSection === 'security') {
@@ -137,6 +154,25 @@ export default function UserInfoPage() {
           </section>
 
           <section className="panel zip-profile-panel stack">
+            <h2 className="panel-title">クイック住所</h2>
+            <div className="saved-address-grid">
+              {Object.entries(savedPlaces).map(([key, place]) => (
+                <label className="saved-address-row" key={key}>
+                  <span className="saved-address-icon">{place.icon}</span>
+                  <span>
+                    <strong>{place.title}</strong>
+                    <input
+                      onChange={(event) => updateSavedPlace(key, event.target.value)}
+                      placeholder={`${place.title}の住所を入力`}
+                      value={place.address}
+                    />
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel zip-profile-panel stack">
             <h2 className="panel-title">通知設定</h2>
             <div className="setting-list">
               {[
@@ -219,7 +255,7 @@ export default function UserInfoPage() {
                   <h1>プロフィール設定</h1>
                   <p>個人情報やアカウント設定を管理できます。必要に応じて内容を更新してください。</p>
                 </div>
-                <button className="submit-button profile-save-button" type="button" onClick={() => setModal('saved')}>変更を保存</button>
+                <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>変更を保存</button>
               </div>
               {renderContent()}
             </section>
