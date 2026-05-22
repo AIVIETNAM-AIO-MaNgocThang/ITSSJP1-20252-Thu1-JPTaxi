@@ -275,4 +275,63 @@ export class RideService {
       paidAt: transaction.paidAt,
     };
   }
+
+      /**
+   * Hoàn thiện logic gán tài xế gần nhất cho yêu cầu đặt xe
+   * Sprint3_ID16 - Hoàn thiện logic gán tài xế
+   */
+  async assignNearestDriver(requestId: number) {
+    const rideRequest = await this.rideRequestRepo.findOne({
+      where: { requestId },
+    });
+
+    if (!rideRequest) {
+      throw new NotFoundException('乗車依頼が見つかりません。'); 
+      // Không tìm thấy yêu cầu đặt xe
+    }
+
+    if (rideRequest.status !== RideRequestStatusType.searching) {
+      throw new BadRequestException('この依頼は現在ドライバーを割り当てられる状態ではありません。'); 
+      // Yêu cầu này hiện không thể gán tài xế
+    }
+
+    // TODO: Logic tìm tài xế gần nhất dựa trên vị trí (sẽ hoàn thiện sau)
+    // Hiện tại tạm gán driverId = 1
+    const driverId = 1;
+
+    // Tạo Trip
+    const trip = this.tripRepo.create({
+      rideRequest: rideRequest,
+      driverId: driverId,
+      startTime: new Date(),
+      status: TripStatusType.ongoing,
+      actualDistanceKm: '0',
+      exchangeRateVndToJpy: '0.0043',
+      finalFareVnd: rideRequest.estimatedFareVnd || 0,     // tạm dùng nếu có
+      finalFareJpy: rideRequest.estimatedFareJpy || 0,
+      rawFareVnd: rideRequest.estimatedFareVnd || 0,
+    });
+
+    const savedTrip = await this.tripRepo.save(trip);
+
+    // Cập nhật trạng thái RideRequest
+    rideRequest.status = RideRequestStatusType.assigned;
+    await this.rideRequestRepo.save(rideRequest);
+
+    // Gửi thông báo realtime
+    this.rideGateway.emitToRequest(rideRequest.requestId, 'driverAssigned', {
+      tripId: savedTrip.tripId,
+      driverId: driverId,
+      message: 'ドライバーが見つかりました。すぐに向かいます。', 
+      // Đã tìm thấy tài xế. Tài xế đang di chuyển đến
+    });
+
+    return {
+      success: true,
+      message: 'ドライバーを割り当てました。', 
+      // Đã gán tài xế thành công
+      tripId: savedTrip.tripId,
+      driverId: driverId,
+    };
+  }
 }

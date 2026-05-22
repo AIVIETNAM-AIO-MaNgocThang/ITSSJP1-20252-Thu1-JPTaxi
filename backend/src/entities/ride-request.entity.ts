@@ -61,4 +61,11 @@ export class RideRequest {
 
   @Column({ name: 'note_to_driver', type: 'varchar', length: 255, nullable: true })
   noteToDriver: string | null;
+
+  // === THÊM MỚI ===
+  @Column({ name: 'estimated_fare_vnd', type: 'int', nullable: true })
+  estimatedFareVnd: number | null;
+
+  @Column({ name: 'estimated_fare_jpy', type: 'int', nullable: true })
+  estimatedFareJpy: number | null;
 }
