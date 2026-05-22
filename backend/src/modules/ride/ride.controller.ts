@@ -19,6 +19,7 @@ import type { JwtValidatedUser } from '../auth/jwt.strategy';
 
 type AuthedRequest = Request & { user: JwtValidatedUser };
 import { RouteDto } from './dto/route.dto';
+import { SelectPickupDto } from './dto/select-pickup.dto';
 
 @Controller()
 export class RideController {
@@ -147,6 +148,22 @@ export class RideController {
   private encodePolyline(points: [number, number][]): string {
     // Simple placeholder - có thể thay bằng thư viện polyline sau
     return 'mock_polyline_' + points.length;
+  }
+
+  /**
+   *Sprint 3_ID13: Triển khai Logic Chọn / xác nhận vị trí điểm đón
+   * POST /ride/pickup/select
+   */
+  @Post('ride/pickup/select')
+  @UseGuards(AuthGuard('jwt'))
+  async selectPickupLocation(
+    @Req() req: AuthedRequest,
+    @Body() dto: SelectPickupDto,
+  ) {
+    if (req.user.role !== 'customer') {
+      throw new ForbiddenException('受け取り場所はお客様のみが選択できます。'); //Chỉ Khách hàng mới được chọn điểm đón
+    }
+    return this.rideService.selectPickupLocation(req.user.id, dto);
   }
 }
 

@@ -15,9 +15,53 @@ import { DriverPayout, PayoutStatusType } from '../../entities/driver-payout.ent
 import { CreateRideRequestDto } from './dto/create-ride-request.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { RideGateway } from './ride.gateway';
+import { SelectPickupDto } from './dto/select-pickup.dto';
 
 @Injectable()
 export class RideService {
+    /**
+   *Sprint3_ID13: Chọn / Cập nhật vị trí điểm đón (cho phép chọn khác vị trí hiện tại)
+   */
+  async selectPickupLocation(customerId: number, dto: SelectPickupDto) {
+    const rideRequest = await this.rideRequestRepo.findOne({
+      where: { 
+        requestId: dto.rideRequestId, 
+        customerId 
+      },
+    });
+
+    if (!rideRequest) {
+      throw new NotFoundException('乗車依頼が見つかりません。'); 
+      // Không tìm thấy yêu cầu đặt xe
+    }
+
+    if (rideRequest.status !== RideRequestStatusType.pending && 
+        rideRequest.status !== RideRequestStatusType.searching) {
+      throw new BadRequestException('現在の状態では受け取り場所を変更できません。'); 
+      // Không thể thay đổi điểm đón ở trạng thái hiện tại
+    }
+
+    // Cập nhật vị trí đón mới
+    rideRequest.pickupLat = dto.pickupLat.toString();
+    rideRequest.pickupLng = dto.pickupLng.toString();
+    
+    if (dto.pickupAddress) {
+      rideRequest.pickupAddress = dto.pickupAddress;
+    }
+
+    const updatedRequest = await this.rideRequestRepo.save(rideRequest);
+
+    return {
+      success: true,
+      message: '受け取り場所を更新しました。', 
+      // Đã cập nhật vị trí điểm đón thành công
+      pickupLocation: {
+        lat: parseFloat(updatedRequest.pickupLat),
+        lng: parseFloat(updatedRequest.pickupLng),
+        address: updatedRequest.pickupAddress,
+      },
+    };
+  }
   constructor(
     @InjectRepository(RideRequest)
     private readonly rideRequestRepo: Repository<RideRequest>,
