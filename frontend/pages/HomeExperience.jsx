@@ -1,7 +1,11 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
+import { buildSelectedRoute, geocodePlace, getCurrentPosition } from '../utils/routePlanner.js';
+import { readSavedPlaces } from '../utils/savedPlaces.js';
 
 const userHome = {
   brandTo: '/home',
@@ -52,7 +56,45 @@ const driverHome = {
 };
 
 export default function HomeExperience({ mode = 'user' }) {
+  const navigate = useNavigate();
   const content = mode === 'driver' ? driverHome : userHome;
+  const isUserMode = mode !== 'driver';
+  const [savedPlaces] = useState(readSavedPlaces);
+  const [quickLoading, setQuickLoading] = useState(null);
+
+  const quickItems = isUserMode
+    ? Object.entries(savedPlaces).map(([key, place]) => ({ ...place, key }))
+    : content.quickItems;
+
+  async function openQuickPlace(item) {
+    if (!isUserMode) return;
+
+    if (!item.address?.trim()) {
+      navigate('/user-info/profile');
+      return;
+    }
+
+    setQuickLoading(item.key);
+
+    try {
+      const [pickup, destination] = await Promise.all([
+        getCurrentPosition(),
+        geocodePlace(item.address),
+      ]);
+      const selectedRoute = await buildSelectedRoute({
+        ...destination,
+        name: item.title,
+        address: destination.address || item.address,
+      }, pickup);
+
+      window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(selectedRoute));
+      navigate('/bill-confirm');
+    } catch {
+      navigate('/location-search');
+    } finally {
+      setQuickLoading(null);
+    }
+  }
 
   return (
     <PageShell>
@@ -60,6 +102,21 @@ export default function HomeExperience({ mode = 'user' }) {
         <Topbar brandTo={content.brandTo} actions={content.actions} />
 
         <section className="zip-home-hero">
+          <InteractiveRouteMap
+            className="home-background-map"
+            centerOnCurrentLocation
+            fitToRoute={false}
+            interactive
+            mapZoom={15}
+            scrollWheelZoom
+            showControls
+            showCurrentLocation
+            showDetails={false}
+            showDriver={false}
+            showMarkers={false}
+            showRoute={false}
+          />
+
           <div className="zip-home-panel">
             <h1>{content.heading}</h1>
             <p className="zip-home-question">{content.question}</p>
@@ -73,13 +130,24 @@ export default function HomeExperience({ mode = 'user' }) {
             </Link>
 
             <div className="zip-quick-row">
-              {content.quickItems.map((item) => {
+              {quickItems.map((item) => {
                 const body = (
                   <>
                     <span>{item.icon}</span>
-                    <div><strong>{item.title}</strong><small>{item.copy}</small></div>
+                    <div>
+                      <strong>{quickLoading === item.key ? '検索中...' : item.title}</strong>
+                      <small>{item.address || item.copy || 'プロフィールで住所を設定'}</small>
+                    </div>
                   </>
                 );
+
+                if (isUserMode) {
+                  return (
+                    <button className="zip-quick-box" type="button" key={item.key} onClick={() => openQuickPlace(item)}>
+                      {body}
+                    </button>
+                  );
+                }
 
                 return item.to ? (
                   <Link className="zip-quick-box" to={item.to} key={item.title}>
@@ -99,18 +167,6 @@ export default function HomeExperience({ mode = 'user' }) {
             </Link>
           </div>
 
-          <span className="home-map-label label1">Hoan Kiem Lake</span>
-          <span className="home-map-label label2">Trang Tien Plaza</span>
-          <span className="home-map-label label3">St. Joseph Cathedral</span>
-          <span className="home-map-label label4">Cua Hue</span>
-          <span className="home-map-label label5">Tran Hung Dao</span>
-          <span className="home-map-pin"></span>
-          <span className="home-car car-main">🚗</span>
-          <span className="home-car car-1">🚘</span>
-          <span className="home-car car-2">🚘</span>
-          <span className="home-car car-3">🚘</span>
-          <span className="home-car car-4">🚘</span>
-          <div className="zip-zoom" aria-hidden="true"><button type="button">+</button><button type="button">−</button></div>
         </section>
       </main>
     </PageShell>

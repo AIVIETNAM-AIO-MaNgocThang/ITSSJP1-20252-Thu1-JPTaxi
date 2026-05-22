@@ -1,4 +1,4 @@
-.DS_Store
+986DS_Store
 .env
 **/.env
 **/.env.local
@@ -7,3 +7,8 @@ backend/node_modules/
 backend/dist/
 backend/uploads/
 frontend/node_modules/
+<<<<<<< HEAD
+=======
+package/
+**/target/
+>>>>>>> 307550d (update)

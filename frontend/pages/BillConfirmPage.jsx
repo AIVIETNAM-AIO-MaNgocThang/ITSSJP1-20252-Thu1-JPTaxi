@@ -1,19 +1,115 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { cancelRideRequest, createRideRequest, getActiveRide } from '../api/rides.js';
+import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/booking.css';
 
+const fallbackRoute = {
+  destination: {
+    name: 'ロッテホテル ハノイ',
+    address: '54 Liễu Giai, Ba Đình, Hà Nội',
+    position: [21.03205, 105.81283],
+  },
+  pickup: {
+    name: 'ホアンキエム湖',
+    position: [21.02878, 105.85204],
+  },
+  routeMetrics: {
+    duration: '12分',
+    distance: '4.8 km',
+    fare: '¥680',
+  },
+  routePath: [
+    [21.02878, 105.85204],
+    [21.02812, 105.85046],
+    [21.02672, 105.84817],
+    [21.02482, 105.85672],
+    [21.02621, 105.84666],
+    [21.02942, 105.83628],
+    [21.03162, 105.82084],
+    [21.03205, 105.81283],
+  ],
+};
+
+function readSelectedRoute() {
+  try {
+    const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
+    if (!rawRoute) return fallbackRoute;
+
+    const parsedRoute = JSON.parse(rawRoute);
+    const destinationPosition = parsedRoute.destination?.position;
+    const pickupPosition = parsedRoute.pickup?.position;
+
+    if (!Array.isArray(destinationPosition) || !Array.isArray(pickupPosition)) {
+      return fallbackRoute;
+    }
+
+    return {
+      ...fallbackRoute,
+      ...parsedRoute,
+      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
+      routeMetrics: {
+        ...fallbackRoute.routeMetrics,
+        ...parsedRoute.routeMetrics,
+      },
+    };
+  } catch {
+    return fallbackRoute;
+  }
+}
+
+const nearTestPickup = {
+  name: 'ハノイ・ホアンキエム周辺',
+  position: [21.02878, 105.85204],
+};
+
+function isNearTestCustomer() {
+  return (localStorage.getItem('jpTaxiCustomerEmail') || localStorage.getItem('jpTaxiUserEmail') || '').toLowerCase() === 'nearcustomer@jptaxi.dev';
+}
+
 export default function BillConfirmPage() {
   const navigate = useNavigate();
-  const isDriver = localStorage.getItem('jpTaxiRole') === 'driver';
-  const homePath = isDriver ? '/driver-home' : '/home';
-  const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
+  const homePath = '/home';
+  const accountPath = '/user-info';
   const [bookingMode, setBookingMode] = useState('self');
   const [accountOpen, setAccountOpen] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
   const [toast, setToast] = useState('');
+  const [noteToDriver, setNoteToDriver] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [proxyPassenger, setProxyPassenger] = useState({ name: '', phone: '' });
+  const [selectedRoute] = useState(readSelectedRoute);
   const accountRef = useRef(null);
+  const displayDistance = selectedRoute.routeMetrics.distance;
+  const routeSummary = `${displayDistance} - ${selectedRoute.routeMetrics.duration}`;
+  const effectivePickup = isNearTestCustomer() ? nearTestPickup : selectedRoute.pickup;
+  const pickupPosition = effectivePickup.position;
+
+  const routePoints = [
+    {
+      key: 'pickup',
+      label: effectivePickup.name,
+      meta: '出発地',
+      time: '現在',
+      position: pickupPosition,
+      type: 'pickup',
+    },
+    {
+      key: 'destination',
+      label: selectedRoute.destination.name,
+      meta: selectedRoute.destination.address,
+      time: `約${selectedRoute.routeMetrics.duration}`,
+      position: selectedRoute.destination.position,
+      type: 'destination',
+    },
+  ];
+
+  function proceedToSearchCar(requestId) {
+    sessionStorage.setItem('jpTaxiRideRequestId', requestId ? String(requestId) : `demo-${Date.now()}`);
+    window.setTimeout(() => navigate('/search-car'), 300);
+  }
 
   useEffect(() => {
     function closeAccount(event) {
@@ -33,10 +129,68 @@ export default function BillConfirmPage() {
     }
   }
 
-  function confirmBooking() {
+  function closeProxyModal({ save = false } = {}) {
+    const hasProxyInfo = proxyPassenger.name.trim() && proxyPassenger.phone.trim();
+    if (!hasProxyInfo) {
+      const shouldNotify = bookingMode === 'proxy';
+      setBookingMode('self');
+      if (save || shouldNotify) {
+        setToast('代理予約の情報が空のため、自分用に戻しました');
+      }
+    }
+    setProxyOpen(false);
+  }
+
+  async function confirmBooking() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     setProxyOpen(false);
     setToast('予約内容を確認しました');
-    window.setTimeout(() => navigate('/search-car'), 700);
+    sessionStorage.removeItem('jpTaxiRideRequestId');
+    sessionStorage.removeItem('jpTaxiTripId');
+    localStorage.removeItem('jpTaxiRideAccepted');
+    localStorage.removeItem('jpTaxiPaymentRequested');
+    const proxyInfoComplete = proxyPassenger.name.trim() && proxyPassenger.phone.trim();
+    const finalBookingMode = bookingMode === 'proxy' && proxyInfoComplete ? 'proxy' : 'self';
+    if (bookingMode === 'proxy' && finalBookingMode === 'self') {
+      setBookingMode('self');
+      setToast('代理予約の情報が未入力のため、本人予約に戻しました。');
+    }
+
+    const bookingPayload = {
+      pickupAddress: effectivePickup.name,
+      pickupLat: pickupPosition[0],
+      pickupLng: pickupPosition[1],
+      dropoffAddress: `${selectedRoute.destination.name} - ${selectedRoute.destination.address}`,
+      dropoffLat: selectedRoute.destination.position[0],
+      dropoffLng: selectedRoute.destination.position[1],
+      vehicleType: '4',
+      noteToDriver,
+      actualPassengerName: finalBookingMode === 'proxy' ? proxyPassenger.name.trim() : undefined,
+      actualPassengerPhone: finalBookingMode === 'proxy' ? proxyPassenger.phone.trim() : undefined,
+    };
+
+    try {
+      let request;
+      try {
+        request = await createRideRequest(bookingPayload);
+      } catch (error) {
+        const activeRide = await getActiveRide().catch(() => null);
+        const requestId = activeRide?.type === 'request' ? activeRide.data?.requestId : null;
+        const requestStatus = activeRide?.data?.status;
+        if (requestId && ['pending', 'searching'].includes(requestStatus)) {
+          await cancelRideRequest(requestId);
+          request = await createRideRequest(bookingPayload);
+        } else {
+          throw error;
+        }
+      }
+
+      proceedToSearchCar(request?.requestId);
+    } catch (error) {
+      setToast('デモモードで予約を続行します');
+      proceedToSearchCar();
+    }
   }
 
   return (
@@ -77,7 +231,7 @@ export default function BillConfirmPage() {
                   <span className="point-dot"></span>
                   <div>
                     <span>出発地</span>
-                    <strong>ホアンキエム湖</strong>
+                    <strong>{effectivePickup.name}</strong>
                   </div>
                 </div>
                 <div className="route-line"></div>
@@ -85,7 +239,7 @@ export default function BillConfirmPage() {
                   <span className="point-dot"></span>
                   <div>
                     <span>目的地</span>
-                    <strong>ロッテホテル ハノイ</strong>
+                    <strong>{selectedRoute.destination.name}</strong>
                   </div>
                 </div>
               </div>
@@ -93,15 +247,15 @@ export default function BillConfirmPage() {
               <div className="trip-summary">
                 <article>
                   <span>乗車予定</span>
-                  <strong>18:30</strong>
+                  <strong>現在</strong>
                 </article>
                 <article>
                   <span>所要時間</span>
-                  <strong>12分</strong>
+                  <strong>{selectedRoute.routeMetrics.duration}</strong>
                 </article>
                 <article>
                   <span>走行距離</span>
-                  <strong>4.8 km</strong>
+                  <strong>{displayDistance}</strong>
                 </article>
               </div>
             </section>
@@ -114,14 +268,18 @@ export default function BillConfirmPage() {
                   <strong>スタンダード</strong>
                   <span>快適なセダン・禁煙車</span>
                 </div>
-                <strong className="vehicle-price">¥680</strong>
+                <strong className="vehicle-price">{selectedRoute.routeMetrics.fare}</strong>
               </div>
             </section>
 
             <section className="section-card">
               <label className="memo-field">
                 <span>ドライバーへのメモ (任意)</span>
-                <textarea placeholder="例: 大きな荷物があります、または待ち合わせ場所の詳細など..." />
+                <textarea
+                  onChange={(event) => setNoteToDriver(event.target.value)}
+                  placeholder="例: 大きな荷物があります、または待ち合わせ場所の詳細など..."
+                  value={noteToDriver}
+                />
               </label>
             </section>
 
@@ -134,7 +292,7 @@ export default function BillConfirmPage() {
                 </div>
                 <div>
                   <dt>距離加算</dt>
-                  <dd>¥120</dd>
+                  <dd>{selectedRoute.routeMetrics.distance === fallbackRoute.routeMetrics.distance ? '¥120' : '自動計算'}</dd>
                 </div>
                 <div>
                   <dt>予約手数料</dt>
@@ -143,7 +301,7 @@ export default function BillConfirmPage() {
               </dl>
               <div className="total-row">
                 <span>合計金額</span>
-                <strong>¥680</strong>
+                <strong>{selectedRoute.routeMetrics.fare}</strong>
               </div>
             </section>
 
@@ -165,47 +323,59 @@ export default function BillConfirmPage() {
             </div>
 
             <div className="action-row">
-              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to={homePath}>
+              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/location-search">
                 戻る
               </Link>
-              <button className="primary-button" type="button" onClick={confirmBooking}>
-                予約を確定する
+              <button className="primary-button" type="button" onClick={confirmBooking} disabled={isSubmitting}>
+                {isSubmitting ? '送信中...' : '予約を確定する'}
               </button>
             </div>
           </section>
 
-          <section className="map-panel" aria-label="ルートマップ">
-            <div className="map-label pickup-label">ホアンキエム湖</div>
-            <div className="map-label destination-label">ロッテホテル</div>
-            <svg className="route-svg" viewBox="0 0 420 760" preserveAspectRatio="none" aria-hidden="true">
-              <path d="M142 230 C260 342 292 452 264 612" />
-            </svg>
-            <span className="map-pin pickup-pin"></span>
-            <span className="map-pin destination-pin"></span>
+          <section className="map-panel booking-route-map" aria-label="ルートマップ">
+            <InteractiveRouteMap
+              alternateRoutePath={[]}
+              currentLocation={pickupPosition}
+              route={routePoints}
+              routePath={selectedRoute.routePath}
+              routeSummary={routeSummary}
+              scrollWheelZoom
+              showCurrentLocation={false}
+            />
           </section>
         </section>
 
-        <div className={`modal-backdrop ${proxyOpen ? 'open' : ''}`} aria-hidden={!proxyOpen} onClick={() => setProxyOpen(false)}>
+        <div className={`modal-backdrop ${proxyOpen ? 'open' : ''}`} aria-hidden={!proxyOpen} onClick={() => closeProxyModal()}>
           <section className="proxy-modal" role="dialog" aria-modal="true" aria-labelledby="proxy-title" onClick={(event) => event.stopPropagation()}>
             <div className="modal-header">
               <h2 id="proxy-title">代理予約の乗車者情報</h2>
-              <button className="modal-close" type="button" aria-label="閉じる" onClick={() => setProxyOpen(false)}>×</button>
+              <button className="modal-close" type="button" aria-label="閉じる" onClick={() => closeProxyModal()}>×</button>
             </div>
             <p className="modal-copy">代理予約に切り替えたため、実際に乗車する方の情報を入力してください。</p>
             <div className="proxy-fields">
               <label>
                 <span>乗車者氏名</span>
-                <input type="text" placeholder="例: 田中 太郎" />
+                <input
+                  type="text"
+                  onChange={(event) => setProxyPassenger((current) => ({ ...current, name: event.target.value }))}
+                  placeholder="例: 田中 太郎"
+                  value={proxyPassenger.name}
+                />
               </label>
               <label>
                 <span>連絡先電話番号</span>
-                <input type="tel" placeholder="090-0000-0000" />
+                <input
+                  type="tel"
+                  onChange={(event) => setProxyPassenger((current) => ({ ...current, phone: event.target.value }))}
+                  placeholder="090-0000-0000"
+                  value={proxyPassenger.phone}
+                />
               </label>
             </div>
 
             <div className="modal-actions">
-              <button className="secondary-button" type="button" onClick={() => setProxyOpen(false)}>後で入力</button>
-              <button className="primary-button" type="button" onClick={() => setProxyOpen(false)}>保存する</button>
+              <button className="secondary-button" type="button" onClick={() => closeProxyModal()}>後で入力</button>
+              <button className="primary-button" type="button" onClick={() => closeProxyModal({ save: true })}>保存する</button>
             </div>
           </section>
         </div>

@@ -1,5 +1,5 @@
 .auth-screen {
-  min-height: calc(100vh - 94px);
+  min-height: 100vh;
   overflow: visible;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.52) 54%, rgba(255, 255, 255, 0.98) 72%),
@@ -11,7 +11,7 @@
   grid-template-columns: minmax(520px, 1fr) 430px;
   align-items: center;
   gap: 52px;
-  min-height: calc(100vh - 158px);
+  min-height: calc(100vh - 78px);
   padding: 24px 64px 48px;
 }
 
@@ -452,6 +452,7 @@
   .driver-register-form-card {
     max-height: none;
   }
+
 }
 
 @media (max-width: 560px) {
@@ -464,4 +465,5 @@
   .intro h1 {
     font-size: 30px;
   }
+
 }

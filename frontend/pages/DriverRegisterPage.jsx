@@ -1,20 +1,51 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/auth.css';
 import '../styles/app-pages.css';
 
 export default function DriverRegisterPage() {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({
+    lastName: '',
+    firstName: '',
+    phone: '',
+    language: 'N3',
+    licenseNumber: '',
+    licenseType: 'B',
+    licenseExpiryDate: '',
+    vehicleBrand: '',
+    licensePlate: '',
+    vehicleType: '4',
+    vehicleColor: '',
+  });
+  const [status, setStatus] = useState('');
+
+  function updateField(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function submitDriverApplication(event) {
+    event.preventDefault();
+    if (!form.lastName.trim() || !form.firstName.trim() || !form.phone.trim() || !form.licenseNumber.trim() || !form.licensePlate.trim()) {
+      setStatus('必要な情報を入力してください。');
+      return;
+    }
+
+    sessionStorage.setItem('jpTaxiPendingDriverRegistration', JSON.stringify(form));
+    navigate('/register?role=driver');
+  }
+
   return (
     <PageShell withFooter={false}>
       <main className="driver-register-screen">
         <Topbar
-          brandTo="/home"
+          brandTo="/login"
           actions={(
             <>
-              <Link to="/home">ホーム</Link>
-              <Link to="/user-info/profile">アカウント</Link>
-              <img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" />
+              <Link to="/login">ログイン</Link>
+              <Link to="/register">顧客登録</Link>
             </>
           )}
         />
@@ -45,21 +76,42 @@ export default function DriverRegisterPage() {
               <p>ドライバー登録、または運転免許・車両情報の更新を行ってください。</p>
             </div>
 
-            <form className="auth-form driver-register-form" onSubmit={(event) => event.preventDefault()}>
+            <form className="auth-form driver-register-form" onSubmit={submitDriverApplication}>
               <div className="notice-box">現在の申請状況：<strong>未提出</strong><br />書類の審査には通常1〜2営業日かかります。</div>
 
               <h3 className="section-title">基本情報</h3>
               <div className="field-grid two">
-                <label><span>姓</span><input placeholder="山田" /></label>
-                <label><span>名</span><input placeholder="太郎" /></label>
-                <label><span>電話番号</span><input placeholder="+84 000 000 000" /></label>
-                <label><span>対応言語</span><select defaultValue="日本語"><option>日本語</option><option>日本語・ベトナム語</option></select></label>
+                <label><span>姓</span><input placeholder="山田" value={form.lastName} onChange={(event) => updateField('lastName', event.target.value)} /></label>
+                <label><span>名</span><input placeholder="太郎" value={form.firstName} onChange={(event) => updateField('firstName', event.target.value)} /></label>
+                <label><span>電話番号</span><input placeholder="+84 000 000 000" value={form.phone} onChange={(event) => updateField('phone', event.target.value)} /></label>
+                <label>
+                  <span>日本語レベル</span>
+                  <select value={form.language} onChange={(event) => updateField('language', event.target.value)}>
+                    <option value="N5">N5</option>
+                    <option value="N4">N4</option>
+                    <option value="N3">N3</option>
+                    <option value="N2">N2</option>
+                    <option value="N1">N1</option>
+                    <option value="Native">Native</option>
+                  </select>
+                </label>
               </div>
 
               <h3 className="section-title">運転免許情報</h3>
               <div className="field-grid two">
-                <label><span>免許証番号</span><input placeholder="DL-123456789" /></label>
-                <label><span>有効期限</span><input type="date" /></label>
+                <label><span>免許証番号</span><input placeholder="DL-123456789" value={form.licenseNumber} onChange={(event) => updateField('licenseNumber', event.target.value)} /></label>
+                <label>
+                  <span>免許種別</span>
+                  <select value={form.licenseType} onChange={(event) => updateField('licenseType', event.target.value)}>
+                    <option value="B">B</option>
+                    <option value="C1">C1</option>
+                    <option value="C">C</option>
+                    <option value="D1">D1</option>
+                    <option value="D2">D2</option>
+                    <option value="D">D</option>
+                  </select>
+                </label>
+                <label><span>有効期限</span><input type="date" value={form.licenseExpiryDate} onChange={(event) => updateField('licenseExpiryDate', event.target.value)} /></label>
               </div>
               <div className="upload-grid">
                 <label className="upload-box">📄<strong>免許証（表）</strong><span>クリックしてアップロード</span><input type="file" hidden /></label>
@@ -68,10 +120,17 @@ export default function DriverRegisterPage() {
 
               <h3 className="section-title">車両情報</h3>
               <div className="field-grid two">
-                <label><span>車種</span><input placeholder="Toyota Vios" /></label>
-                <label><span>ナンバープレート</span><input placeholder="30A-123.45" /></label>
-                <label><span>座席数</span><select><option>4人乗り</option><option>7人乗り</option></select></label>
-                <label><span>車両カラー</span><input placeholder="白" /></label>
+                <label><span>車種</span><input placeholder="Toyota Vios" value={form.vehicleBrand} onChange={(event) => updateField('vehicleBrand', event.target.value)} /></label>
+                <label><span>ナンバープレート</span><input placeholder="30A-123.45" value={form.licensePlate} onChange={(event) => updateField('licensePlate', event.target.value)} /></label>
+                <label>
+                  <span>座席数</span>
+                  <select value={form.vehicleType} onChange={(event) => updateField('vehicleType', event.target.value)}>
+                    <option value="4">4人乗り</option>
+                    <option value="7">7人乗り</option>
+                    <option value="9">9人乗り</option>
+                  </select>
+                </label>
+                <label><span>車両カラー</span><input placeholder="白" value={form.vehicleColor} onChange={(event) => updateField('vehicleColor', event.target.value)} /></label>
               </div>
               <div className="upload-grid">
                 <label className="upload-box">🚗<strong>車両写真</strong><span>車の外観写真をアップロード</span><input type="file" hidden /></label>
@@ -79,13 +138,14 @@ export default function DriverRegisterPage() {
               </div>
 
               <label className="terms">
-                <input type="checkbox" />
+                <input type="checkbox" required />
                 <span>提出した情報が正確であり、ドライバー利用規約および審査ポリシーに同意します。</span>
               </label>
+              {status && <p className="form-status show">{status}</p>}
 
               <div className="driver-register-actions">
-                <button className="secondary-button" type="button">一時保存</button>
-                <Link className="submit-button" to="/register">申請を送信</Link>
+                <button className="secondary-button" type="button" onClick={() => navigate('/login')}>戻る</button>
+                <button className="submit-button" type="submit">申請を送信</button>
               </div>
             </form>
           </section>

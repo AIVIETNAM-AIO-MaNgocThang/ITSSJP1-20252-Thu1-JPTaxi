@@ -1,56 +1,202 @@
-import { Link, NavLink, useParams } from 'react-router-dom';
-import { useState } from 'react';
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import Footer from '../components/Footer.jsx';
 import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import {
+  getCustomerProfile,
+  resolveAssetUrl,
+  updateCustomerProfile,
+  uploadAvatar,
+} from '../api/accounts.js';
+import {
+  getStoredProfileLanguage,
+  languageOptions,
+  LANGUAGE_EVENT,
+  profileText,
+  setStoredProfileLanguage,
+} from '../i18n/profileLanguage.js';
 import '../styles/app-pages.css';
+import { readSavedPlaces, writeSavedPlaces } from '../utils/savedPlaces.js';
 
 const userMenu = [
-  { id: 'profile', icon: '👤', label: 'プロフィール', to: '/user-info/profile' },
-  { id: 'security', icon: '🔒', label: 'セキュリティ', to: '/user-info/security' },
-  { id: 'notifications', icon: '🔔', label: '通知設定', to: '/user-info/notifications' },
-  { id: 'payment', icon: '💳', label: '支払い方法', to: '/user-info/payment' },
-  { id: 'language', icon: '🌐', label: '言語設定', to: '/user-info/language' },
-  { id: 'logout', icon: '🚪', label: 'ログアウト', to: '/user-info/logout' },
+  { id: 'profile', icon: '👤', to: '/user-info/profile' },
+  { id: 'security', icon: '🔒', to: '/user-info/security' },
+  { id: 'notifications', icon: '🔔', to: '/user-info/notifications' },
+  { id: 'payment', icon: '💳', to: '/user-info/payment' },
+  { id: 'language', icon: '🌐', to: '/user-info/language' },
+  { id: 'logout', icon: '🚪', to: '/user-info/logout' },
 ];
 
+const fallbackProfile = {
+  lastName: '山田',
+  firstName: '太郎',
+  email: localStorage.getItem('jpTaxiUserEmail') || 'yamada@example.com',
+  gender: 'Male',
+  phone: '+84123456789',
+  birthDate: '1990-01-01',
+  avatarUrl: '',
+  createdAt: '2026-03-10',
+  loginHistory: [],
+};
+
+function normalizeProfile(profile = fallbackProfile) {
+  return {
+    ...fallbackProfile,
+    ...profile,
+    birthDate: profile.birthDate ? String(profile.birthDate).slice(0, 10) : fallbackProfile.birthDate,
+    avatarUrl: resolveAssetUrl(profile.avatarUrl),
+    loginHistory: Array.isArray(profile.loginHistory) ? profile.loginHistory : [],
+  };
+}
+
+function formatDate(value, locale = 'ja-JP') {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString(locale);
+}
+
 export default function UserInfoPage() {
+  const navigate = useNavigate();
   const { section } = useParams();
   const activeSection = userMenu.some((item) => item.id === section) ? section : 'profile';
   const [modal, setModal] = useState(null);
+  const [profile, setProfile] = useState(fallbackProfile);
+  const [savedPlaces, setSavedPlaces] = useState(readSavedPlaces);
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [language, setLanguage] = useState(getStoredProfileLanguage);
+  const text = profileText[language] || profileText.ja;
+  const common = text.common;
+  const userText = text.user;
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadProfile() {
+      setLoading(true);
+      try {
+        const data = await getCustomerProfile();
+        if (!ignore) setProfile(normalizeProfile(data));
+      } catch (error) {
+        if (!ignore) setStatus(error.message || text.status.userDemo);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    loadProfile();
+    return () => {
+      ignore = true;
+    };
+  }, [text.status.userDemo]);
+
+  useEffect(() => {
+    function syncLanguage(event) {
+      setLanguage(event.detail?.language || getStoredProfileLanguage());
+    }
+
+    window.addEventListener(LANGUAGE_EVENT, syncLanguage);
+    return () => window.removeEventListener(LANGUAGE_EVENT, syncLanguage);
+  }, []);
+
+  const fullName = `${profile.lastName} ${profile.firstName}`.trim();
+  const avatar = profile.avatarUrl;
 
   const modalTitle = {
-    account: 'アカウント情報を編集',
-    avatar: 'プロフィール画像を変更',
-    password: 'パスワード変更',
-    loginHistory: 'ログイン履歴',
-    card: 'カード情報',
-    addCard: 'カードを追加',
-    logout: 'ログアウト確認',
-    saved: '保存しました',
+    account: userText.modal.account,
+    avatar: userText.modal.avatar,
+    password: userText.modal.password,
+    loginHistory: userText.modal.loginHistory,
+    card: userText.modal.card,
+    addCard: userText.modal.addCard,
+    logout: userText.modal.logout,
+    saved: userText.modal.saved,
+    error: userText.modal.error,
   }[modal];
+
+  function updateField(field, value) {
+    setProfile((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateSavedPlace(key, value) {
+    setSavedPlaces((current) => ({
+      ...current,
+      [key]: {
+        ...current[key],
+        address: value,
+      },
+    }));
+  }
+
+  async function handleAvatarChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadAvatar(file);
+      if (url) {
+        setProfile((current) => ({ ...current, avatarUrl: url }));
+        setStatus(text.status.avatarUploaded);
+      }
+    } catch (error) {
+      setStatus(error.message || text.status.avatarFailed);
+    }
+  }
+
+  async function saveProfile() {
+    writeSavedPlaces(savedPlaces);
+    try {
+      const updated = await updateCustomerProfile({
+        lastName: profile.lastName,
+        firstName: profile.firstName,
+        gender: profile.gender,
+        birthDate: profile.birthDate,
+        phone: profile.phone,
+        email: profile.email,
+        avatarUrl: profile.avatarUrl || null,
+      });
+      setProfile(normalizeProfile(updated));
+      setModal('saved');
+      setStatus(text.status.dbSaved);
+    } catch (error) {
+      setModal('error');
+      setStatus(error.message || text.status.userSaveFailed);
+    }
+  }
+
+  function changeLanguage(nextLanguage) {
+    setLanguage(setStoredProfileLanguage(nextLanguage));
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('jpTaxiToken');
+    localStorage.removeItem('jpTaxiRole');
+    localStorage.removeItem('jpTaxiUserEmail');
+    localStorage.removeItem('jpTaxiCustomerId');
+    localStorage.removeItem('jpTaxiDriverId');
+    localStorage.removeItem('jpTaxiFallbackRide');
+    localStorage.removeItem('jpTaxiPaymentRequested');
+    sessionStorage.removeItem('jpTaxiRideRequestId');
+    sessionStorage.removeItem('jpTaxiTripId');
+    sessionStorage.removeItem('jpTaxiSelectedRoute');
+    navigate('/login', { replace: true });
+  }
 
   function renderContent() {
     if (activeSection === 'security') {
       return (
         <section className="panel zip-profile-panel">
-          <h2 className="panel-title">セキュリティ</h2>
+          <h2 className="panel-title">{common.security}</h2>
           <div className="security-list">
-            <article className="security-item">
-              <strong>パスワード変更</strong>
-              <span>アカウント保護のため、定期的にパスワードを更新してください。</span>
-              <button className="link-btn" type="button" onClick={() => setModal('password')}>変更する</button>
-            </article>
-            <article className="security-item">
-              <strong>アカウント情報</strong>
-              <span>ログインID、メール、電話番号などの基本アカウント情報を編集します。</span>
-              <button className="link-btn" type="button" onClick={() => setModal('account')}>編集する</button>
-            </article>
-            <article className="security-item">
-              <strong>ログイン履歴</strong>
-              <span>最近ログインした端末と日時を確認できます。</span>
-              <button className="link-btn" type="button" onClick={() => setModal('loginHistory')}>確認する</button>
-            </article>
+            {userText.security.map(([title, copy, action], index) => (
+              <article className="security-item" key={title}>
+                <strong>{title}</strong>
+                <span>{copy}</span>
+                {index === 1 ? (
+                  <NavLink className="link-btn" to="/user-info/profile">{action}</NavLink>
+                ) : (
+                  <button className="link-btn" type="button" onClick={() => setModal(index === 0 ? 'password' : 'loginHistory')}>{action}</button>
+                )}
+              </article>
+            ))}
           </div>
         </section>
       );
@@ -59,19 +205,12 @@ export default function UserInfoPage() {
     if (activeSection === 'notifications') {
       return (
         <section className="panel zip-profile-panel">
-          <h2 className="panel-title">通知設定</h2>
+          <h2 className="panel-title">{userText.menu.notifications}</h2>
           <div className="setting-list">
-            {[
-              ['🔔', '配車通知', '予約確認や到着予定などの通知を受け取る'],
-              ['💬', 'メッセージ通知', 'ドライバーやサポートからの連絡を受け取る'],
-              ['📧', 'メール通知', 'キャンペーンやお知らせをメールで受け取る'],
-            ].map(([icon, title, sub]) => (
+            {userText.notifications.map(([icon, title, sub]) => (
               <label className="setting-row" key={title}>
                 <span className="icon-box">{icon}</span>
-                <span>
-                  <strong>{title}</strong>
-                  <small>{sub}</small>
-                </span>
+                <span><strong>{title}</strong><small>{sub}</small></span>
                 <span className="switch"><input type="checkbox" defaultChecked /><span></span></span>
               </label>
             ))}
@@ -83,13 +222,13 @@ export default function UserInfoPage() {
     if (activeSection === 'payment') {
       return (
         <section className="panel zip-profile-panel narrow-panel">
-          <h2 className="panel-title">支払い方法</h2>
+          <h2 className="panel-title">{userText.paymentTitle}</h2>
           <div className="setting-list">
             <button className="account-card" type="button" onClick={() => setModal('card')}>
-              <strong>既定の支払い方法</strong>
-              <span>クレジットカード **** 4821</span>
+              <strong>{userText.defaultPayment}</strong>
+              <span>{common.card}</span>
             </button>
-            <button className="submit-button profile-save-button" type="button" onClick={() => setModal('addCard')}>カードを追加</button>
+            <button className="submit-button profile-save-button" type="button" onClick={() => setModal('addCard')}>{common.addCard}</button>
           </div>
         </section>
       );
@@ -98,13 +237,13 @@ export default function UserInfoPage() {
     if (activeSection === 'language') {
       return (
         <section className="panel zip-profile-panel narrow-panel">
-          <h2 className="panel-title">言語設定</h2>
+          <h2 className="panel-title">{userText.languageTitle}</h2>
           <label>
-            <span>表示言語</span>
-            <select defaultValue="ja">
-              <option value="ja">日本語</option>
-              <option value="vi">ベトナム語</option>
-              <option value="en">英語</option>
+            <span>{userText.displayLanguage}</span>
+            <select value={language} onChange={(event) => changeLanguage(event.target.value)}>
+              {languageOptions.map((option) => (
+                <option value={option.value} key={option.value}>{option.label}</option>
+              ))}
             </select>
           </label>
         </section>
@@ -114,9 +253,9 @@ export default function UserInfoPage() {
     if (activeSection === 'logout') {
       return (
         <section className="panel zip-profile-panel narrow-panel">
-          <h2 className="panel-title">ログアウト</h2>
-          <p className="muted-copy">現在のアカウントからログアウトします。</p>
-          <button className="submit-button profile-save-button" type="button" onClick={() => setModal('logout')}>ログアウト</button>
+          <h2 className="panel-title">{common.logout}</h2>
+          <p className="muted-copy">{userText.logoutCopy}</p>
+          <button className="submit-button profile-save-button" type="button" onClick={handleLogout}>{common.logout}</button>
         </section>
       );
     }
@@ -125,25 +264,28 @@ export default function UserInfoPage() {
       <div className="profile-reference-grid">
         <div>
           <section className="panel zip-profile-panel">
-            <h2 className="panel-title">個人情報</h2>
+            <h2 className="panel-title">{userText.personalInfo}</h2>
             <div className="form-grid">
-              <label><span>姓</span><input defaultValue="山田" /></label>
-              <label><span>名</span><input defaultValue="太郎" /></label>
-              <label className="field full"><span>メールアドレス</span><input defaultValue="yamada@example.com" /></label>
-              <label><span>性別</span><select defaultValue="male"><option value="male">男性</option><option value="female">女性</option></select></label>
-              <label><span>電話番号</span><input defaultValue="+84 123 456 789" /></label>
-              <label className="field full"><span>住所</span><input defaultValue="ハノイ市バーディン区" /></label>
+              <label><span>{common.lastName}</span><input value={profile.lastName} onChange={(event) => updateField('lastName', event.target.value)} /></label>
+              <label><span>{common.firstName}</span><input value={profile.firstName} onChange={(event) => updateField('firstName', event.target.value)} /></label>
+              <label className="field full"><span>{common.email}</span><input type="email" value={profile.email} onChange={(event) => updateField('email', event.target.value)} /></label>
+              <label>
+                <span>{common.gender}</span>
+                <select value={profile.gender} onChange={(event) => updateField('gender', event.target.value)}>
+                  <option value="Male">{common.male}</option>
+                  <option value="Female">{common.female}</option>
+                  <option value="Other">{common.other}</option>
+                </select>
+              </label>
+              <label><span>{common.phone}</span><input value={profile.phone} onChange={(event) => updateField('phone', event.target.value)} /></label>
+              <label className="field full"><span>{userText.address}</span><input defaultValue="Ba Dinh, Ha Noi" /></label>
             </div>
           </section>
 
           <section className="panel zip-profile-panel stack">
-            <h2 className="panel-title">通知設定</h2>
+            <h2 className="panel-title">{userText.menu.notifications}</h2>
             <div className="setting-list">
-              {[
-                ['🔔', '配車通知', '予約確認や到着予定などの通知を受け取る'],
-                ['💬', 'メッセージ通知', 'ドライバーやサポートからの連絡を受け取る'],
-                ['📧', 'メール通知', 'キャンペーンやお知らせをメールで受け取る'],
-              ].map(([icon, title, sub]) => (
+              {userText.notifications.map(([icon, title, sub]) => (
                 <label className="setting-row" key={title}>
                   <span className="icon-box">{icon}</span>
                   <span><strong>{title}</strong><small>{sub}</small></span>
@@ -156,33 +298,33 @@ export default function UserInfoPage() {
 
         <div>
           <section className="panel zip-profile-panel">
-            <h2 className="panel-title">アカウント情報</h2>
+            <h2 className="panel-title">{userText.accountInfo}</h2>
             <div className="setting-list">
-              <button className="account-card" type="button" onClick={() => setModal('account')}><strong>ログインアカウント</strong><span>yamada@example.com</span></button>
-              <Link className="account-card" to="/user-info/language"><strong>表示言語</strong><span>日本語</span></Link>
-              <Link className="account-card" to="/user-info/payment"><strong>支払い方法</strong><span>カード **** 4821</span></Link>
-              <article className="account-card"><strong>登録日</strong><span>2026年03月10日</span></article>
+              <Link className="account-card profile-info-card" to="/user-info/language">
+                <span className="account-icon">🌐</span>
+                <span><strong>{userText.displayLanguage}</strong><small>{languageOptions.find((item) => item.value === language)?.label || '日本語'}</small></span>
+              </Link>
+              <Link className="account-card profile-info-card" to="/user-info/payment">
+                <span className="account-icon">💳</span>
+                <span><strong>{userText.defaultPayment}</strong><small>{common.card}</small></span>
+              </Link>
+              <article className="account-card profile-info-card">
+                <span className="account-icon">🕘</span>
+                <span><strong>{userText.registeredDate}</strong><small>{formatDate(profile.createdAt, text.locale) || '2026/03/10'}</small></span>
+              </article>
             </div>
           </section>
 
           <section className="panel zip-profile-panel stack">
-            <h2 className="panel-title">セキュリティ</h2>
+            <h2 className="panel-title">{common.security}</h2>
             <div className="security-list">
-              <article className="security-item">
-                <strong>パスワード変更</strong>
-                <span>アカウントの安全性を高めるため、定期的にパスワードを変更してください。</span>
-                <button className="link-btn" type="button" onClick={() => setModal('password')}>変更する</button>
-              </article>
-              <article className="security-item">
-                <strong>二段階認証</strong>
-                <span>ログイン時に追加の確認コードを要求して、セキュリティを強化します。</span>
-                <button className="link-btn" type="button" onClick={() => setModal('twoFactor')}>設定する</button>
-              </article>
-              <article className="security-item">
-                <strong>ログイン履歴</strong>
-                <span>最近のログイン履歴や利用端末を確認できます。</span>
-                <button className="link-btn" type="button" onClick={() => setModal('loginHistory')}>確認する</button>
-              </article>
+              {userText.securityHome.map(([title, copy, action], index) => (
+                <article className="security-item" key={title}>
+                  <strong>{title}</strong>
+                  <span>{copy}</span>
+                  <button className="link-btn" type="button" onClick={() => setModal(index === 0 ? 'password' : 'loginHistory')}>{action}</button>
+                </article>
+              ))}
             </div>
           </section>
         </div>
@@ -191,23 +333,26 @@ export default function UserInfoPage() {
   }
 
   return (
-    <PageShell>
+    <PageShell withFooter={false}>
       <main className="app-screen zip-profile-screen">
         <div className="profile-window">
-          <Topbar actions={<><Link to="/home">ホーム</Link><Link to="/messages/driver">メッセージ</Link><img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
+          <Topbar actions={<><Link to="/home">{common.home}</Link><Link to="/messages/driver">{common.messages}</Link>{avatar ? <img className="topbar-avatar" src={avatar} alt="" /> : <span className="topbar-avatar" />}</>} />
           <section className="profile-page-shell zip-profile-shell">
             <aside className="profile-sidebar">
               <section className="profile-card zip-profile-card">
-                <div className="profile-avatar">山</div>
-                <strong>山田 太郎</strong>
-                <span>yamada@example.com</span>
-                <em>一般ユーザー</em>
+                <div className="profile-avatar">
+                  {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : profile.lastName.slice(0, 1)}
+                </div>
+                <strong>{fullName}</strong>
+                <span>{profile.email}</span>
+                <em>{loading ? common.loading : userText.role}</em>
+                <input type="file" accept="image/*" onChange={handleAvatarChange} />
               </section>
-              <nav className="side-menu" aria-label="プロフィールメニュー">
+              <nav className="side-menu" aria-label={userText.pageTitle}>
                 {userMenu.map((tab) => (
                   <NavLink className={({ isActive }) => `side-item ${isActive || activeSection === tab.id ? 'active' : ''}`} to={tab.to} key={tab.id}>
                     <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
+                    <span>{userText.menu[tab.id]}</span>
                   </NavLink>
                 ))}
               </nav>
@@ -216,36 +361,43 @@ export default function UserInfoPage() {
             <section className="profile-content">
               <div className="profile-header zip-profile-header">
                 <div>
-                  <h1>プロフィール設定</h1>
-                  <p>個人情報やアカウント設定を管理できます。必要に応じて内容を更新してください。</p>
+                  <h1>{userText.pageTitle}</h1>
+                  <p>{userText.pageSubtitle}</p>
+                  {status && <p className="muted-copy">{status}</p>}
                 </div>
-                <button className="submit-button profile-save-button" type="button" onClick={() => setModal('saved')}>変更を保存</button>
+                <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>{common.saveChanges}</button>
               </div>
               {renderContent()}
             </section>
           </section>
+          <Footer />
         </div>
 
-        <Modal open={Boolean(modal)} title={modalTitle || '保存しました'} onClose={() => setModal(null)}>
+        <Modal open={Boolean(modal)} title={modalTitle || userText.modal.saved} onClose={() => setModal(null)}>
           {modal === 'account' && (
             <div className="modal-form zip-modal-form">
-              <label><span>ログインID</span><input defaultValue="yamada_taro" /></label>
-              <label><span>メールアドレス</span><input type="email" defaultValue="yamada@example.com" /></label>
-              <label><span>電話番号</span><input defaultValue="+84 123 456 789" /></label>
-              <label><span>表示名</span><input defaultValue="山田 太郎" /></label>
-              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>保存</button>
+              <label><span>{common.email}</span><input type="email" value={profile.email} onChange={(event) => updateField('email', event.target.value)} /></label>
+              <label><span>{common.phone}</span><input value={profile.phone} onChange={(event) => updateField('phone', event.target.value)} /></label>
+              <label><span>{userText.modal.displayName}</span><input value={fullName} readOnly /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>{common.save}</button>
             </div>
           )}
           {modal === 'password' && (
             <div className="modal-form zip-modal-form">
-              <label><span>現在のパスワード</span><input type="password" /></label>
-              <label><span>新しいパスワード</span><input type="password" /></label>
-              <label><span>新しいパスワード確認</span><input type="password" /></label>
-              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>保存</button>
+              <label><span>{userText.modal.currentPassword}</span><input type="password" /></label>
+              <label><span>{userText.modal.newPassword}</span><input type="password" /></label>
+              <label><span>{userText.modal.confirmPassword}</span><input type="password" /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>{common.save}</button>
             </div>
           )}
-          {modal === 'loginHistory' && <div className="modal-list"><span>2026/05/14 21:30 - Chrome / Windows</span><span>2026/05/12 08:15 - Mobile Safari</span></div>}
-          {modal && !['account', 'password', 'loginHistory'].includes(modal) && <p className="modal-copy">内容を確認して保存してください。</p>}
+          {modal === 'loginHistory' && (
+            <div className="modal-list">
+              {profile.loginHistory.length ? profile.loginHistory.map((item) => (
+                <span key={`${item.loginTime}-${item.ipAddress}`}>{formatDate(item.loginTime, text.locale)} - {item.ipAddress || 'unknown'}</span>
+              )) : <span>{userText.modal.emptyLoginHistory}</span>}
+            </div>
+          )}
+          {modal && !['account', 'password', 'loginHistory'].includes(modal) && <p className="modal-copy">{status || userText.modal.defaultCopy}</p>}
         </Modal>
       </main>
     </PageShell>

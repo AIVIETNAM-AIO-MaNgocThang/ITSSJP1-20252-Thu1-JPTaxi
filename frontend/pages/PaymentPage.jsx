@@ -1,17 +1,60 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
+import { processRidePayment } from '../api/rides.js';
 import PageShell from '../components/PageShell.jsx';
 import '../styles/app-pages.css';
 
+const paymentMethodMap = {
+  'クレジットカード (**** 4821)': 'VISA',
+  現金: 'VISA',
+  PayPay: 'VNPAY',
+  'Apple Pay': 'VISA',
+};
+
 export default function PaymentPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [method, setMethod] = useState('クレジットカード (**** 4821)');
   const [methodOpen, setMethodOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [status, setStatus] = useState('');
   const methods = ['クレジットカード (**** 4821)', '現金', 'PayPay', 'Apple Pay'];
+  const backPath =
+    searchParams.get('from') === 'driver' || localStorage.getItem('jpTaxiRole') === 'driver'
+      ? '/driver-ride-status'
+      : '/ride-status';
 
-  function confirmPayment() {
+  function clearActiveRideState() {
+    sessionStorage.removeItem('jpTaxiRideRequestId');
+    sessionStorage.removeItem('jpTaxiTripId');
+    localStorage.removeItem('jpTaxiRideAccepted');
+    localStorage.removeItem('jpTaxiPaymentRequested');
+  }
+
+  async function confirmPayment() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setStatus('');
     setMethodOpen(false);
-    navigate('/driver-review');
+
+    const tripId = Number(sessionStorage.getItem('jpTaxiTripId'));
+
+    if (Number.isFinite(tripId) && tripId > 0 && backPath !== '/driver-ride-status') {
+      try {
+        await processRidePayment({
+          tripId,
+          paymentMethod: paymentMethodMap[method] || 'VISA',
+          password: 'password123',
+        });
+      } catch (error) {
+        setStatus(error.message || '支払い処理を完了できませんでした。');
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    clearActiveRideState();
+    navigate(backPath === '/driver-ride-status' ? '/driver-ride-status' : '/driver-review');
   }
 
   return (
@@ -48,10 +91,14 @@ export default function PaymentPage() {
             </section>
 
             <div className="receipt-actions">
-              <button className="pay-confirm" type="button" onClick={confirmPayment}>お支払いを確定する</button>
+              <Link className="payment-back-link" to={backPath}>戻る</Link>
+              <button className="pay-confirm" type="button" onClick={confirmPayment} disabled={isSubmitting}>
+                {isSubmitting ? '処理中...' : 'お支払いを確定する'}
+              </button>
               <Link className="invoice-link" to="/invoice"><span>📄</span> 領収書を発行する</Link>
               <Link className="support-link" to="/messages/driver">お問い合わせはこちら</Link>
             </div>
+            {status ? <p className="payment-status-text">{status}</p> : null}
           </div>
         </section>
 

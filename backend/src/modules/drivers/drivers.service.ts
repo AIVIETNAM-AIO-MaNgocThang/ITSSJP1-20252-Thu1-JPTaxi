@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Driver, DriverJapaneseLevelEnum, DriverStatusType } from '../../entities/driver.entity';
@@ -13,6 +13,10 @@ import {
   buildNoDriversNotification,
   DriverSearchNotification,
 } from './driver-search.messages';
+
+import { ApplyDriverDto } from './dto/apply-driver.dto';
+import { LicenseTypeEnum } from '../../entities/driver-license.entity';
+import { VehicleTypeEnum } from '../../entities/vehicle.entity';
 
 const JAPANESE_LEVEL_RANK: Record<DriverJapaneseLevelEnum, number> = {
   [DriverJapaneseLevelEnum.N5]: 1,
@@ -299,5 +303,84 @@ export class DriversService {
       hasResults,
       notification,
     };
+  }
+
+  // ==================== LOGIC XÉT DUYỆT TÀI XẾ ====================
+  async applyToBeDriver(driverId: number, dto: ApplyDriverDto) {
+    const driver = await this.drivers.findOne({ where: { driverId } });
+    if (!driver) {
+      throw new NotFoundException('Driver profile not found');
+    }
+
+    if (!dto.licenseNumber || !dto.vehiclePlate || !dto.vehicleType) {
+      throw new BadRequestException(
+        'Missing required fields: licenseNumber, vehiclePlate, vehicleType',
+      );
+    }
+
+    const vehicleType = dto.vehicleType as VehicleTypeEnum;
+    if (!Object.values(VehicleTypeEnum).includes(vehicleType)) {
+      throw new BadRequestException('Invalid vehicleType');
+    }
+
+    const licenseType = dto.licenseType as LicenseTypeEnum;
+    if (!Object.values(LicenseTypeEnum).includes(licenseType)) {
+      throw new BadRequestException('Invalid licenseType');
+    }
+
+    let vehicle = await this.vehicles.findOne({ where: { driverId } });
+    if (!vehicle) {
+      vehicle = this.vehicles.create({
+        driverId,
+        vehicleType,
+        licensePlate: dto.vehiclePlate,
+        brand: dto.vehicleBrand ?? '',
+        color: '',
+        manufactureYear: new Date().getFullYear(),
+      });
+    } else {
+      vehicle.vehicleType = vehicleType;
+      vehicle.licensePlate = dto.vehiclePlate;
+      if (dto.vehicleBrand) vehicle.brand = dto.vehicleBrand;
+    }
+    await this.vehicles.save(vehicle);
+
+    const today = new Date().toISOString().slice(0, 10);
+    let license = await this.licenses.findOne({ where: { driverId } });
+    if (!license) {
+      license = this.licenses.create({
+        driverId,
+        licenseType,
+        issueDate: today,
+        expiryDate: today,
+        issuePlace: dto.licenseNumber,
+      });
+    } else {
+      license.licenseType = licenseType;
+      license.issuePlace = dto.licenseNumber;
+    }
+    await this.licenses.save(license);
+
+    driver.status = DriverStatusType.pending;
+    return this.drivers.save(driver);
+  }
+
+  async approveDriver(
+    driverId: number,
+    status: 'approved' | 'rejected',
+    _reason?: string,
+  ) {
+    const driver = await this.drivers.findOne({ where: { driverId } });
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    driver.status =
+      status === 'approved' ? DriverStatusType.approved : DriverStatusType.rejected;
+    if (status === 'approved') {
+      driver.approvedAt = new Date();
+    }
+
+    return this.drivers.save(driver);
   }
 }

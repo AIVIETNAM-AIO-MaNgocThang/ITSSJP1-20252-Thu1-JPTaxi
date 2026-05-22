@@ -1,63 +1,256 @@
-import { Link, NavLink, useParams } from 'react-router-dom';
-import { useState } from 'react';
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import Footer from '../components/Footer.jsx';
 import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import {
+  getDriverProfile,
+  resolveAssetUrl,
+  updateDriverBankAccount,
+  updateDriverProfile,
+  uploadAvatar,
+} from '../api/accounts.js';
+import {
+  getStoredProfileLanguage,
+  languageOptions,
+  LANGUAGE_EVENT,
+  profileText,
+  setStoredProfileLanguage,
+} from '../i18n/profileLanguage.js';
 import '../styles/app-pages.css';
 
 const driverMenu = [
-  { id: 'basic', icon: '👤', label: 'プロフィール設定', to: '/driver-info/basic' },
-  { id: 'vehicle', icon: '🚗', label: '車両・免許情報', to: '/driver-info/vehicle' },
-  { id: 'history', icon: '📈', label: '稼働履歴', to: '/driver-info/history' },
-  { id: 'payout', icon: '💰', label: 'お支払い・振込', to: '/driver-info/payout' },
-  { id: 'logout', icon: '🚪', label: 'ログアウト', to: '/driver-info/logout' },
+  { id: 'basic', icon: '👤', to: '/driver-info/basic' },
+  { id: 'vehicle', icon: '🚗', to: '/driver-info/vehicle' },
+  { id: 'history', icon: '📈', to: '/driver-info/history' },
+  { id: 'payout', icon: '💰', to: '/driver-info/payout' },
+  { id: 'language', icon: '🌐', to: '/driver-info/language' },
+  { id: 'logout', icon: '🚪', to: '/driver-info/logout' },
 ];
 
+const fallbackDriver = {
+  lastName: '山田',
+  firstName: '太郎',
+  nationality: 'Japan',
+  phone: '+84123456789',
+  email: localStorage.getItem('jpTaxiUserEmail') || 'driver1@example.com',
+  japaneseLevel: 'N2',
+  birthDate: '1990-01-01',
+  gender: 'Male',
+  idNumber: '',
+  avatarUrl: '',
+  vehicle: {
+    brand: 'Toyota',
+    color: 'White',
+    licensePlate: '30A-123.45',
+    vehicleType: '4',
+  },
+  licenses: [],
+  bankAccount: {
+    bankName: 'Vietcombank',
+    accountNumber: '00000291',
+    accountHolder: 'TARO YAMADA',
+  },
+  trips: [],
+};
+
+function normalizeProfile(profile = fallbackDriver) {
+  return {
+    ...fallbackDriver,
+    ...profile,
+    birthDate: profile.birthDate ? String(profile.birthDate).slice(0, 10) : fallbackDriver.birthDate,
+    avatarUrl: resolveAssetUrl(profile.avatarUrl),
+    vehicle: profile.vehicle || fallbackDriver.vehicle,
+    bankAccount: profile.bankAccount || fallbackDriver.bankAccount,
+    licenses: Array.isArray(profile.licenses) ? profile.licenses : [],
+    trips: Array.isArray(profile.trips) ? profile.trips : [],
+  };
+}
+
+function formatCurrency(value) {
+  if (!value) return '¥0';
+  return `¥${Number(value).toLocaleString('ja-JP')}`;
+}
+
+function formatDate(value, locale = 'ja-JP') {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString(locale);
+}
+
 export default function DriverInfoPage() {
+  const navigate = useNavigate();
   const { section } = useParams();
   const activeSection = driverMenu.some((item) => item.id === section) ? section : 'basic';
   const [online, setOnline] = useState(true);
   const [modal, setModal] = useState(null);
+  const [profile, setProfile] = useState(fallbackDriver);
+  const [bankAccount, setBankAccount] = useState(fallbackDriver.bankAccount);
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [language, setLanguage] = useState(getStoredProfileLanguage);
+  const text = profileText[language] || profileText.ja;
+  const common = text.common;
+  const driverText = text.driver;
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadProfile() {
+      setLoading(true);
+      try {
+        const data = normalizeProfile(await getDriverProfile());
+        if (!ignore) {
+          setProfile(data);
+          setBankAccount(data.bankAccount);
+        }
+      } catch (error) {
+        if (!ignore) setStatus(error.message || text.status.driverDemo);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    loadProfile();
+    return () => {
+      ignore = true;
+    };
+  }, [text.status.driverDemo]);
+
+  useEffect(() => {
+    function syncLanguage(event) {
+      setLanguage(event.detail?.language || getStoredProfileLanguage());
+    }
+
+    window.addEventListener(LANGUAGE_EVENT, syncLanguage);
+    return () => window.removeEventListener(LANGUAGE_EVENT, syncLanguage);
+  }, []);
+
+  const fullName = `${profile.lastName} ${profile.firstName}`.trim();
+  const avatar = profile.avatarUrl;
+  const vehicle = profile.vehicle || fallbackDriver.vehicle;
+  const totalSales = profile.trips.reduce((sum, trip) => sum + Number(trip.finalFareJpy || 0), 0);
+  const completedTrips = profile.trips.filter((trip) => trip.status === 'completed').length;
 
   const modalTitle = {
-    account: 'アカウント情報を編集',
-    vehicle: '車両情報を追加',
-    password: 'パスワード変更',
-    saved: '保存しました',
-  }[modal] || '詳細設定';
+    account: driverText.modal.account,
+    vehicle: driverText.modal.vehicle,
+    password: driverText.modal.password,
+    bank: driverText.modal.bank,
+    saved: driverText.modal.saved,
+    error: driverText.modal.error,
+  }[modal] || driverText.modal.detail;
+
+  function updateField(field, value) {
+    setProfile((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateBankField(field, value) {
+    setBankAccount((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleAvatarChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await uploadAvatar(file);
+      if (url) {
+        setProfile((current) => ({ ...current, avatarUrl: url }));
+        setStatus(text.status.avatarUploaded);
+      }
+    } catch (error) {
+      setStatus(error.message || text.status.avatarFailed);
+    }
+  }
+
+  async function saveProfile() {
+    try {
+      const updated = await updateDriverProfile({
+        lastName: profile.lastName,
+        firstName: profile.firstName,
+        gender: profile.gender,
+        birthDate: profile.birthDate,
+        phone: profile.phone,
+        email: profile.email,
+        nationality: profile.nationality,
+        idNumber: profile.idNumber || null,
+        japaneseLevel: profile.japaneseLevel,
+        avatarUrl: profile.avatarUrl || null,
+      });
+      const normalized = normalizeProfile(updated);
+      setProfile(normalized);
+      setBankAccount(normalized.bankAccount);
+      setModal('saved');
+      setStatus(text.status.dbSaved);
+    } catch (error) {
+      setModal('error');
+      setStatus(error.message || text.status.driverSaveFailed);
+    }
+  }
+
+  async function saveBankAccount() {
+    try {
+      const updated = await updateDriverBankAccount(bankAccount);
+      const normalized = normalizeProfile(updated);
+      setProfile(normalized);
+      setBankAccount(normalized.bankAccount);
+      setModal('saved');
+      setStatus(text.status.driverBankSaved);
+    } catch (error) {
+      setModal('error');
+      setStatus(error.message || text.status.driverBankFailed);
+    }
+  }
+
+  function changeLanguage(nextLanguage) {
+    setLanguage(setStoredProfileLanguage(nextLanguage));
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('jpTaxiToken');
+    localStorage.removeItem('jpTaxiRole');
+    localStorage.removeItem('jpTaxiUserEmail');
+    localStorage.removeItem('jpTaxiCustomerId');
+    localStorage.removeItem('jpTaxiDriverId');
+    localStorage.removeItem('jpTaxiFallbackRide');
+    localStorage.removeItem('jpTaxiPaymentRequested');
+    sessionStorage.removeItem('jpTaxiRideRequestId');
+    sessionStorage.removeItem('jpTaxiTripId');
+    sessionStorage.removeItem('jpTaxiSelectedRoute');
+    navigate('/login', { replace: true });
+  }
 
   function renderTab() {
     if (activeSection === 'vehicle') {
       return (
         <div className="profile-grid">
           <section className="panel zip-profile-panel">
-            <h2 className="panel-title">登録車両情報</h2>
+            <h2 className="panel-title">{driverText.vehicleInfo}</h2>
             <div className="driver-info-card">
               <span>🚗</span>
               <div>
-                <strong>Toyota Vios <small>(白)</small></strong>
-                <p>ナンバープレート: 30A-123.45 / 座席数: 4</p>
+                <strong>{vehicle.brand || common.unregistered} <small>({vehicle.color || '-'})</small></strong>
+                <p>{driverText.plate}: {vehicle.licensePlate || '-'} / {driverText.seats}: {vehicle.vehicleType || '-'}</p>
               </div>
-              <em>認証済み</em>
+              <em>{driverText.verified}</em>
             </div>
             <div className="vehicle-actions">
-              <button className="submit-button profile-save-button" type="button" onClick={() => setModal('vehicle')}>車両を追加</button>
-              <button className="secondary-button profile-save-button" type="button" onClick={() => setModal('vehicle')}>編集</button>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal('vehicle')}>{common.details}</button>
             </div>
           </section>
 
           <aside className="panel zip-profile-panel">
-            <h2 className="panel-title">本人確認・書類状況</h2>
+            <h2 className="panel-title">{driverText.docs}</h2>
             <div className="license-preview-card">
-              <span className="license-preview-title">運転免許証</span>
+              <span className="license-preview-title">{driverText.license}</span>
               <div className="license-preview-frame">
                 <span>LICENSE IMAGE</span>
               </div>
             </div>
             <div className="doc-list">
-              <button type="button" onClick={() => setModal('license')}>運転免許証 <strong>承認済み</strong></button>
-              <button type="button" onClick={() => setModal('inspection')}>車検証 <strong>承認済み</strong></button>
-              <button className="warning" type="button" onClick={() => setModal('insurance')}>任意保険証 <strong>更新が必要</strong></button>
+              {profile.licenses.length ? profile.licenses.map((license) => (
+                <button type="button" key={`${license.licenseType}-${license.expiryDate}`} onClick={() => setModal('license')}>
+                  {license.licenseType} <strong>{formatDate(license.expiryDate, text.locale)}</strong>
+                </button>
+              )) : <button type="button" onClick={() => setModal('license')}>{driverText.license} <strong>{common.unregistered}</strong></button>}
             </div>
           </aside>
         </div>
@@ -67,16 +260,16 @@ export default function DriverInfoPage() {
     if (activeSection === 'history') {
       return (
         <section className="panel zip-profile-panel">
-          <h2 className="panel-title">稼働履歴</h2>
+          <h2 className="panel-title">{driverText.historyTitle}</h2>
           <div className="trip-summary">
-            <article><span>本日の乗車</span><strong>8件</strong></article>
-            <article><span>評価</span><strong>4.9</strong></article>
-            <article><span>売上</span><strong>¥12,800</strong></article>
+            <article><span>{driverText.completedTrips}</span><strong>{completedTrips}</strong></article>
+            <article><span>{driverText.ratingLabel}</span><strong>4.9</strong></article>
+            <article><span>{driverText.sales}</span><strong>{formatCurrency(totalSales)}</strong></article>
           </div>
           <div className="modal-list history-list">
-            <span>18:20 Hoan Kiem Lake → Lotte Hotel / ¥680</span>
-            <span>16:05 Noi Bai Airport → Ba Dinh / ¥2,400</span>
-            <span>13:40 Old Quarter → Tay Ho / ¥1,100</span>
+            {profile.trips.length ? profile.trips.map((trip) => (
+              <span key={`${trip.startTime}-${trip.pickupAddress}`}>{formatDate(trip.startTime, text.locale)} {trip.pickupAddress} → {trip.dropoffAddress} / {formatCurrency(trip.finalFareJpy)}</span>
+            )) : <span>{driverText.noHistory}</span>}
           </div>
         </section>
       );
@@ -85,12 +278,28 @@ export default function DriverInfoPage() {
     if (activeSection === 'payout') {
       return (
         <section className="panel zip-profile-panel narrow-panel">
-          <h2 className="panel-title">お支払い・振込</h2>
+          <h2 className="panel-title">{driverText.payoutTitle}</h2>
           <div className="setting-list">
-            <article className="account-card"><strong>今週の振込予定</strong><span>¥48,500</span></article>
-            <button className="account-card" type="button" onClick={() => setModal('bank')}><strong>振込先銀行</strong><span>Vietcombank **** 0291</span></button>
-            <button className="submit-button profile-save-button" type="button" onClick={() => setModal('payout')}>明細を見る</button>
+            <article className="account-card"><strong>{driverText.weeklyPayout}</strong><span>{formatCurrency(totalSales)}</span></article>
+            <button className="account-card" type="button" onClick={() => setModal('bank')}><strong>{driverText.bank}</strong><span>{bankAccount.bankName} **** {bankAccount.accountNumber.slice(-4)}</span></button>
+            <button className="submit-button profile-save-button" type="button" onClick={() => setModal('bank')}>{common.edit}</button>
           </div>
+        </section>
+      );
+    }
+
+    if (activeSection === 'language') {
+      return (
+        <section className="panel zip-profile-panel narrow-panel">
+          <h2 className="panel-title">{driverText.menu.language}</h2>
+          <label>
+            <span>{text.user.displayLanguage}</span>
+            <select value={language} onChange={(event) => changeLanguage(event.target.value)}>
+              {languageOptions.map((option) => (
+                <option value={option.value} key={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
         </section>
       );
     }
@@ -98,9 +307,9 @@ export default function DriverInfoPage() {
     if (activeSection === 'logout') {
       return (
         <section className="panel zip-profile-panel narrow-panel">
-          <h2 className="panel-title">ログアウト</h2>
-          <p className="muted-copy">ドライバーアカウントからログアウトします。</p>
-          <button className="submit-button profile-save-button" type="button" onClick={() => setModal('logout')}>ログアウト</button>
+          <h2 className="panel-title">{common.logout}</h2>
+          <p className="muted-copy">{driverText.logoutCopy}</p>
+          <button className="submit-button profile-save-button" type="button" onClick={handleLogout}>{common.logout}</button>
         </section>
       );
     }
@@ -110,57 +319,73 @@ export default function DriverInfoPage() {
         <div>
           <label className="status-toggle">
             <span>
-              <strong>{online ? '現在オンライン' : '現在オフライン'}</strong>
-              <small>{online ? '配車リクエストを受け取れる状態です' : '配車リクエストを停止しています'}</small>
+              <strong>{online ? driverText.online : driverText.offline}</strong>
+              <small>{online ? driverText.onlineCopy : driverText.offlineCopy}</small>
             </span>
             <span className="switch"><input type="checkbox" checked={online} onChange={(event) => setOnline(event.target.checked)} /><span></span></span>
           </label>
 
-          <section className="panel zip-profile-panel">
-            <h2 className="panel-title">基本情報</h2>
-            <div className="form-grid">
-              <label><span>氏名</span><input defaultValue="山田 太郎 (Taro Yamada)" /></label>
-              <label><span>電話番号</span><input defaultValue="+84 123 456 789" /></label>
-              <label><span>対応言語</span><input defaultValue="日本語, 英語" /></label>
-              <label><span>メールアドレス</span><input defaultValue="yamada.driver@example.com" /></label>
+          <section className="panel zip-profile-panel driver-basic-card">
+            <h2 className="panel-title">{driverText.basicInfo}</h2>
+            <div className="form-grid driver-edit-grid">
+              <label><span>{common.lastName}</span><input value={profile.lastName} onChange={(event) => updateField('lastName', event.target.value)} /></label>
+              <label><span>{common.firstName}</span><input value={profile.firstName} onChange={(event) => updateField('firstName', event.target.value)} /></label>
+              <label><span>{common.phone}</span><input value={profile.phone} onChange={(event) => updateField('phone', event.target.value)} /></label>
+              <label><span>{common.email}</span><input type="email" value={profile.email} onChange={(event) => updateField('email', event.target.value)} /></label>
+              <label><span>{driverText.nationality}</span><input value={profile.nationality} onChange={(event) => updateField('nationality', event.target.value)} /></label>
+              <label>
+                <span>{driverText.japaneseLevel}</span>
+                <select value={profile.japaneseLevel} onChange={(event) => updateField('japaneseLevel', event.target.value)}>
+                  {['N5', 'N4', 'N3', 'N2', 'N1', 'Native'].map((level) => <option value={level} key={level}>{level}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>{common.gender}</span>
+                <select value={profile.gender} onChange={(event) => updateField('gender', event.target.value)}>
+                  <option value="Male">{common.male}</option>
+                  <option value="Female">{common.female}</option>
+                  <option value="Other">{common.other}</option>
+                </select>
+              </label>
+              <label><span>{common.birthDate}</span><input type="date" value={profile.birthDate} onChange={(event) => updateField('birthDate', event.target.value)} /></label>
+              <label className="field full"><span>{driverText.identityNumber}</span><input value={profile.idNumber || ''} onChange={(event) => updateField('idNumber', event.target.value)} /></label>
             </div>
           </section>
 
           <section className="panel zip-profile-panel stack">
-            <h2 className="panel-title">登録車両情報</h2>
+            <h2 className="panel-title">{driverText.vehicleInfo}</h2>
             <div className="driver-info-card">
               <span>🚗</span>
               <div>
-                <strong>Toyota Vios <small>(白)</small></strong>
-                <p>ナンバープレート: 30A-123.45 • 座席数: 4</p>
+                <strong>{vehicle.brand} <small>({vehicle.color})</small></strong>
+                <p>{driverText.plate}: {vehicle.licensePlate} • {driverText.seats}: {vehicle.vehicleType}</p>
               </div>
-              <em>✓ 認証済み</em>
+              <em>✓ {driverText.verified}</em>
             </div>
           </section>
         </div>
 
         <div>
           <section className="panel zip-profile-panel">
-            <h2 className="panel-title">本人確認・書類状況</h2>
+            <h2 className="panel-title">{driverText.docs}</h2>
             <div className="doc-list">
-              <button type="button" onClick={() => setModal('license')}>🪪 運転免許証 <strong>承認済み</strong></button>
-              <button type="button" onClick={() => setModal('inspection')}>📘 車検証 <strong>承認済み</strong></button>
-              <button className="warning" type="button" onClick={() => setModal('insurance')}>📋 任意保険証 <strong>更新が必要</strong></button>
+              <button type="button" onClick={() => setModal('license')}>🪪 {driverText.license} <strong>{profile.licenses.length ? common.approved : common.unregistered}</strong></button>
+              <button type="button" onClick={() => setModal('vehicle')}>📘 {driverText.inspection} <strong>{common.approved}</strong></button>
+              <button className="warning" type="button" onClick={() => setModal('insurance')}>📋 {driverText.insurance} <strong>{driverText.updateRequired}</strong></button>
             </div>
-            <p className="muted-copy">有効期限: 2027年03月10日まで</p>
           </section>
 
           <section className="panel zip-profile-panel stack">
-            <h2 className="panel-title">アカウント安全</h2>
+            <h2 className="panel-title">{driverText.accountSafety}</h2>
             <div className="security-list">
               <article className="security-item">
-                <strong>パスワード</strong>
-                <button className="link-btn" type="button" onClick={() => setModal('password')}>変更する</button>
+                <strong>{common.password}</strong>
+                <button className="link-btn" type="button" onClick={() => setModal('password')}>{common.edit}</button>
               </article>
               <article className="security-item">
-                <strong>二段階認証</strong>
-                <span>有効化されています</span>
-                <button className="link-btn" type="button" onClick={() => setModal('twoFactor')}>確認する</button>
+                <strong>{common.bankAccount}</strong>
+                <span>{bankAccount.bankName} / {bankAccount.accountHolder}</span>
+                <button className="link-btn" type="button" onClick={() => setModal('bank')}>{common.edit}</button>
               </article>
             </div>
           </section>
@@ -170,23 +395,26 @@ export default function DriverInfoPage() {
   }
 
   return (
-    <PageShell>
+    <PageShell withFooter={false}>
       <main className="app-screen zip-profile-screen">
         <div className="profile-window">
-          <Topbar brandTo="/driver-home" actions={<><Link to="/driver-home">売上管理</Link><Link to="/messages/customer">通知</Link><img className="topbar-avatar driver-avatar-top" src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
+          <Topbar brandTo="/driver-home" brandExtra="for Driver" actions={<><Link to="/driver-home">{common.home}</Link><Link to="/messages/customer">{common.messages}</Link>{avatar ? <img className="topbar-avatar driver-avatar-top" src={avatar} alt="" /> : <span className="topbar-avatar driver-avatar-top" />}</>} />
           <section className="profile-page-shell zip-profile-shell">
             <aside className="profile-sidebar">
               <section className="profile-card zip-profile-card driver-profile-card">
-                <div className="profile-avatar">山田</div>
-                <strong>山田 太郎</strong>
-                <span>⭐ 4.9 (256件の評価)</span>
-                <em>公式ドライバー</em>
+                <div className="profile-avatar">
+                  {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : profile.lastName}
+                </div>
+                <strong>{fullName}</strong>
+                <span>⭐ 4.9 ({completedTrips || 0} {driverText.rating})</span>
+                <em>{loading ? common.loading : driverText.role}</em>
+                <input type="file" accept="image/*" onChange={handleAvatarChange} />
               </section>
-              <nav className="side-menu" aria-label="ドライバーメニュー">
+              <nav className="side-menu" aria-label={driverText.pageTitle}>
                 {driverMenu.map((tab) => (
                   <NavLink className={({ isActive }) => `side-item ${isActive || activeSection === tab.id ? 'active' : ''}`} to={tab.to} key={tab.id}>
                     <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
+                    <span>{driverText.menu[tab.id]}</span>
                   </NavLink>
                 ))}
               </nav>
@@ -195,55 +423,54 @@ export default function DriverInfoPage() {
             <section className="profile-content">
               <div className="profile-header zip-profile-header">
                 <div>
-                  <h1>ドライバープロフィール</h1>
-                  <p>あなたの公開情報と車両設定を管理します。</p>
+                  <h1>{driverText.pageTitle}</h1>
+                  <p>{driverText.pageSubtitle}</p>
+                  {status && <p className="muted-copy">{status}</p>}
                 </div>
-                <button className="submit-button profile-save-button" type="button" onClick={() => setModal('saved')}>情報を更新する</button>
+                <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>{driverText.saveInfo}</button>
               </div>
               {renderTab()}
             </section>
           </section>
+          <Footer />
         </div>
 
         <Modal open={Boolean(modal)} title={modalTitle} onClose={() => setModal(null)}>
           {modal === 'account' && (
             <div className="modal-form zip-modal-form">
-              <label><span>ログインID</span><input defaultValue="driver_yamada" /></label>
-              <label><span>メールアドレス</span><input type="email" defaultValue="yamada.driver@example.com" /></label>
-              <label><span>電話番号</span><input defaultValue="+84 123 456 789" /></label>
-              <label><span>表示名</span><input defaultValue="山田 太郎" /></label>
-              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>保存</button>
+              <label><span>{common.email}</span><input type="email" value={profile.email} onChange={(event) => updateField('email', event.target.value)} /></label>
+              <label><span>{common.phone}</span><input value={profile.phone} onChange={(event) => updateField('phone', event.target.value)} /></label>
+              <label><span>{driverText.modal.displayName}</span><input value={fullName} readOnly /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>{common.save}</button>
             </div>
           )}
           {modal === 'vehicle' && (
             <div className="modal-form zip-modal-form">
               <div className="form-grid">
-                <label><span>メーカー</span><input defaultValue="Toyota" /></label>
-                <label><span>車種</span><input defaultValue="Vios" /></label>
-                <label><span>色</span><input defaultValue="White" /></label>
-                <label><span>座席数</span><select defaultValue="4"><option value="4">4</option><option value="7">7</option></select></label>
-                <label><span>ナンバープレート</span><input defaultValue="30A-123.45" /></label>
-                <label><span>車検有効期限</span><input type="date" defaultValue="2027-05-14" /></label>
+                <label><span>{driverText.modal.manufacturer}</span><input value={vehicle.brand || ''} readOnly /></label>
+                <label><span>{common.color}</span><input value={vehicle.color || ''} readOnly /></label>
+                <label><span>{driverText.seats}</span><input value={vehicle.vehicleType || ''} readOnly /></label>
+                <label><span>{driverText.plate}</span><input value={vehicle.licensePlate || ''} readOnly /></label>
               </div>
-              <label><span>車両メモ</span><textarea defaultValue="禁煙車、空港送迎対応" /></label>
-              <div className="license-preview-card">
-                <span className="license-preview-title">運転免許証画像</span>
-                <div className="license-preview-frame large">
-                  <span>画像プレビュー</span>
-                </div>
-                <input type="file" accept="image/*" />
-              </div>
-              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>保存</button>
+              <p className="modal-copy">{driverText.modal.vehicleDbCopy}</p>
+            </div>
+          )}
+          {modal === 'bank' && (
+            <div className="modal-form zip-modal-form">
+              <label><span>{driverText.bankName}</span><input value={bankAccount.bankName} onChange={(event) => updateBankField('bankName', event.target.value)} /></label>
+              <label><span>{driverText.accountNumber}</span><input value={bankAccount.accountNumber} onChange={(event) => updateBankField('accountNumber', event.target.value)} /></label>
+              <label><span>{driverText.accountHolder}</span><input value={bankAccount.accountHolder} onChange={(event) => updateBankField('accountHolder', event.target.value)} /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={saveBankAccount}>{common.save}</button>
             </div>
           )}
           {modal === 'password' && (
             <div className="modal-form zip-modal-form">
-              <label><span>現在のパスワード</span><input type="password" /></label>
-              <label><span>新しいパスワード</span><input type="password" /></label>
-              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>保存</button>
+              <label><span>{driverText.modal.currentPassword}</span><input type="password" /></label>
+              <label><span>{driverText.modal.newPassword}</span><input type="password" /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>{common.save}</button>
             </div>
           )}
-          {modal && !['account', 'vehicle', 'password'].includes(modal) && <p className="modal-copy">選択した項目の詳細確認・編集用ポップアップです。</p>}
+          {modal && !['account', 'vehicle', 'bank', 'password'].includes(modal) && <p className="modal-copy">{status || driverText.modal.defaultCopy}</p>}
         </Modal>
       </main>
     </PageShell>

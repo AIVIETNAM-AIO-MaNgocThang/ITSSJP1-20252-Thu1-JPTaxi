@@ -4,6 +4,7 @@ import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
 import PasswordField from '../components/PasswordField.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { apiRequest } from '../api/client.js';
 import { emailPattern } from '../utils/loginValidation.js';
 import '../styles/auth.css';
 
@@ -14,11 +15,6 @@ const loginMessages = {
   passwordShort: 'パスワードは6文字以上で入力してください。',
   success: 'ログイン情報を確認しました。',
 };
-
-function detectRoleByEmail(email) {
-  const normalizedEmail = email.trim().toLowerCase();
-  return normalizedEmail.includes('driver') || normalizedEmail.includes('taxi') ? 'driver' : 'user';
-}
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -98,7 +94,7 @@ export default function LoginPage() {
     }
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setStatus('');
 
@@ -120,11 +116,38 @@ export default function LoginPage() {
       localStorage.removeItem('jpTaxiLoginEmail');
     }
 
-    const role = detectRoleByEmail(email);
-    localStorage.setItem('jpTaxiRole', role);
-    localStorage.setItem('jpTaxiUserEmail', email.trim());
-    setStatus(loginMessages.success);
-    navigate(role === 'driver' ? '/driver-home' : '/home');
+    const trimmedEmail = email.trim();
+
+    try {
+      const result = await apiRequest('/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: trimmedEmail, password }),
+      });
+      const role = result?.role === 'driver' ? 'driver' : 'customer';
+
+      localStorage.setItem('jpTaxiToken', result.token);
+      localStorage.setItem('jpTaxiRole', role);
+      localStorage.setItem('jpTaxiUserEmail', trimmedEmail);
+      localStorage.setItem(role === 'driver' ? 'jpTaxiDriverToken' : 'jpTaxiCustomerToken', result.token);
+      localStorage.setItem(role === 'driver' ? 'jpTaxiDriverEmail' : 'jpTaxiCustomerEmail', trimmedEmail);
+      sessionStorage.setItem('jpTaxiActiveRole', role);
+
+      if (result?.user?.customerId) {
+        localStorage.setItem('jpTaxiCustomerId', String(result.user.customerId));
+      }
+      if (result?.user?.driverId) {
+        localStorage.setItem('jpTaxiDriverId', String(result.user.driverId));
+      }
+
+      setStatus(loginMessages.success);
+      navigate(role === 'driver' ? '/driver-home' : '/home');
+    } catch (error) {
+      localStorage.removeItem('jpTaxiToken');
+      localStorage.removeItem('jpTaxiRole');
+      localStorage.removeItem('jpTaxiUserEmail');
+      sessionStorage.removeItem('jpTaxiActiveRole');
+      setStatus(error.message || 'ログインできませんでした。');
+    }
   }
 
   function openForgotModal() {

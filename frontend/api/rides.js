@@ -1,89 +1,79 @@
 import { apiRequest } from './client.js';
+import { getCurrentCustomerId, getCurrentDriverId } from './accounts.js';
 
-const DEFAULT_CUSTOMER_ID = 1;
-const DEFAULT_DRIVER_ID = 1;
 const FALLBACK_RIDE_KEY = 'jpTaxiFallbackRide';
 
-function idFromEmail(prefix, fallback) {
-  const email = localStorage.getItem('jpTaxiUserEmail') || '';
-  const match = email.match(new RegExp(`^${prefix}(\\d+)@`, 'i'));
-  return match ? Number(match[1]) : fallback;
+export function createRideRequest(payload) {
+  return apiRequest('/ride/request', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
-export function getCurrentCustomerId() {
-  return idFromEmail('customer', DEFAULT_CUSTOMER_ID);
+export function getActiveRide() {
+  return apiRequest('/ride/active');
 }
 
-export function getCurrentDriverId() {
-  return idFromEmail('driver', DEFAULT_DRIVER_ID);
-}
-
-export function getCurrentRideForCustomer(customerId = getCurrentCustomerId()) {
-  return apiRequest(`/ride/current?customerId=${customerId}`);
-}
-
-export function getCurrentRideForDriver(driverId = getCurrentDriverId()) {
-  return apiRequest(`/ride/current?driverId=${driverId}`);
-}
-
-export function ensureDemoRide(
-  customerId = DEFAULT_CUSTOMER_ID,
-  driverId = DEFAULT_DRIVER_ID,
-) {
-  return apiRequest(`/ride/demo?customerId=${customerId}&driverId=${driverId}`, {
+export function cancelRideRequest(requestId) {
+  return apiRequest(`/ride/cancel/${requestId}`, {
     method: 'POST',
   });
 }
 
-export function startDemoSearch(
-  customerId = DEFAULT_CUSTOMER_ID,
-  driverId = DEFAULT_DRIVER_ID,
-) {
-  return apiRequest(`/ride/search-demo?customerId=${customerId}&driverId=${driverId}`, {
+export function getPendingDriverRide() {
+  return apiRequest('/ride/driver/pending');
+}
+
+export function updateDriverLocation(payload) {
+  return apiRequest('/ride/driver/location', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function acceptDriverRide(requestId) {
+  return apiRequest(`/ride/driver/accept/${requestId}`, {
     method: 'POST',
   });
 }
 
-export function cancelDemoSearch(customerId = DEFAULT_CUSTOMER_ID) {
-  return apiRequest(`/ride/search-demo/cancel?customerId=${customerId}`, {
+export function requestDriverPayment(tripId) {
+  return apiRequest(`/ride/driver/request-payment/${tripId}`, {
     method: 'POST',
   });
 }
 
-export function cancelRideByDriver(tripId) {
-  return apiRequest(`/ride/${tripId}/cancel-by-driver`, {
+export function cancelDriverRide(tripId) {
+  return apiRequest(`/ride/driver/cancel/${tripId}`, {
     method: 'POST',
+  });
+}
+
+export function processRidePayment(payload) {
+  return apiRequest('/ride/pay', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }
 
 function buildFallbackRide(status = 'ongoing') {
   return {
     tripId: 1,
-    requestId: 1,
+    requestId: Number(sessionStorage.getItem('jpTaxiRideRequestId')) || 1,
     status,
     requestStatus: status === 'cancelled' ? 'failed' : 'assigned',
     cancelledBy: status === 'cancelled' ? 'driver' : null,
-    route: {
-      pickupAddress: 'Hoan Kiem Lake, Hanoi',
-      dropoffAddress: 'Lotte Hotel Hanoi',
-    },
     passenger: {
-      customerId: DEFAULT_CUSTOMER_ID,
+      customerId: getCurrentCustomerId(),
       name: 'JPTX-9821',
       phone: '090-1234-5678',
       noteToDriver: null,
     },
     driver: {
-      driverId: DEFAULT_DRIVER_ID,
+      driverId: getCurrentDriverId(),
       name: 'JP Taxi Driver',
       phone: '070-0000-0001',
       avatarUrl: null,
-    },
-    vehicle: {
-      brand: 'Toyota',
-      color: 'Black',
-      licensePlate: '31A-101.01',
-      vehicleType: '4',
     },
     trip: {
       startTime: new Date().toISOString(),

@@ -1,81 +1,138 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { cancelDriverRide, requestDriverPayment } from '../api/rides.js';
+import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
-import {
-  cancelFallbackRide,
-  cancelRideByDriver,
-  getFallbackRide,
-  getCurrentRideForDriver,
-} from '../api/rides.js';
 import '../styles/app-pages.css';
+
+const fallbackRoute = {
+  destination: {
+    name: 'ロッテホテル ハノイ',
+    address: '54 Liễu Giai, Ba Đình, Hà Nội',
+    position: [21.03205, 105.81283],
+  },
+  pickup: {
+    name: 'ホアンキエム湖',
+    position: [21.02878, 105.85204],
+  },
+  routeMetrics: {
+    duration: '12分',
+    distance: '4.8 km',
+  },
+  routePath: [
+    [21.02878, 105.85204],
+    [21.02812, 105.85046],
+    [21.02672, 105.84817],
+    [21.02482, 105.85672],
+    [21.02621, 105.84666],
+    [21.02942, 105.83628],
+    [21.03162, 105.82084],
+    [21.03205, 105.81283],
+  ],
+  passenger: null,
+};
+
+function readSelectedRoute() {
+  try {
+    const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
+    if (!rawRoute) return fallbackRoute;
+
+    const parsedRoute = JSON.parse(rawRoute);
+    const pickupPosition = parsedRoute.pickup?.position;
+    const destinationPosition = parsedRoute.destination?.position;
+
+    if (!Array.isArray(pickupPosition) || !Array.isArray(destinationPosition)) {
+      return fallbackRoute;
+    }
+
+    return {
+      ...fallbackRoute,
+      ...parsedRoute,
+      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
+      routeMetrics: {
+        ...fallbackRoute.routeMetrics,
+        ...parsedRoute.routeMetrics,
+      },
+    };
+  } catch {
+    return fallbackRoute;
+  }
+}
 
 export default function DriverRideStatusPage() {
   const navigate = useNavigate();
-  const [ride, setRide] = useState(null);
-  const [statusText, setStatusText] = useState('乗車情報を読み込み中です...');
-  const [isCancelling, setIsCancelling] = useState(false);
+  const [selectedRoute] = useState(readSelectedRoute);
+  const [isCancellingRide, setIsCancellingRide] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const passenger = selectedRoute.passenger ?? {};
+  const passengerName = passenger.name || 'お客様';
+  const passengerPhone = passenger.phone || '連絡先を確認中';
+  const routePoints = [
+    {
+      key: 'pickup',
+      label: selectedRoute.pickup.name,
+      meta: '乗車地',
+      time: '現在',
+      position: selectedRoute.pickup.position,
+      type: 'pickup',
+    },
+    {
+      key: 'destination',
+      label: selectedRoute.destination.name,
+      meta: selectedRoute.destination.address,
+      time: `約${selectedRoute.routeMetrics.duration}`,
+      position: selectedRoute.destination.position,
+      type: 'destination',
+    },
+  ];
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadRide() {
-      try {
-        const data = await getCurrentRideForDriver();
-        if (!isMounted) return;
-
-        if (!data) {
-          const fallbackRide = getFallbackRide();
-          if (fallbackRide?.status === 'ongoing') {
-            setRide(fallbackRide);
-            setStatusText('');
-            return;
-          }
-
-          setStatusText('現在対応中の乗車はありません。');
-          return;
-        }
-
-        setRide(data);
-        setStatusText(data.status === 'cancelled' ? '乗車はキャンセルされました。' : '');
-      } catch {
-        if (!isMounted) return;
-
-        const fallbackRide = getFallbackRide();
-        if (fallbackRide?.status === 'ongoing') {
-          setRide(fallbackRide);
-          setStatusText('');
-          return;
-        }
-
-        setStatusText('乗車情報を読み込めません。');
-      }
+  async function requestPayment() {
+    const tripId = Number(sessionStorage.getItem('jpTaxiTripId'));
+    if (!Number.isFinite(tripId) || tripId <= 0) {
+      navigate('/xacnhancuocxe', { replace: true });
+      return;
     }
 
-    loadRide();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  async function handleCancelRide() {
-    if (!ride || isCancelling) return;
-
-    setIsCancelling(true);
     try {
-      await cancelRideByDriver(ride.tripId);
+      const result = await requestDriverPayment(tripId);
+      localStorage.setItem('jpTaxiPaymentRequested', JSON.stringify({
+        tripId,
+        requestedAt: result?.requestedAt || Date.now(),
+      }));
     } catch {
-      cancelFallbackRide();
-    } finally {
-      navigate('/driver-home', {
-        replace: true,
-        state: { cancelledMessage: '乗車をキャンセルしました。' },
-      });
+      localStorage.setItem('jpTaxiPaymentRequested', JSON.stringify({
+        tripId,
+        requestedAt: Date.now(),
+      }));
     }
+    navigate('/driver-invoice');
   }
 
-  const passengerName = ride?.passenger?.name || 'お客様';
-  const passengerPhone = ride?.passenger?.phone || '確認中';
+  async function cancelRideByDriver() {
+    if (isCancellingRide) return;
+
+    const tripId = Number(sessionStorage.getItem('jpTaxiTripId'));
+    if (!Number.isFinite(tripId) || tripId <= 0) {
+      navigate('/xacnhancuocxe', { replace: true });
+      return;
+    }
+
+    setIsCancellingRide(true);
+    setCancelError('');
+
+    try {
+      await cancelDriverRide(tripId);
+      sessionStorage.removeItem('jpTaxiRideRequestId');
+      sessionStorage.removeItem('jpTaxiTripId');
+      localStorage.removeItem('jpTaxiRideAccepted');
+      localStorage.removeItem('jpTaxiPaymentRequested');
+      navigate('/xacnhancuocxe', { replace: true });
+    } catch (error) {
+      setCancelError(error.message || '乗車をキャンセルできませんでした。');
+      setIsCancellingRide(false);
+    }
+  }
 
   return (
     <PageShell>
@@ -92,50 +149,45 @@ export default function DriverRideStatusPage() {
         />
 
         <section className="driver-tracking-map">
-          <span className="tracking-user-marker">📍</span>
-          <span className="tracking-car-marker">🚕</span>
+          <InteractiveRouteMap
+            alternateRoutePath={[]}
+            className="tracking-route-map"
+            compact
+            currentLocation={selectedRoute.pickup.position}
+            route={routePoints}
+            routePath={selectedRoute.routePath}
+            routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
+            scrollWheelZoom
+            showCurrentLocation={false}
+            showDetails={false}
+          />
 
           <section className="driver-tracking-card">
             <div className="tracking-eta-header">
               <div>
                 <span>到着予定時間</span>
-                <strong>{ride ? 'あと3分' : '読み込み中'}</strong>
+                <strong>あと {selectedRoute.routeMetrics.duration}</strong>
               </div>
-              <em>{ride ? `${ride.trip.distanceKm} km` : '--'}</em>
+              <em>{selectedRoute.routeMetrics.distance}</em>
             </div>
 
-            {statusText ? (
-              <div className="tracking-status-note" role="status">{statusText}</div>
-            ) : (
-              <>
-                <div className="tracking-passenger-row">
-                  <span>👤</span>
-                  <div>
-                    <strong>{passengerName}</strong>
-                    <small>{ride.route.pickupAddress}</small>
-                    <em>{passengerPhone}</em>
-                  </div>
-                </div>
+            <div className="tracking-passenger-row">
+              <span>人</span>
+              <div>
+                <strong>{passengerName} 様</strong>
+                <small>{selectedRoute.pickup.name}で待機中</small>
+                <em>{passengerPhone}</em>
+              </div>
+            </div>
 
-                <div className="tracking-route-note">
-                  <strong>{ride.route.pickupAddress}</strong>
-                  <span>{ride.route.dropoffAddress}</span>
-                </div>
-
-                <div className="tracking-actions">
-                  <Link className="tracking-call" to="/messages/customer">📞 連絡する</Link>
-                  <Link className="tracking-message" to="/driver-invoice">📄 請求書へ</Link>
-                </div>
-                <button
-                  className="tracking-cancel"
-                  type="button"
-                  onClick={handleCancelRide}
-                  disabled={isCancelling}
-                >
-                  {isCancelling ? 'キャンセル中...' : '乗車をキャンセル'}
-                </button>
-              </>
-            )}
+            <div className="tracking-actions">
+              <Link className="tracking-call" to="/messages/customer">連絡する</Link>
+              <button className="tracking-message" type="button" onClick={requestPayment}>請求書を発行</button>
+              <button className="tracking-cancel-ride" type="button" onClick={cancelRideByDriver} disabled={isCancellingRide}>
+                {isCancellingRide ? 'キャンセル中...' : '乗車をキャンセル'}
+              </button>
+            </div>
+            {cancelError ? <p className="tracking-error-text">{cancelError}</p> : null}
           </section>
         </section>
       </main>
