@@ -1,57 +1,194 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import InvoiceTemplate from '../components/InvoiceTemplate.jsx';
 import PageShell from '../components/PageShell.jsx';
+import { getTripInvoice, issueTripInvoice } from '../api/invoices.js';
+import { ApiError } from '../api/client.js';
+import { getLastInvoiceTripId } from '../utils/invoiceSession.js';
+import { getAuthToken, getStoredUser, isDriverRole } from '../utils/session.js';
 import '../styles/app-pages.css';
+
+const DEMO_TRIP_ID = 1;
+
+function resolveTripId(searchParams) {
+  const fromQuery = searchParams.get('tripId');
+  if (fromQuery) {
+    const n = Number(fromQuery);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return getLastInvoiceTripId() ?? DEMO_TRIP_ID;
+}
 
 export default function InvoicePage() {
   const location = useLocation();
-  const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || location.pathname.startsWith('/driver');
+  const [searchParams] = useSearchParams();
+  const isDriver =
+    isDriverRole() || location.pathname.startsWith('/driver-invoice');
   const closePath = isDriver ? '/driver-home' : '/driver-review';
   const closeLabel = isDriver ? '閉じる' : 'ドライバー評価へ';
+
+  const tripId = resolveTripId(searchParams);
+  const [invoice, setInvoice] = useState(null);
+  const [canIssue, setCanIssue] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionMsg, setActionMsg] = useState('');
+  const [issuing, setIssuing] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [email, setEmail] = useState('');
+
+  const loadInvoice = useCallback(async () => {
+    if (!getAuthToken()) {
+      setError('ログインしてから領収書を表示してください。');
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const data = await getTripInvoice(tripId);
+      setInvoice(data);
+      setCanIssue(Boolean(data.canIssue));
+      const user = getStoredUser();
+      if (user?.email) {
+        setEmail((prev) => prev || user.email);
+      }
+    } catch (err) {
+      setInvoice(null);
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : '領収書の読み込みに失敗しました。',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [tripId]);
+
+  useEffect(() => {
+    loadInvoice();
+  }, [loadInvoice]);
+
+  async function handleIssue(sendEmail = false) {
+    setIssuing(true);
+    setActionMsg('');
+    setError('');
+    try {
+      const payload = sendEmail && email.trim() ? { recipientEmail: email.trim() } : {};
+      const result = await issueTripInvoice(tripId, payload);
+      setInvoice(result.invoice);
+      setCanIssue(false);
+      setActionMsg(result.message);
+      setEmailOpen(false);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : '領収書の発行に失敗しました。',
+      );
+    } finally {
+      setIssuing(false);
+    }
+  }
+
+  function handlePrint() {
+    window.print();
+  }
 
   return (
     <PageShell withFooter={false}>
       <main className="invoice-screen">
         <section className="zip-invoice-container">
-          <div className="zip-invoice-paper">
-            <header>
-              <div className="invoice-brand">🚕 JP TAXI</div>
-              <div>
-                <h1>電子領収書</h1>
-                <p>NO. JPT-2026-0328</p>
-              </div>
-            </header>
+          {loading && <p className="invoice-status">読み込み中…</p>}
+          {error && (
+            <p className="form-error invoice-status" role="alert">
+              {error}
+            </p>
+          )}
+          {!loading && !error && invoice && (
+            <InvoiceTemplate invoice={invoice} />
+          )}
 
-            <div className="invoice-details-grid">
-              <article><span>利用日時</span><strong>2026年3月28日 18:42</strong></article>
-              <article><span>決済方法</span><strong>VISA (**** 4821)</strong></article>
-              <article><span>乗車場所</span><strong>ホアンキエム湖</strong></article>
-              <article><span>降車場所</span><strong>ロッテホテル</strong></article>
+          {!loading && invoice && (
+            <div className="invoice-actions">
+              <button type="button" onClick={handlePrint} disabled={!invoice}>
+                📄 PDF保存
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (invoice.issued) {
+                    setEmailOpen(true);
+                    return;
+                  }
+                  if (canIssue) {
+                    setEmailOpen(true);
+                  } else {
+                    handleIssue(false);
+                  }
+                }}
+                disabled={issuing || !invoice}
+              >
+                📧 メールで送信
+              </button>
+              {canIssue && (
+                <button
+                  type="button"
+                  className="invoice-issue-btn"
+                  disabled={issuing}
+                  onClick={() => handleIssue(false)}
+                >
+                  {issuing ? '発行中…' : 'VAT領収書を発行'}
+                </button>
+              )}
             </div>
+          )}
 
-            <table className="zip-invoice-table">
-              <thead><tr><th>項目</th><th>金額</th></tr></thead>
-              <tbody>
-                <tr><td>タクシー運賃 (4.8 km)</td><td>¥618</td></tr>
-                <tr><td>予約・配車手数料</td><td>¥62</td></tr>
-              </tbody>
-            </table>
+          {actionMsg && (
+            <p className="invoice-toast" role="status">
+              {actionMsg}
+            </p>
+          )}
 
-            <div className="invoice-summary">
-              <div className="qr-code" aria-hidden="true"><span></span></div>
-              <div>
-                <span>領収金額 (税込)</span>
-                <strong>¥680</strong>
-                <small>（内消費税10%：¥62）</small>
-              </div>
-            </div>
-          </div>
-
-          <div className="invoice-actions">
-            <button type="button">📄 PDF保存</button>
-            <button type="button">📧 メールで送信</button>
-          </div>
-          <Link className="invoice-close" to={closePath}>{closeLabel}</Link>
+          <Link className="invoice-close" to={closePath}>
+            {closeLabel}
+          </Link>
         </section>
+
+        <div
+          className={`payment-method-backdrop ${emailOpen ? 'open' : ''}`}
+          onClick={() => setEmailOpen(false)}
+        >
+          <section
+            className="payment-method-modal invoice-email-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="invoice-email-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header>
+              <h2 id="invoice-email-title">メールで領収書を送信</h2>
+              <button type="button" aria-label="閉じる" onClick={() => setEmailOpen(false)}>
+                ×
+              </button>
+            </header>
+            <label className="invoice-email-field">
+              <span>送信先メール</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="name@example.com"
+              />
+            </label>
+            <button
+              className="payment-method-confirm"
+              type="button"
+              disabled={issuing || !email.trim()}
+              onClick={() => handleIssue(true)}
+            >
+              {issuing ? '送信中…' : '発行して送信'}
+            </button>
+          </section>
+        </div>
       </main>
     </PageShell>
   );

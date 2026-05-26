@@ -273,6 +273,7 @@ export class RideService {
       status: 'completed',
       transactionId: transaction.gatewayTransactionId,
       paidAt: transaction.paidAt,
+      invoicePath: `/trips/${trip.tripId}/invoice`,
     };
   }
 

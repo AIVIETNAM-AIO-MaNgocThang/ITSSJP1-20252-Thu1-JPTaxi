@@ -1,17 +1,27 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
 import PageShell from '../components/PageShell.jsx';
+import { setLastInvoiceTripId } from '../utils/invoiceSession.js';
 import '../styles/app-pages.css';
+
+const DEMO_TRIP_ID = 1;
 
 export default function PaymentPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const invoiceTripId = Number(searchParams.get('tripId')) || DEMO_TRIP_ID;
   const [method, setMethod] = useState('クレジットカード (**** 4821)');
   const [methodOpen, setMethodOpen] = useState(false);
   const methods = ['クレジットカード (**** 4821)', '現金', 'PayPay', 'Apple Pay'];
 
   function confirmPayment() {
     setMethodOpen(false);
-    navigate('/driver-review');
+    setLastInvoiceTripId(invoiceTripId);
+    navigate(`/driver-review?tripId=${invoiceTripId}`);
+  }
+
+  function openInvoice() {
+    setLastInvoiceTripId(invoiceTripId);
   }
 
   return (
@@ -50,7 +60,13 @@ export default function PaymentPage() {
             <div className="receipt-actions">
               <Link className="payment-back-link" to="/ride-status">戻る</Link>
               <button className="pay-confirm" type="button" onClick={confirmPayment}>お支払いを確定する</button>
-              <Link className="invoice-link" to="/invoice"><span>📄</span> 領収書を発行する</Link>
+              <Link
+                className="invoice-link"
+                to={`/invoice?tripId=${invoiceTripId}`}
+                onClick={openInvoice}
+              >
+                <span>📄</span> 領収書を発行する
+              </Link>
               <Link className="support-link" to="/messages/driver">お問い合わせはこちら</Link>
             </div>
           </div>

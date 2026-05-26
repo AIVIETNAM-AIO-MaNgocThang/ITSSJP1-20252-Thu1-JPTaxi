@@ -1,62 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { createRideRequest, postEstimate } from '../api/rides.js';
+import { ApiError } from '../api/client.js';
+import {
+  getBookingDraft,
+  saveBookingDraft,
+  setActiveRequestId,
+} from '../utils/bookingSession.js';
 import '../styles/booking.css';
 
-const fallbackRoute = {
-  destination: {
-    name: 'ロッテホテル ハノイ',
-    address: '54 Liễu Giai, Ba Đình, Hà Nội',
-    position: [21.03205, 105.81283],
-  },
-  pickup: {
-    name: 'ホアンキエム湖',
-    position: [21.02878, 105.85204],
-  },
-  routeMetrics: {
-    duration: '12分',
-    distance: '4.8 km',
-    fare: '¥680',
-  },
-  routePath: [
-    [21.02878, 105.85204],
-    [21.02812, 105.85046],
-    [21.02672, 105.84817],
-    [21.02482, 105.85672],
-    [21.02621, 105.84666],
-    [21.02942, 105.83628],
-    [21.03162, 105.82084],
-    [21.03205, 105.81283],
-  ],
-};
+const VEHICLE_LABELS = { 4: 'スタンダード', 7: 'ミニバン', 9: 'プレミアム' };
 
-function readSelectedRoute() {
-  try {
-    const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
-    if (!rawRoute) return fallbackRoute;
+function formatVnd(amount) {
+  return new Intl.NumberFormat('vi-VN').format(amount);
+}
 
-    const parsedRoute = JSON.parse(rawRoute);
-    const destinationPosition = parsedRoute.destination?.position;
-    const pickupPosition = parsedRoute.pickup?.position;
-
-    if (!Array.isArray(destinationPosition) || !Array.isArray(pickupPosition)) {
-      return fallbackRoute;
-    }
-
-    return {
-      ...fallbackRoute,
-      ...parsedRoute,
-      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
-      routeMetrics: {
-        ...fallbackRoute.routeMetrics,
-        ...parsedRoute.routeMetrics,
-      },
-    };
-  } catch {
-    return fallbackRoute;
-  }
+function routeFromDraft(draft) {
+  return {
+    pickup: { name: draft.pickupAddress, position: [draft.pickupLat, draft.pickupLng] },
+    destination: {
+      name: draft.dropoffAddress,
+      address: draft.dropoffAddress,
+      position: [draft.dropoffLat, draft.dropoffLng],
+    },
+    routePath: [
+      [draft.pickupLat, draft.pickupLng],
+      [draft.dropoffLat, draft.dropoffLng],
+    ],
+  };
 }
 
 export default function BillConfirmPage() {
@@ -65,14 +39,30 @@ export default function BillConfirmPage() {
   const homePath = isDriver ? '/driver-home' : '/home';
   const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
   const chatPath = isDriver ? '/messages/customer' : '/messages/driver';
+  const draft = getBookingDraft();
+  const [estimate, setEstimate] = useState(null);
   const [bookingMode, setBookingMode] = useState('self');
   const [accountOpen, setAccountOpen] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
   const [toast, setToast] = useState('');
-  const [selectedRoute] = useState(readSelectedRoute);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [proxyName, setProxyName] = useState(draft.actualPassengerName || '');
+  const [proxyPhone, setProxyPhone] = useState(draft.actualPassengerPhone || '');
+  const [note, setNote] = useState(draft.noteToDriver || '');
   const accountRef = useRef(null);
-  const displayDistance = selectedRoute.routeMetrics.distance;
-  const routeSummary = `${displayDistance} - ${selectedRoute.routeMetrics.duration}`;
+
+  const selectedRoute = useMemo(
+    () => routeFromDraft(draft),
+    [
+      draft.pickupAddress,
+      draft.pickupLat,
+      draft.pickupLng,
+      draft.dropoffAddress,
+      draft.dropoffLat,
+      draft.dropoffLng,
+    ],
+  );
 
   const routePoints = [
     {
@@ -87,11 +77,15 @@ export default function BillConfirmPage() {
       key: 'destination',
       label: selectedRoute.destination.name,
       meta: selectedRoute.destination.address,
-      time: `約${selectedRoute.routeMetrics.duration}`,
+      time: estimate ? `約${estimate.estimated_time_minutes}分` : '—',
       position: selectedRoute.destination.position,
       type: 'destination',
     },
   ];
+
+  const routeSummary = estimate
+    ? `${estimate.distance_km} km - ${estimate.estimated_time_minutes}分`
+    : '—';
 
   useEffect(() => {
     function closeAccount(event) {
@@ -104,6 +98,26 @@ export default function BillConfirmPage() {
     return () => document.removeEventListener('click', closeAccount);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    postEstimate({
+      startLat: draft.pickupLat,
+      startLng: draft.pickupLng,
+      endLat: draft.dropoffLat,
+      endLng: draft.dropoffLng,
+      vehicleType: draft.vehicleType,
+    })
+      .then((data) => {
+        if (!cancelled) setEstimate(data);
+      })
+      .catch(() => {
+        if (!cancelled) setEstimate(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.pickupLat, draft.pickupLng, draft.dropoffLat, draft.dropoffLng, draft.vehicleType]);
+
   function selectMode(mode) {
     setBookingMode(mode);
     if (mode === 'proxy') {
@@ -111,11 +125,47 @@ export default function BillConfirmPage() {
     }
   }
 
-  function confirmBooking() {
-    setProxyOpen(false);
-    setToast('予約内容を確認しました');
-    window.setTimeout(() => navigate(isDriver ? '/ride-status' : '/search-car'), 700);
+  async function confirmBooking() {
+    setError('');
+    setSubmitting(true);
+    try {
+      const payload = {
+        pickupAddress: draft.pickupAddress,
+        pickupLat: draft.pickupLat,
+        pickupLng: draft.pickupLng,
+        dropoffAddress: draft.dropoffAddress,
+        dropoffLat: draft.dropoffLat,
+        dropoffLng: draft.dropoffLng,
+        vehicleType: draft.vehicleType,
+        noteToDriver: note.trim() || undefined,
+      };
+      if (bookingMode === 'proxy') {
+        payload.actualPassengerName = proxyName.trim() || undefined;
+        payload.actualPassengerPhone = proxyPhone.trim() || undefined;
+      }
+      saveBookingDraft({ ...payload, noteToDriver: note.trim() || null });
+
+      if (isDriver) {
+        setToast('ドライバー画面では予約確定のデモのみです');
+        window.setTimeout(() => navigate('/ride-status'), 700);
+        return;
+      }
+
+      const result = await createRideRequest(payload);
+      setActiveRequestId(result.request_id);
+      setProxyOpen(false);
+      setToast('予約内容を確認しました');
+      window.setTimeout(() => navigate('/search-car'), 700);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '予約の確定に失敗しました');
+    } finally {
+      setSubmitting(false);
+    }
   }
+
+  const distanceLabel = estimate ? `${estimate.distance_km} km` : '—';
+  const timeLabel = estimate ? `${estimate.estimated_time_minutes}分` : '—';
+  const fareLabel = estimate ? `${formatVnd(estimate.total_price)} ₫` : '—';
 
   return (
     <PageShell>
@@ -155,7 +205,7 @@ export default function BillConfirmPage() {
                   <span className="point-dot"></span>
                   <div>
                     <span>出発地</span>
-                    <strong>{selectedRoute.pickup.name}</strong>
+                    <strong>{draft.pickupAddress}</strong>
                   </div>
                 </div>
                 <div className="route-line"></div>
@@ -163,23 +213,23 @@ export default function BillConfirmPage() {
                   <span className="point-dot"></span>
                   <div>
                     <span>目的地</span>
-                    <strong>{selectedRoute.destination.name}</strong>
+                    <strong>{draft.dropoffAddress}</strong>
                   </div>
                 </div>
               </div>
 
               <div className="trip-summary">
                 <article>
-                  <span>乗車予定</span>
-                  <strong>現在</strong>
-                </article>
-                <article>
                   <span>所要時間</span>
-                  <strong>{selectedRoute.routeMetrics.duration}</strong>
+                  <strong>{timeLabel}</strong>
                 </article>
                 <article>
                   <span>走行距離</span>
-                  <strong>{displayDistance}</strong>
+                  <strong>{distanceLabel}</strong>
+                </article>
+                <article>
+                  <span>見積料金</span>
+                  <strong>{fareLabel}</strong>
                 </article>
               </div>
             </section>
@@ -189,17 +239,21 @@ export default function BillConfirmPage() {
               <div className="vehicle-card">
                 <span className="vehicle-icon">🚖</span>
                 <div>
-                  <strong>スタンダード</strong>
+                  <strong>{VEHICLE_LABELS[draft.vehicleType] || 'スタンダード'}</strong>
                   <span>快適なセダン・禁煙車</span>
                 </div>
-                <strong className="vehicle-price">{selectedRoute.routeMetrics.fare}</strong>
+                <strong className="vehicle-price">{fareLabel}</strong>
               </div>
             </section>
 
             <section className="section-card">
               <label className="memo-field">
                 <span>ドライバーへのメモ (任意)</span>
-                <textarea placeholder="例: 大きな荷物があります、または待ち合わせ場所の詳細など..." />
+                <textarea
+                  placeholder="例: 大きな荷物があります、または待ち合わせ場所の詳細など..."
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                />
               </label>
             </section>
 
@@ -207,21 +261,17 @@ export default function BillConfirmPage() {
               <h2>料金詳細</h2>
               <dl>
                 <div>
-                  <dt>基本運賃</dt>
-                  <dd>¥500</dd>
+                  <dt>見積合計</dt>
+                  <dd>{fareLabel}</dd>
                 </div>
                 <div>
-                  <dt>距離加算</dt>
-                  <dd>{selectedRoute.routeMetrics.distance === fallbackRoute.routeMetrics.distance ? '¥120' : '自動計算'}</dd>
-                </div>
-                <div>
-                  <dt>予約手数料</dt>
-                  <dd>¥60</dd>
+                  <dt>走行距離</dt>
+                  <dd>{distanceLabel}</dd>
                 </div>
               </dl>
               <div className="total-row">
-                <span>合計金額</span>
-                <strong>{selectedRoute.routeMetrics.fare}</strong>
+                <span>合計金額 (見積)</span>
+                <strong>{fareLabel}</strong>
               </div>
             </section>
 
@@ -242,8 +292,14 @@ export default function BillConfirmPage() {
               </button>
             </div>
 
+            {error && (
+              <p className="form-error" role="alert" style={{ margin: '0 0 12px' }}>
+                {error}
+              </p>
+            )}
+
             <div className="action-row">
-              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/location-search">
+              <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to={homePath}>
                 戻る
               </Link>
               {isDriver && (
@@ -251,8 +307,8 @@ export default function BillConfirmPage() {
                   連絡
                 </Link>
               )}
-              <button className="primary-button" type="button" onClick={confirmBooking}>
-                予約を確定する
+              <button className="primary-button" type="button" onClick={confirmBooking} disabled={submitting}>
+                {submitting ? '送信中…' : '予約を確定する'}
               </button>
             </div>
           </section>
@@ -280,11 +336,21 @@ export default function BillConfirmPage() {
             <div className="proxy-fields">
               <label>
                 <span>乗車者氏名</span>
-                <input type="text" placeholder="例: 田中 太郎" />
+                <input
+                  type="text"
+                  placeholder="例: 田中 太郎"
+                  value={proxyName}
+                  onChange={(event) => setProxyName(event.target.value)}
+                />
               </label>
               <label>
                 <span>連絡先電話番号</span>
-                <input type="tel" placeholder="090-0000-0000" />
+                <input
+                  type="tel"
+                  placeholder="090-0000-0000"
+                  value={proxyPhone}
+                  onChange={(event) => setProxyPhone(event.target.value)}
+                />
               </label>
             </div>
 

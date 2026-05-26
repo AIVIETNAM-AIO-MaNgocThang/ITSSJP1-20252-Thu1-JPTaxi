@@ -1,83 +1,51 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { getRideRequest } from '../api/rides.js';
+import { getActiveRequestId } from '../utils/bookingSession.js';
 import '../styles/app-pages.css';
 
-const fallbackRoute = {
-  destination: {
-    name: 'ロッテホテル ハノイ',
-    address: '54 Liễu Giai, Ba Đình, Hà Nội',
-    position: [21.03205, 105.81283],
-  },
-  pickup: {
-    name: 'ホアンキエム湖',
-    position: [21.02878, 105.85204],
-  },
-  routeMetrics: {
-    duration: '12分',
-    distance: '4.8 km',
-  },
-  routePath: [
-    [21.02878, 105.85204],
-    [21.02812, 105.85046],
-    [21.02672, 105.84817],
-    [21.02482, 105.85672],
-    [21.02621, 105.84666],
-    [21.02942, 105.83628],
-    [21.03162, 105.82084],
-    [21.03205, 105.81283],
-  ],
-};
+export default function RideStatusPage() {
+  const requestId = getActiveRequestId();
+  const [ride, setRide] = useState(null);
 
-function readSelectedRoute() {
-  try {
-    const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
-    if (!rawRoute) return fallbackRoute;
+  useEffect(() => {
+    if (!requestId) return;
+    let cancelled = false;
 
-    const parsedRoute = JSON.parse(rawRoute);
-    const pickupPosition = parsedRoute.pickup?.position;
-    const destinationPosition = parsedRoute.destination?.position;
-
-    if (!Array.isArray(pickupPosition) || !Array.isArray(destinationPosition)) {
-      return fallbackRoute;
+    async function load() {
+      try {
+        const data = await getRideRequest(requestId);
+        if (!cancelled) setRide(data);
+      } catch {
+        if (!cancelled) setRide(null);
+      }
     }
 
-    return {
-      ...fallbackRoute,
-      ...parsedRoute,
-      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
-      routeMetrics: {
-        ...fallbackRoute.routeMetrics,
-        ...parsedRoute.routeMetrics,
-      },
+    load();
+    const timer = window.setInterval(load, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
     };
-  } catch {
-    return fallbackRoute;
-  }
-}
+  }, [requestId]);
 
-export default function RideStatusPage() {
-  const [selectedRoute] = useState(readSelectedRoute);
-  const routePoints = [
-    {
-      key: 'pickup',
-      label: selectedRoute.pickup.name,
-      meta: '出発地',
-      time: '現在',
-      position: selectedRoute.pickup.position,
-      type: 'pickup',
-    },
-    {
-      key: 'destination',
-      label: selectedRoute.destination.name,
-      meta: selectedRoute.destination.address,
-      time: `約${selectedRoute.routeMetrics.duration}`,
-      position: selectedRoute.destination.position,
-      type: 'destination',
-    },
-  ];
+  const driver = ride?.assigned_driver;
+  const driverName = driver
+    ? `${driver.last_name} ${driver.first_name}`
+    : 'ドライバー';
+  const vehicle = driver?.vehicle;
+  const vehicleLabel = vehicle
+    ? `${vehicle.brand} (${vehicle.color})`
+    : '車両情報';
+  const plate = vehicle?.license_plate ?? '—';
+  const eta = ride?.estimate?.estimated_time_minutes
+    ? `あと ${ride.estimate.estimated_time_minutes} 分`
+    : 'あと 3 分';
+  const distance = ride?.estimate?.distance_km
+    ? `${ride.estimate.distance_km} km`
+    : '—';
 
   return (
     <PageShell>
@@ -94,41 +62,39 @@ export default function RideStatusPage() {
         />
 
         <section className="user-tracking-map">
-          <InteractiveRouteMap
-            alternateRoutePath={[]}
-            className="tracking-route-map"
-            compact
-            currentLocation={selectedRoute.pickup.position}
-            route={routePoints}
-            routePath={selectedRoute.routePath}
-            routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
-            scrollWheelZoom
-            showCurrentLocation={false}
-            showDetails={false}
-          />
+          <span className="tracking-user-marker">📍</span>
+          <span className="tracking-car-marker">🚕</span>
 
           <section className="tracking-card">
             <div className="tracking-eta-header">
               <div>
                 <span>到着予定時間</span>
-                <strong>あと {selectedRoute.routeMetrics.duration}</strong>
+                <strong>{eta}</strong>
               </div>
-              <em>{selectedRoute.routeMetrics.distance}</em>
+              <em>{distance}</em>
             </div>
 
             <div className="tracking-driver-row">
               <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80" alt="" />
               <div>
-                <strong>田中 ドライバー</strong>
-                <small>トヨタ・ヴィオス (黒)</small>
-                <em>30A-123.45</em>
+                <strong>{driverName}</strong>
+                <small>{vehicleLabel}</small>
+                <em>{plate}</em>
               </div>
             </div>
+
+            {ride && (
+              <p style={{ margin: '8px 0 0', fontSize: '0.85rem', opacity: 0.85 }}>
+                ステータス: <strong>{ride.status}</strong>
+                {ride.pickup_address && ` · ${ride.pickup_address}`}
+              </p>
+            )}
 
             <div className="tracking-actions">
               <Link className="tracking-call" to="/messages/driver">📞 電話する</Link>
               <Link className="tracking-message" to="/messages/driver">💬 メッセージ</Link>
             </div>
+            <Link className="tracking-next" to="/payment">支払いへ進む</Link>
           </section>
         </section>
       </main>

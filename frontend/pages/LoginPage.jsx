@@ -1,9 +1,17 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { getCustomerProfile, getDriverProfile, loginCustomer, loginDriver } from '../api/auth.js';
+import { ApiError } from '../api/client.js';
 import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
 import PasswordField from '../components/PasswordField.jsx';
 import Topbar from '../components/Topbar.jsx';
+import {
+  clearAuthSession,
+  getLoginAccountType,
+  persistAuthSession,
+  saveLoginAccountType,
+} from '../utils/session.js';
 import { emailPattern } from '../utils/loginValidation.js';
 import '../styles/auth.css';
 
@@ -15,13 +23,9 @@ const loginMessages = {
   success: 'ログイン情報を確認しました。',
 };
 
-function detectRoleByEmail(email) {
-  const normalizedEmail = email.trim().toLowerCase();
-  return normalizedEmail.includes('driver') || normalizedEmail.includes('taxi') ? 'driver' : 'user';
-}
-
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
   const [email, setEmail] = useState('');
@@ -37,6 +41,32 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [forgotError, setForgotError] = useState('');
   const [forgotStatus, setForgotStatus] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [accountType, setAccountType] = useState(() => getLoginAccountType());
+  const loginAttemptRef = useRef(0);
+  const loginAbortRef = useRef(null);
+  const userInitiatedSubmitRef = useRef(false);
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('jpTaxiLoginEmail');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRemember(true);
+    }
+
+    const roleFromUrl = searchParams.get('role');
+    if (roleFromUrl === 'driver') {
+      setAccountType('driver');
+      saveLoginAccountType('driver');
+    }
+  }, [searchParams]);
+
+  function handleAccountTypeChange(nextType) {
+    setAccountType(nextType);
+    saveLoginAccountType(nextType);
+    setStatus('');
+    setFieldError('password', '');
+  }
 
   function setFieldError(field, message) {
     setErrors((current) => ({ ...current, [field]: message }));
@@ -98,9 +128,17 @@ export default function LoginPage() {
     }
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+
+    if (!userInitiatedSubmitRef.current) {
+      return;
+    }
+    userInitiatedSubmitRef.current = false;
+
+    const attemptId = ++loginAttemptRef.current;
     setStatus('');
+    setFieldError('password', '');
 
     const isEmailValid = validateEmail();
     const isPasswordValid = validatePassword();
@@ -114,17 +152,72 @@ export default function LoginPage() {
       return;
     }
 
+    const trimmedEmail = email.trim();
+    const isDriver = accountType === 'driver';
+
     if (remember) {
-      localStorage.setItem('jpTaxiLoginEmail', email.trim());
+      localStorage.setItem('jpTaxiLoginEmail', trimmedEmail);
     } else {
       localStorage.removeItem('jpTaxiLoginEmail');
     }
+    saveLoginAccountType(accountType);
 
-    const role = detectRoleByEmail(email);
-    localStorage.setItem('jpTaxiRole', role);
-    localStorage.setItem('jpTaxiUserEmail', email.trim());
-    setStatus(loginMessages.success);
-    navigate(role === 'driver' ? '/driver-home' : '/home');
+    loginAbortRef.current?.abort();
+    const controller = new AbortController();
+    loginAbortRef.current = controller;
+
+    setSubmitting(true);
+    try {
+      const result = isDriver
+        ? await loginDriver(trimmedEmail, password, { signal: controller.signal })
+        : await loginCustomer(trimmedEmail, password, { signal: controller.signal });
+
+      if (attemptId !== loginAttemptRef.current) {
+        return;
+      }
+
+      if (!result?.token) {
+        throw new ApiError('ログイン応答が不正です。', 500, result);
+      }
+
+      persistAuthSession({
+        token: result.token,
+        role: isDriver ? 'driver' : 'customer',
+        user: result.user,
+        session: result.session,
+        email: trimmedEmail,
+      });
+
+      if (isDriver) {
+        await getDriverProfile({ signal: controller.signal });
+      } else {
+        await getCustomerProfile({ signal: controller.signal });
+      }
+
+      if (attemptId !== loginAttemptRef.current) {
+        clearAuthSession();
+        return;
+      }
+
+      setStatus(loginMessages.success);
+      navigate(isDriver ? '/driver-home' : '/home');
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        return;
+      }
+      if (attemptId !== loginAttemptRef.current) {
+        return;
+      }
+      clearAuthSession();
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'ログインに失敗しました。しばらくしてから再度お試しください。';
+      setFieldError('password', message);
+      passwordRef.current?.focus();
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function openForgotModal() {
@@ -188,7 +281,7 @@ export default function LoginPage() {
   return (
     <PageShell withFooter={false}>
       <main className="auth-screen">
-        <Topbar />
+        <Topbar brandTo="/login" />
 
         <section className="auth-layout">
           <div className="intro">
@@ -219,7 +312,44 @@ export default function LoginPage() {
               <p>メールアドレスとパスワードを入力して、システムにアクセスしてください。</p>
             </div>
 
-            <form className="auth-form" onSubmit={handleSubmit} noValidate>
+            <form
+              className="auth-form"
+              onSubmit={handleSubmit}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  userInitiatedSubmitRef.current = true;
+                }
+              }}
+              noValidate
+              aria-busy={submitting}
+            >
+              <div className="login-account-type" role="tablist" aria-label="アカウント種別">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={accountType === 'customer'}
+                  className={accountType === 'customer' ? 'is-active' : ''}
+                  onClick={() => handleAccountTypeChange('customer')}
+                >
+                  顧客
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={accountType === 'driver'}
+                  className={accountType === 'driver' ? 'is-active' : ''}
+                  onClick={() => handleAccountTypeChange('driver')}
+                >
+                  ドライバー
+                </button>
+              </div>
+
+              <p className="login-account-hint">
+                {accountType === 'driver'
+                  ? 'ドライバーアカウントでログインします。'
+                  : 'お客様アカウントでログインします。'}
+              </p>
+
               <label>
                 <span>メールアドレス</span>
                 <input
@@ -267,7 +397,16 @@ export default function LoginPage() {
                 {status}
               </div>
 
-              <button className="submit-button" type="submit">ログインする</button>
+              <button
+                className="submit-button"
+                type="submit"
+                disabled={submitting}
+                onClick={() => {
+                  userInitiatedSubmitRef.current = true;
+                }}
+              >
+                {submitting ? 'ログイン中...' : 'ログインする'}
+              </button>
               <div className="login-register-links">
                 <p className="note-link">アカウントをお持ちでないですか？ <Link to="/register">顧客登録</Link></p>
                 <Link className="driver-register-link" to="/driver-register">運転者登録</Link>

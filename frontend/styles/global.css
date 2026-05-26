@@ -21,6 +21,14 @@ body {
   background: #f8fafc;
 }
 
+.auth-loading {
+  display: grid;
+  place-items: center;
+  min-height: 40vh;
+  color: var(--muted);
+  font-size: 15px;
+}
+
 .page-shell {
   display: flex;
   flex-direction: column;
@@ -201,6 +209,12 @@ input[type="password"]::-ms-clear {
 
 .submit-button:hover {
   background: var(--green-dark);
+}
+
+.submit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  box-shadow: none;
 }
 
 .secondary-button {

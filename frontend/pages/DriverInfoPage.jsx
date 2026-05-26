@@ -1,6 +1,11 @@
-import { Link, NavLink, useParams } from 'react-router-dom';
-import { useState } from 'react';
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { getDriverMyProfile } from '../api/drivers.js';
+import { getDriverRatings } from '../api/ratings.js';
 import Modal from '../components/Modal.jsx';
+import ProfileAvatarSlot from '../components/ProfileAvatarSlot.jsx';
+import { clearAuthSession, getAuthToken, isDriverRole } from '../utils/session.js';
+import { resolveUploadUrl } from '../utils/uploadUrl.js';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
@@ -9,15 +14,96 @@ const driverMenu = [
   { id: 'basic', icon: '👤', label: 'プロフィール設定', to: '/driver-info/basic' },
   { id: 'vehicle', icon: '🚗', label: '車両・免許情報', to: '/driver-info/vehicle' },
   { id: 'history', icon: '📈', label: '稼働履歴', to: '/driver-info/history' },
+  { id: 'reviews', icon: '⭐', label: '評価・コメント', to: '/driver-info/reviews' },
   { id: 'payout', icon: '💰', label: 'お支払い・振込', to: '/driver-info/payout' },
   { id: 'logout', icon: '🚪', label: 'ログアウト', to: '/driver-info/logout' },
 ];
 
 export default function DriverInfoPage() {
+  const navigate = useNavigate();
   const { section } = useParams();
   const activeSection = driverMenu.some((item) => item.id === section) ? section : 'basic';
   const [online, setOnline] = useState(true);
   const [modal, setModal] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [ratingsData, setRatingsData] = useState(null);
+
+  useEffect(() => {
+    if (!getAuthToken()) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    if (!isDriverRole()) {
+      navigate('/home', { replace: true });
+      return;
+    }
+    getDriverMyProfile()
+      .then(setProfile)
+      .catch(() => {
+        clearAuthSession();
+        navigate('/login', { replace: true });
+      });
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!getAuthToken() || !isDriverRole()) return;
+    if (activeSection === 'history' || activeSection === 'reviews') {
+      getDriverRatings({ limit: 15 })
+        .then(setRatingsData)
+        .catch(() => setRatingsData(null));
+    }
+  }, [activeSection]);
+
+  function formatTripDate(iso) {
+    if (!iso) return '—';
+    return new Intl.DateTimeFormat('ja-JP', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(iso));
+  }
+
+  function renderRatingStars(score) {
+    return '★'.repeat(score) + '☆'.repeat(Math.max(0, 5 - score));
+  }
+
+  function renderReviewsList() {
+    if (!ratingsData?.items?.length) {
+      return <p className="muted-copy">まだ評価がありません。</p>;
+    }
+    return (
+      <div className="driver-rating-list">
+        {ratingsData.items.map((item) => (
+          <article className="driver-rating-item" key={item.ratingId}>
+            <header>
+              <strong>{item.customerName || 'お客様'}</strong>
+              <span className="rating-stars-inline">{renderRatingStars(item.score)}</span>
+            </header>
+            {item.tags?.length > 0 && (
+              <div className="driver-rating-tags">
+                {item.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+            )}
+            {item.comment && <p>{item.comment}</p>}
+            <small className="muted-copy">{formatTripDate(item.createdAt)}</small>
+          </article>
+        ))}
+      </div>
+    );
+  }
+
+  function handleLogout() {
+    clearAuthSession();
+    navigate('/login', { replace: true });
+  }
+
+  const displayName = profile
+    ? `${profile.lastName ?? ''} ${profile.firstName ?? ''}`.trim()
+    : '—';
+  const avatarSrc = resolveUploadUrl(profile?.avatarUrl);
 
   const modalTitle = {
     account: 'アカウント情報を編集',
@@ -65,19 +151,50 @@ export default function DriverInfoPage() {
     }
 
     if (activeSection === 'history') {
+      const completedTrips = profile?.trips?.filter((t) => t.status === 'completed') ?? [];
+      const avgLabel =
+        ratingsData?.averageScore != null ? ratingsData.averageScore.toFixed(1) : '—';
       return (
         <section className="panel zip-profile-panel">
           <h2 className="panel-title">稼働履歴</h2>
           <div className="trip-summary">
-            <article><span>本日の乗車</span><strong>8件</strong></article>
-            <article><span>評価</span><strong>4.9</strong></article>
-            <article><span>売上</span><strong>¥12,800</strong></article>
+            <article><span>完了乗車</span><strong>{completedTrips.length}件</strong></article>
+            <article><span>評価</span><strong>{avgLabel}</strong></article>
+            <article>
+              <span>レビュー</span>
+              <strong>{ratingsData?.ratingCount ?? '—'}</strong>
+            </article>
           </div>
           <div className="modal-list history-list">
-            <span>18:20 Hoan Kiem Lake → Lotte Hotel / ¥680</span>
-            <span>16:05 Noi Bai Airport → Ba Dinh / ¥2,400</span>
-            <span>13:40 Old Quarter → Tay Ho / ¥1,100</span>
+            {completedTrips.slice(0, 8).map((trip, index) => (
+              <span key={`${trip.startTime}-${index}`}>
+                {formatTripDate(trip.startTime)} {trip.pickupAddress} → {trip.dropoffAddress} / ¥
+                {trip.finalFareJpy}
+              </span>
+            ))}
+            {completedTrips.length === 0 && <span>履歴がありません</span>}
           </div>
+        </section>
+      );
+    }
+
+    if (activeSection === 'reviews') {
+      return (
+        <section className="panel zip-profile-panel">
+          <h2 className="panel-title">評価・コメント</h2>
+          <div className="trip-summary">
+            <article>
+              <span>平均評価</span>
+              <strong>
+                {ratingsData?.averageScore != null ? ratingsData.averageScore.toFixed(2) : '—'}
+              </strong>
+            </article>
+            <article>
+              <span>レビュー数</span>
+              <strong>{ratingsData?.ratingCount ?? '—'}</strong>
+            </article>
+          </div>
+          {renderReviewsList()}
         </section>
       );
     }
@@ -100,7 +217,7 @@ export default function DriverInfoPage() {
         <section className="panel zip-profile-panel narrow-panel">
           <h2 className="panel-title">ログアウト</h2>
           <p className="muted-copy">ドライバーアカウントからログアウトします。</p>
-          <button className="submit-button profile-save-button" type="button" onClick={() => setModal('logout')}>ログアウト</button>
+          <button className="submit-button profile-save-button" type="button" onClick={handleLogout}>ログアウト</button>
         </section>
       );
     }
@@ -173,13 +290,13 @@ export default function DriverInfoPage() {
     <PageShell>
       <main className="app-screen zip-profile-screen">
         <div className="profile-window">
-          <Topbar brandTo="/driver-home" actions={<><Link to="/driver-home">売上管理</Link><Link to="/messages/customer">通知</Link><img className="topbar-avatar driver-avatar-top" src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
+          <Topbar brandTo="/driver-home" actions={<><Link to="/driver-home">売上管理</Link><Link to="/messages/customer">通知</Link><ProfileAvatarSlot slot="topbar" className="driver-avatar-top" src={avatarSrc} fallbackText={displayName} /></>} />
           <section className="profile-page-shell zip-profile-shell">
             <aside className="profile-sidebar">
               <section className="profile-card zip-profile-card driver-profile-card">
-                <div className="profile-avatar">山田</div>
-                <strong>山田 太郎</strong>
-                <span>⭐ 4.9 (256件の評価)</span>
+                <ProfileAvatarSlot slot="1" src={avatarSrc} fallbackText={displayName} />
+                <strong>{displayName}</strong>
+                <span>{profile?.email ?? '—'}</span>
                 <em>公式ドライバー</em>
               </section>
               <nav className="side-menu" aria-label="ドライバーメニュー">

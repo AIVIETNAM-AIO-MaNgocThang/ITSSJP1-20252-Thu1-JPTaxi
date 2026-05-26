@@ -127,7 +127,7 @@ export default function DriverRideStatusPage() {
 
             <div className="tracking-actions">
               <Link className="tracking-call" to="/messages/customer">📞 連絡する</Link>
-              <Link className="tracking-message" to="/driver-invoice">📄 請求書へ</Link>
+              <Link className="tracking-message" to="/driver-invoice?tripId=1">📄 請求書へ</Link>
             </div>
           </section>
         </section>

@@ -704,8 +704,10 @@
   display: grid;
   justify-items: center;
   gap: 8px;
+  min-width: 0;
   margin-bottom: 20px;
   padding: 22px 18px;
+  overflow: hidden;
   text-align: center;
   background: #fff;
   border: 1px solid var(--line);
@@ -713,19 +715,76 @@
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
 }
 
-.profile-card .profile-avatar {
-  display: grid;
-  place-items: center;
-  width: 86px;
-  height: 86px;
-  color: #047857;
-  font-size: 28px;
-  font-weight: 900;
-  background: #d1fae5;
-  border-radius: 20px;
+/* Ô #1 — khung đỏ wireframe: đầu card sidebar, căn giữa */
+.profile-avatar-slot-1 {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 0 0 4px;
 }
 
-.driver-profile-card .profile-avatar {
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  color: #047857;
+  font-weight: 900;
+  line-height: 1;
+  background: #d1fae5;
+  contain: layout style paint;
+}
+
+/* Kích thước/vị trí khớp wireframe ô số 1 */
+.profile-avatar--slot-1 {
+  width: 96px;
+  height: 96px;
+  font-size: 32px;
+  border-radius: 22px;
+}
+
+.profile-avatar--preview {
+  width: 96px;
+  height: 96px;
+  font-size: 32px;
+  border-radius: 22px;
+  margin: 0 auto 12px;
+}
+
+/* Topbar — cùng cơ chế khung + object-fit như ô #1 */
+.profile-avatar-slot-topbar {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-avatar--topbar {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  border-radius: 50%;
+}
+
+.profile-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.profile-avatar-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.driver-profile-card .profile-avatar--slot-1 {
   border: 3px solid #047857;
 }
 
@@ -947,9 +1006,11 @@
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
 }
 
-.zip-profile-card .profile-avatar {
-  border-radius: 24px;
+.profile-sidebar {
+  min-width: 0;
+  overflow: hidden;
 }
+
 
 .zip-profile-header {
   align-items: flex-start;
@@ -1019,6 +1080,8 @@
 }
 
 .profile-window .profile-sidebar {
+  min-width: 0;
+  overflow: hidden;
   padding: 28px 20px;
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
 }
@@ -1143,6 +1206,21 @@
 .zip-modal-form {
   display: grid;
   gap: 14px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.forgot-modal .zip-modal-form img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.forgot-modal .profile-avatar img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
 }
 
 .account-card {
@@ -1150,11 +1228,16 @@
   text-decoration: none;
 }
 
+/* Legacy pages vẫn dùng img.topbar-avatar trực tiếp */
 .topbar-avatar {
   width: 44px;
   height: 44px;
   object-fit: cover;
   border-radius: 50%;
+}
+
+.profile-avatar--topbar.driver-avatar-top {
+  border: 3px solid #10b981;
 }
 
 .active-header-link {
@@ -2179,6 +2262,105 @@ button.zip-fast-button {
   border-color: #1e293b;
 }
 
+.invoice-status {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--text-muted, #64748b);
+}
+
+.invoice-seller-block {
+  padding: 0 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.invoice-seller-block span {
+  font-weight: 600;
+  color: #334155;
+}
+
+.invoice-vat-note {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 20px 0;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.invoice-issued-badge {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #059669;
+  font-weight: 600;
+}
+
+.invoice-buyer-footer {
+  padding: 16px 20px 20px;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.invoice-issue-btn {
+  grid-column: 1 / -1;
+  border: 1px solid #0f766e;
+  background: #ecfdf5;
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.invoice-toast {
+  text-align: center;
+  font-size: 14px;
+  color: #059669;
+  margin: 8px 0 0;
+}
+
+.invoice-email-modal {
+  max-width: 400px;
+}
+
+.invoice-email-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 20px 16px;
+}
+
+.invoice-email-field input {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+@media print {
+  .invoice-actions,
+  .invoice-close,
+  .payment-method-backdrop,
+  .topbar,
+  .invoice-toast,
+  .invoice-status.form-error {
+    display: none !important;
+  }
+
+  .invoice-screen {
+    padding: 0;
+    background: #fff;
+  }
+
+  .zip-invoice-paper {
+    box-shadow: none;
+    border: none;
+  }
+}
+
 .invoice-close {
   display: block;
   margin-top: 16px;
@@ -2236,8 +2418,7 @@ button.zip-fast-button {
   border-radius: 16px;
 }
 
-.dispatch-driver-box img,
-.driver-avatar-top {
+.dispatch-driver-box img {
   border: 3px solid #10b981;
 }
 
@@ -3054,6 +3235,78 @@ button.zip-fast-button {
   margin-bottom: 28px;
   background: #f8fafc;
   border-radius: 16px;
+}
+
+.review-stars button.active {
+  color: #f59e0b;
+}
+
+.review-driver-avatar-img {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.review-topbar button {
+  border: none;
+  background: none;
+  color: #0f766e;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.review-topbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.driver-rating-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.driver-rating-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.driver-rating-item header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.driver-rating-item .rating-stars-inline {
+  color: #f59e0b;
+  letter-spacing: 1px;
+}
+
+.driver-rating-item p {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.driver-rating-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.driver-rating-tags span {
+  font-size: 11px;
+  background: #ecfdf5;
+  color: #0f766e;
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .review-submit {

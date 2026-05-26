@@ -13,7 +13,7 @@ OUT = Path(__file__).parent / "DB_data.sql"
 # bcrypt hashes (dev)
 HASH_ADMIN = "$2a$10$lCQpNF9iSt1J2BxYrjv.1.ZSnl7iTnazMo3kXmwCSKBulPEwtQOMi"  # admin123
 HASH_MOD = "$2a$10$dOqgeeFpW7cWlVfmiyfJVeWz3ItokJt93ZvWaaSIDcrd0tEKpxcLS"  # mod123
-HASH_USER = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"  # password123
+HASH_USER = "$2a$10$Bf2ID3957Jxa6J9/FWuyROo1THOJWuQdQ5i12aAW6XSQHTrlO0xIS"  # password123
 
 GENDERS = ("Male", "Female", "Other")
 DRIVER_STATUS = ("pending", "approved", "rejected", "suspended")

@@ -7,13 +7,23 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as bcrypt from 'bcryptjs';
+import { assertDriverMayLogin } from '../../common/driver-login.util';
+import {
+  hashPassword,
+  isBcryptHash,
+  verifyPassword,
+} from '../../common/password.util';
 import { Customer, GenderType } from '../../entities/customer.entity';
+import { Driver } from '../../entities/driver.entity';
 import { LoginHistory, LoginUserType } from '../../entities/login-history.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+
+const SESSION_EXPIRES_IN = '7d';
+const INVALID_CREDENTIALS_MSG =
+  'メールアドレスまたはパスワードが正しくありません';
 
 @Injectable()
 export class AuthService {
@@ -23,6 +33,8 @@ export class AuthService {
   constructor(
     @InjectRepository(Customer)
     private readonly customers: Repository<Customer>,
+    @InjectRepository(Driver)
+    private readonly drivers: Repository<Driver>,
     @InjectRepository(LoginHistory)
     private readonly logins: Repository<LoginHistory>,
     private readonly jwt: JwtService,
@@ -30,12 +42,12 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     try {
-      const passwordHash = await bcrypt.hash(dto.password, 10);
+      const passwordHash = await hashPassword(dto.password);
       const birthDate = dto.birth_date?.slice(0, 10) ?? '1990-01-01';
       const entity = this.customers.create({
         firstName: dto.first_name,
         lastName: dto.last_name,
-        email: dto.email,
+        email: dto.email.trim().toLowerCase(),
         passwordHash,
         phone: dto.phone,
         gender: dto.gender ?? GenderType.Other,
@@ -55,22 +67,49 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, clientIp?: string | null) {
-    const user = await this.customers
+    const email = dto.email.trim().toLowerCase();
+
+    const customer = await this.customers
       .createQueryBuilder('c')
       .addSelect('c.passwordHash')
-      .where('c.email = :email', { email: dto.email })
+      .where('LOWER(c.email) = :email', { email })
       .getOne();
 
-    if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
-      throw new UnauthorizedException('Email hoặc mật khẩu sai');
+    if (
+      customer &&
+      isBcryptHash(customer.passwordHash) &&
+      (await verifyPassword(dto.password, customer.passwordHash))
+    ) {
+      return this.buildCustomerLoginResponse(customer, clientIp);
     }
 
+    const driver = await this.drivers
+      .createQueryBuilder('d')
+      .addSelect('d.passwordHash')
+      .where('LOWER(d.email) = :email', { email })
+      .getOne();
+
+    if (
+      driver &&
+      isBcryptHash(driver.passwordHash) &&
+      (await verifyPassword(dto.password, driver.passwordHash))
+    ) {
+      return this.buildDriverLoginResponse(driver, clientIp);
+    }
+
+    throw new UnauthorizedException(INVALID_CREDENTIALS_MSG);
+  }
+
+  private async buildCustomerLoginResponse(
+    user: Customer,
+    clientIp?: string | null,
+  ) {
     try {
       await this.logins.save(
         this.logins.create({
           userType: LoginUserType.customer,
           userId: user.customerId,
-          ipAddress: clientIp || null,
+          ipAddress: clientIp ?? null,
           loginTime: new Date(),
         }),
       );
@@ -80,14 +119,58 @@ export class AuthService {
 
     const token = this.jwt.sign(
       { id: user.customerId, role: 'customer' },
-      { expiresIn: '7d' },
+      { expiresIn: SESSION_EXPIRES_IN },
     );
     return {
       token,
+      tokenType: 'Bearer' as const,
+      expiresIn: SESSION_EXPIRES_IN,
+      role: 'customer' as const,
       user: {
-        email: user.email,
-        name: user.firstName,
         customerId: user.customerId,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        name: user.firstName,
+      },
+    };
+  }
+
+  private async buildDriverLoginResponse(
+    driver: Driver,
+    clientIp?: string | null,
+  ) {
+    assertDriverMayLogin(driver.status);
+
+    try {
+      await this.logins.save(
+        this.logins.create({
+          userType: LoginUserType.driver,
+          userId: driver.driverId,
+          ipAddress: clientIp ?? null,
+          loginTime: new Date(),
+        }),
+      );
+    } catch {
+      /* bỏ qua nếu ghi login_history thất bại */
+    }
+
+    const token = this.jwt.sign(
+      { id: driver.driverId, role: 'driver' },
+      { expiresIn: SESSION_EXPIRES_IN },
+    );
+
+    return {
+      token,
+      tokenType: 'Bearer' as const,
+      expiresIn: SESSION_EXPIRES_IN,
+      role: 'driver' as const,
+      user: {
+        driverId: driver.driverId,
+        email: driver.email,
+        firstName: driver.firstName,
+        lastName: driver.lastName,
+        status: driver.status,
       },
     };
   }
@@ -169,7 +252,7 @@ export class AuthService {
     }
 
     // 3. Hash mật khẩu mới và lưu vào DB
-    customer.passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    customer.passwordHash = await hashPassword(dto.newPassword);
     await this.customers.save(customer);
 
     // 4. Giải phóng mã trong cache

@@ -6,9 +6,17 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 function ensureUploadDirs() {
-  const avatars = join(process.cwd(), 'uploads', 'avatars');
-  if (!existsSync(avatars)) {
-    mkdirSync(avatars, { recursive: true });
+  const dirs = [
+    'avatars',
+    'drivers/portraits',
+    'drivers/licenses',
+    'drivers/vehicles',
+  ];
+  for (const sub of dirs) {
+    const path = join(process.cwd(), 'uploads', sub);
+    if (!existsSync(path)) {
+      mkdirSync(path, { recursive: true });
+    }
   }
 }
 

@@ -31,6 +31,7 @@ export class CustomersService {
     if (!c) throw new NotFoundException();
     const loginHistory = await this.loginHistoryFor(customerId);
     return {
+      customerId: c.customerId,
       lastName: c.lastName,
       firstName: c.firstName,
       email: c.email,

@@ -10,11 +10,11 @@ import { DriverBankAccount } from './entities/driver-bank-account.entity';
 import { DriverLicense } from './entities/driver-license.entity';
 import { Trip } from './entities/trip.entity';
 import { RideRequest } from './entities/ride-request.entity';
+import { RideRequestDispatch } from './entities/ride-request-dispatch.entity';
 import { LoginHistory } from './entities/login-history.entity';
 import { DriverLocationHistory } from './entities/driver-location-history.entity';
 import { Rating } from './entities/rating.entity';
 import { PricingRule } from './entities/pricing-rule.entity';
-import { RideRequestDispatch } from './entities/ride-request-dispatch.entity';
 import { PaymentTransaction } from './entities/payment-transaction.entity';
 import { DriverPayout } from './entities/driver-payout.entity';
 import { SearchHistory } from './entities/search-history.entity';
@@ -26,6 +26,8 @@ import { AdminModule } from './modules/admin/admin.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DriversModule } from './modules/drivers/drivers.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
+import { RatingsModule } from './modules/ratings/ratings.module';
 
 @Module({
   imports: [
@@ -55,11 +57,11 @@ import { UploadsModule } from './modules/uploads/uploads.module';
           DriverLicense,
           Trip,
           RideRequest,
+          RideRequestDispatch,
           LoginHistory,
           DriverLocationHistory,
           Rating,
           PricingRule,
-          RideRequestDispatch,
           PaymentTransaction,
           DriverPayout,
           SearchHistory,
@@ -76,6 +78,8 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     CustomersModule,
     DriversModule,
     UploadsModule,
+    InvoicesModule,
+    RatingsModule,
   ],
 })
 export class AppModule {}

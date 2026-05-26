@@ -3,8 +3,12 @@
   "private": true,
   "description": "JP Taxi — chạy npm từ root sẽ ủy quyền sang backend/",
   "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run start:dev --prefix backend",
     "test:db": "npm run test:db --prefix backend",
     "build": "npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
     "start": "npm run start --prefix backend",
     "start:dev": "npm run start:dev --prefix backend",
     "start:prod": "npm run start:prod --prefix backend"

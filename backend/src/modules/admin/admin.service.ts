@@ -5,7 +5,10 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as bcrypt from 'bcryptjs';
+import {
+  isBcryptHash,
+  verifyPassword,
+} from '../../common/password.util';
 import { Customer } from '../../entities/customer.entity';
 import { Driver } from '../../entities/driver.entity';
 import { Admin } from '../../entities/admin.entity';
@@ -37,15 +40,17 @@ export class AdminService {
   }
 
   async login(dto: AdminLoginDto) {
+    const username = dto.username.trim();
     const admin = await this.admins
       .createQueryBuilder('a')
       .addSelect('a.passwordHash')
-      .where('a.username = :username', { username: dto.username })
+      .where('a.username = :username', { username })
       .getOne();
 
     if (
       !admin ||
-      !(await bcrypt.compare(dto.password, admin.passwordHash))
+      !isBcryptHash(admin.passwordHash) ||
+      !(await verifyPassword(dto.password, admin.passwordHash))
     ) {
       throw new UnauthorizedException('Sai tên đăng nhập hoặc mật khẩu');
     }
