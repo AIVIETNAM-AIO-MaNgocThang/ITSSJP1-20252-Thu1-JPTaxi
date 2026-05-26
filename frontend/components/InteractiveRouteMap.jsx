@@ -153,7 +153,7 @@ function MapInteractionLock({ disabled, scrollWheelZoom }) {
 function RouteControls({ currentLocationPosition, fitCurrentLocation, mapZoom, positions }) {
   const map = useMap();
   const handleFit = () => {
-    if (fitCurrentLocation) {
+    if (fitCurrentLocation && currentLocationPosition) {
       map.setView(currentLocationPosition, mapZoom, { animate: true });
       return;
     }
@@ -162,7 +162,7 @@ function RouteControls({ currentLocationPosition, fitCurrentLocation, mapZoom, p
   };
 
   useEffect(() => {
-    if (!fitCurrentLocation) return undefined;
+    if (!fitCurrentLocation || !currentLocationPosition) return undefined;
 
     const originalFitBounds = map.fitBounds.bind(map);
     map.fitBounds = () => {
@@ -208,20 +208,21 @@ export default function InteractiveRouteMap({
 }) {
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [routeHovered, setRouteHovered] = useState(false);
-  const [browserLocation, setBrowserLocation] = useState(currentPosition);
+  const [browserLocation, setBrowserLocation] = useState(null);
   const positions = useMemo(() => route.map((point) => point.position), [route]);
   const routeBoundsPositions = useMemo(
     () => (routePath?.length ? routePath : positions),
     [positions, routePath],
   );
   const currentLocationPosition = currentLocation ?? browserLocation;
+  const hasCurrentLocation = Array.isArray(currentLocationPosition);
   const fitControlPositions = showCurrentLocation
-    ? [
+    ? hasCurrentLocation ? [
         [currentLocationPosition[0] - 0.002, currentLocationPosition[1] - 0.002],
         [currentLocationPosition[0] + 0.002, currentLocationPosition[1] + 0.002],
-      ]
+      ] : routeBoundsPositions
     : routeBoundsPositions;
-  const resolvedMapCenter = centerOnCurrentLocation ? currentLocationPosition : mapCenter;
+  const resolvedMapCenter = centerOnCurrentLocation && hasCurrentLocation ? currentLocationPosition : mapCenter;
   const isRouteHighlighted = routeHovered || hoveredPoint !== null;
 
   useEffect(() => {
@@ -234,9 +235,9 @@ export default function InteractiveRouteMap({
         setBrowserLocation([position.coords.latitude, position.coords.longitude]);
       },
       () => {
-        setBrowserLocation(currentPosition);
+        setBrowserLocation(null);
       },
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
     );
   }, [currentLocation, showCurrentLocation]);
 
@@ -331,7 +332,7 @@ export default function InteractiveRouteMap({
             </Marker>
           );
         })}
-        {showCurrentLocation && (
+        {showCurrentLocation && hasCurrentLocation && (
           <Marker icon={createCurrentLocationIcon()} position={currentLocationPosition}>
             <Tooltip direction="top" offset={[0, -13]} opacity={1}>現在位置</Tooltip>
           </Marker>
@@ -341,7 +342,7 @@ export default function InteractiveRouteMap({
         {showControls && (
           <RouteControls
             currentLocationPosition={currentLocationPosition}
-            fitCurrentLocation={showCurrentLocation}
+            fitCurrentLocation={showCurrentLocation && hasCurrentLocation}
             mapZoom={mapZoom}
             positions={fitControlPositions}
           />

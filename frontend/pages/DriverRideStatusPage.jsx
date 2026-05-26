@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { getChatPath } from '../utils/chatSession.js';
 import '../styles/app-pages.css';
 
 const fallbackRoute = {
@@ -87,7 +88,7 @@ export default function DriverRideStatusPage() {
           actions={(
             <>
               <Link to="/driver-home">ホーム</Link>
-              <Link to="/messages/customer">メッセージ</Link>
+              <Link to={getChatPath('customer')}>メッセージ</Link>
               <Link to="/driver-info/basic">アカウント</Link>
             </>
           )}
@@ -126,7 +127,7 @@ export default function DriverRideStatusPage() {
             </div>
 
             <div className="tracking-actions">
-              <Link className="tracking-call" to="/messages/customer">📞 連絡する</Link>
+              <Link className="tracking-call" to={getChatPath('customer')}>💬 連絡する</Link>
               <Link className="tracking-message" to="/driver-invoice">📄 請求書へ</Link>
             </div>
           </section>

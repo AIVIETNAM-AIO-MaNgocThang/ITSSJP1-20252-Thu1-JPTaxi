@@ -4,6 +4,8 @@ import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/booking.css';
+import { useLanguage } from '../context/LanguageContext.jsx';
+import { getChatPath, saveActiveChatSession } from '../utils/chatSession.js';
 
 const fallbackRoute = {
   destination: {
@@ -61,10 +63,10 @@ function readSelectedRoute() {
 
 export default function BillConfirmPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver';
   const homePath = isDriver ? '/driver-home' : '/home';
   const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
-  const chatPath = isDriver ? '/messages/customer' : '/messages/driver';
   const [bookingMode, setBookingMode] = useState('self');
   const [accountOpen, setAccountOpen] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
@@ -112,6 +114,12 @@ export default function BillConfirmPage() {
   }
 
   function confirmBooking() {
+    saveActiveChatSession({
+      tripId: selectedRoute.tripId ?? selectedRoute.trip_id ?? `local-trip-${Date.now()}`,
+      requestId: selectedRoute.requestId ?? selectedRoute.request_id ?? `local-request-${Date.now()}`,
+      customerId: selectedRoute.customerId ?? selectedRoute.customer_id ?? localStorage.getItem('jpTaxiUserId') ?? 1,
+      driverId: selectedRoute.driverId ?? selectedRoute.driver_id ?? 1,
+    });
     setProxyOpen(false);
     setToast('予約内容を確認しました');
     window.setTimeout(() => navigate(isDriver ? '/ride-status' : '/search-car'), 700);
@@ -144,17 +152,17 @@ export default function BillConfirmPage() {
         <section className="booking-layout">
           <section className="confirm-panel" aria-labelledby="page-title">
             <div className="page-heading">
-              <h1 id="page-title">予約内容を確認</h1>
-              <p>最終的なルートと料金を確認してください。</p>
+              <h1 id="page-title">{t('routeConfirmTitle')}</h1>
+              <p>{t('routeConfirmCopy')}</p>
             </div>
 
             <section className="section-card">
-              <h2>乗車ルート</h2>
+              <h2>{t('pickupRoute')}</h2>
               <div className="route-list">
                 <div className="route-point pickup">
                   <span className="point-dot"></span>
                   <div>
-                    <span>出発地</span>
+                    <span>{t('pickupPoint')}</span>
                     <strong>{selectedRoute.pickup.name}</strong>
                   </div>
                 </div>
@@ -162,7 +170,7 @@ export default function BillConfirmPage() {
                 <div className="route-point destination">
                   <span className="point-dot"></span>
                   <div>
-                    <span>目的地</span>
+                    <span>{t('destination')}</span>
                     <strong>{selectedRoute.destination.name}</strong>
                   </div>
                 </div>
@@ -170,27 +178,33 @@ export default function BillConfirmPage() {
 
               <div className="trip-summary">
                 <article>
-                  <span>乗車予定</span>
-                  <strong>現在</strong>
+                  <span>{t('rideTime')}</span>
+                  <strong>{t('now')}</strong>
                 </article>
                 <article>
-                  <span>所要時間</span>
+                  <span>{t('duration')}</span>
                   <strong>{selectedRoute.routeMetrics.duration}</strong>
                 </article>
                 <article>
-                  <span>走行距離</span>
+                  <span>{t('distance')}</span>
                   <strong>{displayDistance}</strong>
                 </article>
               </div>
             </section>
 
+            {selectedRoute.routeMetrics.isLongDistance && (
+              <div className="booking-route-warning">
+                {t('routeLongWarning')}
+              </div>
+            )}
+
             <section className="section-card">
-              <h2>車種</h2>
+              <h2>{t('vehicleType')}</h2>
               <div className="vehicle-card">
                 <span className="vehicle-icon">🚖</span>
                 <div>
-                  <strong>スタンダード</strong>
-                  <span>快適なセダン・禁煙車</span>
+                  <strong>{t('standard')}</strong>
+                  <span>{t('standardCopy')}</span>
                 </div>
                 <strong className="vehicle-price">{selectedRoute.routeMetrics.fare}</strong>
               </div>
@@ -198,29 +212,29 @@ export default function BillConfirmPage() {
 
             <section className="section-card">
               <label className="memo-field">
-                <span>ドライバーへのメモ (任意)</span>
-                <textarea placeholder="例: 大きな荷物があります、または待ち合わせ場所の詳細など..." />
+                <span>{t('memoToDriver')}</span>
+                <textarea placeholder={t('memoPlaceholder')} />
               </label>
             </section>
 
             <section className="section-card fare-card">
-              <h2>料金詳細</h2>
+              <h2>{t('fareDetails')}</h2>
               <dl>
                 <div>
-                  <dt>基本運賃</dt>
+                  <dt>{t('baseFare')}</dt>
                   <dd>¥500</dd>
                 </div>
                 <div>
-                  <dt>距離加算</dt>
+                  <dt>{t('distanceFare')}</dt>
                   <dd>{selectedRoute.routeMetrics.distance === fallbackRoute.routeMetrics.distance ? '¥120' : '自動計算'}</dd>
                 </div>
                 <div>
-                  <dt>予約手数料</dt>
+                  <dt>{t('bookingFee')}</dt>
                   <dd>¥60</dd>
                 </div>
               </dl>
               <div className="total-row">
-                <span>合計金額</span>
+                <span>{t('totalFare')}</span>
                 <strong>{selectedRoute.routeMetrics.fare}</strong>
               </div>
             </section>
@@ -231,28 +245,28 @@ export default function BillConfirmPage() {
                 type="button"
                 onClick={() => selectMode('self')}
               >
-                自分用
+                {t('selfBooking')}
               </button>
               <button
                 className={`mode-button ${bookingMode === 'proxy' ? 'active' : ''}`}
                 type="button"
                 onClick={() => selectMode('proxy')}
               >
-                代理予約
+                {t('proxyBooking')}
               </button>
             </div>
 
             <div className="action-row">
               <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/location-search">
-                戻る
+                {t('back')}
               </Link>
               {isDriver && (
-                <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to={chatPath}>
+                <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to={getChatPath(isDriver ? 'customer' : 'driver')}>
                   連絡
                 </Link>
               )}
               <button className="primary-button" type="button" onClick={confirmBooking}>
-                予約を確定する
+                {t('confirmBooking')}
               </button>
             </div>
           </section>

@@ -79,13 +79,24 @@
 .confirm-panel {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.confirm-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.confirm-panel::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
 }
 
 .page-heading h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1.15;
   letter-spacing: 0;
 }
@@ -97,16 +108,28 @@
 }
 
 .section-card {
-  padding: 11px 14px;
+  padding: 10px 13px;
   background: #fff;
   border: 1px solid #e5eaf0;
   border-radius: 8px;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
 }
 
+.booking-route-warning {
+  margin-top: 0;
+  padding: 8px 10px;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+}
+
 .section-card h2 {
-  margin: 0 0 8px;
-  font-size: 14px;
+  margin: 0 0 7px;
+  font-size: 13px;
 }
 
 .route-list {
@@ -158,14 +181,14 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .trip-summary article {
   display: grid;
   place-items: center;
   min-height: 46px;
-  padding: 6px;
+  padding: 5px;
   background: #f8fafc;
   border: 1px solid #dfe6ee;
   border-radius: 8px;
@@ -187,7 +210,7 @@
   grid-template-columns: 42px 1fr auto;
   align-items: center;
   gap: 10px;
-  padding: 11px 12px;
+  padding: 9px 11px;
   background: #ecfdf5;
   border: 2px solid #55d8ae;
   border-radius: 10px;
@@ -232,15 +255,15 @@
 }
 
 .memo-field textarea {
-  min-height: 52px;
-  max-height: 52px;
-  padding: 10px 12px;
+  min-height: 44px;
+  max-height: 44px;
+  padding: 8px 10px;
   resize: none;
 }
 
 .fare-card dl {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   margin: 0;
   padding-bottom: 8px;
   border-bottom: 1px dashed #cbd5e1;
@@ -278,6 +301,11 @@
   padding: 4px;
   background: #eef2f7;
   border-radius: 12px;
+  position: sticky;
+  bottom: 58px;
+  z-index: 4;
+  margin-top: auto;
+  box-shadow: 0 -12px 24px rgba(246, 248, 251, 0.9);
 }
 
 .mode-button {
@@ -302,6 +330,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 12px;
+}
+
+.action-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding: 8px 0 0;
+  background: linear-gradient(180deg, rgba(246,248,251,0), #f6f8fb 28%);
 }
 
 .action-row .secondary-button {

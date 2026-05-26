@@ -4,7 +4,8 @@ import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
-import { buildSelectedRoute, geocodePlace, getCurrentPosition } from '../utils/routePlanner.js';
+import { useLanguage } from '../context/LanguageContext.jsx';
+import { buildSelectedRoute, geocodePlace, getCurrentPosition, reverseGeocodePosition } from '../utils/routePlanner.js';
 import { readSavedPlaces } from '../utils/savedPlaces.js';
 
 const userHome = {
@@ -57,13 +58,18 @@ const driverHome = {
 
 export default function HomeExperience({ mode = 'user' }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const content = mode === 'driver' ? driverHome : userHome;
   const isUserMode = mode !== 'driver';
   const [savedPlaces] = useState(readSavedPlaces);
   const [quickLoading, setQuickLoading] = useState(null);
 
   const quickItems = isUserMode
-    ? Object.entries(savedPlaces).map(([key, place]) => ({ ...place, key }))
+    ? Object.entries(savedPlaces).map(([key, place]) => ({
+        ...place,
+        key,
+        title: key === 'work' ? t('quickWork') : key === 'home' ? t('quickHome') : t('quickFavorite'),
+      }))
     : content.quickItems;
 
   async function openQuickPlace(item) {
@@ -77,16 +83,30 @@ export default function HomeExperience({ mode = 'user' }) {
     setQuickLoading(item.key);
 
     try {
-      const [pickup, destination] = await Promise.all([
-        getCurrentPosition(),
-        geocodePlace(item.address),
-      ]);
-      const selectedRoute = await buildSelectedRoute({
+      const destination = await geocodePlace(item.address);
+      const pendingDestination = {
         ...destination,
         name: item.title,
         address: destination.address || item.address,
-      }, pickup);
+        query: item.address,
+      };
 
+      window.sessionStorage.setItem('jpTaxiPendingDestination', JSON.stringify(pendingDestination));
+
+      const rawPickup = await getCurrentPosition({ allowFallback: false, maximumAge: 0, timeout: 12000 });
+      const pickup = await reverseGeocodePosition(rawPickup).catch(() => ({
+        ...rawPickup,
+        name: t('currentLocation'),
+        address: t('currentLocation'),
+      }));
+      const selectedRoute = await buildSelectedRoute(pendingDestination, pickup);
+
+      if (selectedRoute.routeMetrics.isTooFar) {
+        navigate('/location-search');
+        return;
+      }
+
+      window.sessionStorage.removeItem('jpTaxiPendingDestination');
       window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(selectedRoute));
       navigate('/bill-confirm');
     } catch {
@@ -118,14 +138,14 @@ export default function HomeExperience({ mode = 'user' }) {
           />
 
           <div className="zip-home-panel">
-            <h1>{content.heading}</h1>
-            <p className="zip-home-question">{content.question}</p>
+            <h1>{isUserMode ? t('homeGreeting') : content.heading}</h1>
+            <p className="zip-home-question">{isUserMode ? t('homeQuestion') : content.question}</p>
 
             <Link className="zip-search-card" to={content.searchTo}>
               <span className="zip-search-icon" aria-hidden="true">📍</span>
               <span>
-                <strong>{content.searchTitle}</strong>
-                <small>{content.searchCopy}</small>
+                <strong>{isUserMode ? t('homeSearchTitle') : content.searchTitle}</strong>
+                <small>{isUserMode ? t('homeSearchCopy') : content.searchCopy}</small>
               </span>
             </Link>
 
@@ -163,7 +183,7 @@ export default function HomeExperience({ mode = 'user' }) {
 
             <Link className="zip-fast-button" to={content.fastTo}>
               <span aria-hidden="true">🚖</span>
-              <span><strong>{content.fastTitle}</strong><small>{content.fastCopy}</small></span>
+              <span><strong>{isUserMode ? t('callTaxiNow') : content.fastTitle}</strong><small>{isUserMode ? t('bookNow') : content.fastCopy}</small></span>
             </Link>
           </div>
 

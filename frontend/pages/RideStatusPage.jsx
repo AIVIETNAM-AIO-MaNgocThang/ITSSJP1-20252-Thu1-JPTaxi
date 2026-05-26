@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
+import { getChatPath } from '../utils/chatSession.js';
 import '../styles/app-pages.css';
 
 const fallbackRoute = {
@@ -59,13 +61,14 @@ function readSelectedRoute() {
 }
 
 export default function RideStatusPage() {
+  const { t } = useLanguage();
   const [selectedRoute] = useState(readSelectedRoute);
   const routePoints = [
     {
       key: 'pickup',
       label: selectedRoute.pickup.name,
-      meta: '出発地',
-      time: '現在',
+      meta: t('pickupPoint'),
+      time: t('now'),
       position: selectedRoute.pickup.position,
       type: 'pickup',
     },
@@ -86,8 +89,8 @@ export default function RideStatusPage() {
           brandTo="/home"
           actions={(
             <>
-              <Link to="/home">ホーム</Link>
-              <Link to="/user-info/profile">アカウント</Link>
+              <Link to="/home">{t('navHome')}</Link>
+              <Link to="/user-info/profile">{t('navAccount')}</Link>
               <img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" />
             </>
           )}
@@ -110,8 +113,8 @@ export default function RideStatusPage() {
           <section className="tracking-card">
             <div className="tracking-eta-header">
               <div>
-                <span>到着予定時間</span>
-                <strong>あと {selectedRoute.routeMetrics.duration}</strong>
+                <span>{t('etaLabel')}</span>
+                <strong>{t('remainingPrefix')} {selectedRoute.routeMetrics.duration}</strong>
               </div>
               <em>{selectedRoute.routeMetrics.distance}</em>
             </div>
@@ -119,15 +122,14 @@ export default function RideStatusPage() {
             <div className="tracking-driver-row">
               <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80" alt="" />
               <div>
-                <strong>田中 ドライバー</strong>
-                <small>トヨタ・ヴィオス (黒)</small>
+                <strong>{t('driverName')}</strong>
+                <small>{t('driverCar')}</small>
                 <em>30A-123.45</em>
               </div>
             </div>
 
             <div className="tracking-actions">
-              <Link className="tracking-call" to="/messages/driver">📞 電話する</Link>
-              <Link className="tracking-message" to="/messages/driver">💬 メッセージ</Link>
+              <Link className="tracking-message wide" to={getChatPath('driver')}>💬 {t('messageDriver')}</Link>
             </div>
           </section>
         </section>

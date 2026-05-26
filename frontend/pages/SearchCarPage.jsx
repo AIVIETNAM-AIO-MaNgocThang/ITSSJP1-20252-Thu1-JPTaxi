@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
 import '../styles/search-car.css';
 
 const defaultUserLocation = {
@@ -112,6 +113,7 @@ function readSelectedRoute() {
 }
 
 export default function SearchCarPage() {
+  const { t } = useLanguage();
   const [selectedRoute] = useState(readSelectedRoute);
   const [userLocation, setUserLocation] = useState({
     latitude: selectedRoute.pickup.position[0],
@@ -121,11 +123,7 @@ export default function SearchCarPage() {
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(true);
 
   useEffect(() => {
-    if (selectedRoute.hasRoute) {
-      return;
-    }
-
-    if (!navigator.geolocation) {
+    if (selectedRoute.hasRoute || !navigator.geolocation) {
       return;
     }
 
@@ -185,8 +183,8 @@ export default function SearchCarPage() {
     {
       key: 'pickup',
       label: selectedRoute.pickup.name,
-      meta: '出発地',
-      time: '現在',
+      meta: t('pickupPoint'),
+      time: t('now'),
       position: mapCenter,
       type: 'pickup',
     },
@@ -198,14 +196,14 @@ export default function SearchCarPage() {
       position: selectedRoute.destination.position,
       type: 'destination',
     },
-  ], [mapCenter, selectedRoute]);
+  ], [mapCenter, selectedRoute, t]);
   const driverCount = drivers.length;
 
   return (
     <PageShell>
       <main className="search-screen">
         <Topbar>
-          <div className="location-chip" aria-label="現在位置">
+          <div className="location-chip" aria-label={t('currentLocation')}>
             <span className="location-dot"></span>
             <span>ハノイ・ホアンキエム周辺</span>
           </div>
@@ -236,13 +234,13 @@ export default function SearchCarPage() {
             <div className="status-info">
               <div className="spinner" aria-hidden="true"></div>
               <div className="text-group">
-                <h1 id="search-title">タクシーを呼び出し中</h1>
+                <h1 id="search-title">{t('searchingTaxi')}</h1>
                 <p>
                   {isLoadingDrivers ? (
-                    '近くの車両を確認しています...'
+                    t('checkingNearbyCars')
                   ) : (
                     <>
-                      近くに <strong>{driverCount}台</strong> の車両が見つかりました。ドライバーの応答を待っています。
+                      {t('nearbyCarsFoundPrefix')} <strong>{driverCount}</strong> {t('nearbyCarsFoundSuffix')}
                     </>
                   )}
                 </p>
@@ -251,10 +249,10 @@ export default function SearchCarPage() {
 
             <div className="card-actions">
               <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/bill-confirm">
-                キャンセル
+                {t('cancel')}
               </Link>
               <Link className="submit-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-status">
-                ドライバー確認へ
+                {t('driverConfirm')}
               </Link>
             </div>
           </section>

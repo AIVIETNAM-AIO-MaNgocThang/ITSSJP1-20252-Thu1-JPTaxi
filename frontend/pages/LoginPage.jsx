@@ -4,6 +4,7 @@ import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
 import PasswordField from '../components/PasswordField.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { apiRequest } from '../api/client.js';
 import { emailPattern } from '../utils/loginValidation.js';
 import '../styles/auth.css';
 
@@ -18,6 +19,24 @@ const loginMessages = {
 function detectRoleByEmail(email) {
   const normalizedEmail = email.trim().toLowerCase();
   return normalizedEmail.includes('driver') || normalizedEmail.includes('taxi') ? 'driver' : 'user';
+}
+
+function readJwtPayload(token) {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) return null;
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = window.atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeAppRole(role, email) {
+  if (role === 'driver') return 'driver';
+  if (role === 'customer' || role === 'user') return 'user';
+  return detectRoleByEmail(email);
 }
 
 export default function LoginPage() {
@@ -98,7 +117,7 @@ export default function LoginPage() {
     }
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setStatus('');
 
@@ -114,17 +133,45 @@ export default function LoginPage() {
       return;
     }
 
-    if (remember) {
-      localStorage.setItem('jpTaxiLoginEmail', email.trim());
-    } else {
-      localStorage.removeItem('jpTaxiLoginEmail');
-    }
+    try {
+      const loginResult = await apiRequest('/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
+      const token = loginResult?.token;
+      const jwtPayload = token ? readJwtPayload(token) : null;
+      const backendRole = loginResult?.user?.role || jwtPayload?.role;
+      const role = normalizeAppRole(backendRole, email);
+      const userId =
+        loginResult?.user?.id ??
+        loginResult?.user?.customerId ??
+        loginResult?.user?.driverId ??
+        jwtPayload?.id;
 
-    const role = detectRoleByEmail(email);
-    localStorage.setItem('jpTaxiRole', role);
-    localStorage.setItem('jpTaxiUserEmail', email.trim());
-    setStatus(loginMessages.success);
-    navigate(role === 'driver' ? '/driver-home' : '/home');
+      if (remember) {
+        localStorage.setItem('jpTaxiLoginEmail', email.trim());
+      } else {
+        localStorage.removeItem('jpTaxiLoginEmail');
+      }
+
+      if (token) {
+        localStorage.setItem('jpTaxiToken', token);
+      }
+      if (userId != null) {
+        localStorage.setItem('jpTaxiUserId', String(userId));
+      }
+      localStorage.setItem('jpTaxiAuthRole', backendRole || (role === 'driver' ? 'driver' : 'customer'));
+      localStorage.setItem('jpTaxiRole', role);
+      localStorage.setItem('jpTaxiUserEmail', email.trim());
+      setStatus(loginMessages.success);
+      navigate(role === 'driver' ? '/driver-home' : '/home');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      setStatus(message);
+    }
   }
 
   function openForgotModal() {

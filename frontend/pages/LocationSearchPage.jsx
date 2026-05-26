@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/app-pages.css';
+import { useLanguage } from '../context/LanguageContext.jsx';
+import { estimateStraightLineDistanceMeters, getRouteDistanceStatus } from '../utils/routePlanner.js';
 
-const defaultUserLocation = {
+const demoMapLocation = {
   latitude: 21.02878,
   longitude: 105.85204,
 };
@@ -15,7 +17,32 @@ const savedPlaces = [
   { icon: '履歴', name: 'チャンティエンプラザ', address: '24 Hai Bà Trưng, Hoàn Kiếm, Hà Nội', time: '2日前', position: [21.02482, 105.85672] },
   { icon: '履歴', name: '日本レストラン 山田', address: 'Đống Đa, Hà Nội', time: '先週', position: [21.01878, 105.82914] },
   { icon: '保存', name: 'ノイバイ国際空港', address: 'Phú Minh, Sóc Sơn, Hà Nội', time: '保存済み', position: [21.21871, 105.80417] },
+  { icon: '履歴', name: 'Viettel', address: 'Hoàng Quốc Việt, Nghĩa Đô, Hà Nội', time: '最近', position: [21.04618, 105.78931] },
+  { icon: '履歴', name: 'Cầu Giấy', address: 'Hà Nội', time: '最近', position: [21.03594, 105.79464] },
 ];
+
+const savedPlaceKey = (place) => place.id ?? `${place.name}-${place.address}`;
+
+function readPendingDestination() {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem('jpTaxiPendingDestination') || 'null');
+
+    if (!stored || !Array.isArray(stored.position)) {
+      return null;
+    }
+
+    return {
+      icon: stored.icon || '保存',
+      id: stored.id || `pending-${stored.name}`,
+      name: stored.name,
+      address: stored.address,
+      position: stored.position,
+      query: stored.query || stored.address || stored.name,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function toPlace(result) {
   const latitude = Number(result.lat);
@@ -43,9 +70,8 @@ function formatDuration(seconds, meters = 0) {
   const baseMinutes = Math.max(1, Math.round(seconds / 60));
   const distanceKm = Math.max(0, meters / 1000);
   const trafficBufferMinutes = Math.max(3, Math.round(distanceKm * 1.2));
-  const minutes = baseMinutes + trafficBufferMinutes;
 
-  return `${minutes}分`;
+  return `${baseMinutes + trafficBufferMinutes}分`;
 }
 
 function formatDistance(meters) {
@@ -62,52 +88,103 @@ function estimateFare(meters) {
 }
 
 export default function LocationSearchPage() {
-  const [query, setQuery] = useState('');
-  const [userLocation, setUserLocation] = useState(defaultUserLocation);
-  const [suggestions, setSuggestions] = useState([]);
-  const [selectedDestination, setSelectedDestination] = useState(null);
+  const { t } = useLanguage();
+  const [pendingDestination] = useState(readPendingDestination);
+  const [pickupQuery, setPickupQuery] = useState('');
+  const [query, setQuery] = useState(pendingDestination?.query ?? '');
+  const [activeField, setActiveField] = useState(null);
+  const [currentPickup, setCurrentPickup] = useState(null);
+  const [selectedPickup, setSelectedPickup] = useState(null);
+  const [selectedDestination, setSelectedDestination] = useState(pendingDestination);
   const [routePath, setRoutePath] = useState([]);
   const [routeMetrics, setRouteMetrics] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [hiddenHistoryKeys, setHiddenHistoryKeys] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [locationError, setLocationError] = useState('');
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    function closeSuggestions(event) {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setSuggestions([]);
+        setSearchError('');
+        setActiveField(null);
+      }
+    }
+
+    document.addEventListener('pointerdown', closeSuggestions);
+    return () => document.removeEventListener('pointerdown', closeSuggestions);
+  }, []);
 
   useEffect(() => {
     if (!navigator.geolocation) {
+      setSelectedPickup(null);
+      setLocationError(t('enableLocation'));
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setUserLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
+        const nextPickup = {
+          id: 'current-location',
+          icon: '現在',
+          name: t('currentLocation'),
+          address: t('currentLocation'),
+          position: [position.coords.latitude, position.coords.longitude],
+        };
+
+        setCurrentPickup(nextPickup);
+        setLocationError('');
       },
       () => {
-        setUserLocation(defaultUserLocation);
+        setCurrentPickup(null);
+        setSelectedPickup(null);
+        setLocationError(t('enableLocation'));
       },
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
     );
-  }, []);
+  }, [t]);
 
   useEffect(() => {
-    const text = query.trim();
-
-    if (text.length < 2) {
+    if (!activeField) {
       setSuggestions([]);
       setSearchError('');
       setIsSearching(false);
       return undefined;
     }
 
-    if (selectedDestination?.name === text) {
+    const text = (activeField === 'pickup' ? pickupQuery : query).trim();
+    const selectedPlace = activeField === 'pickup' ? selectedPickup : selectedDestination;
+    const selectedText = selectedPlace?.query || selectedPlace?.name || '';
+
+    if (selectedPlace && text !== selectedText && text !== selectedPlace.name) {
+      if (activeField === 'pickup') {
+        setSelectedPickup(null);
+      } else {
+        setSelectedDestination(null);
+      }
+
+      setRoutePath([]);
+      setRouteMetrics(null);
+      window.sessionStorage.removeItem('jpTaxiSelectedRoute');
+    }
+
+    if (text.length < 2 || selectedPlace?.name === text) {
       setSuggestions([]);
       setSearchError('');
       setIsSearching(false);
       return undefined;
     }
 
+    const localMatches = savedPlaces.filter((place) => {
+      const haystack = `${place.name} ${place.address}`.toLowerCase();
+      return haystack.includes(text.toLowerCase());
+    });
+
+    setSuggestions(localMatches);
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => {
       setIsSearching(true);
@@ -134,19 +211,15 @@ export default function LocationSearchPage() {
         })
         .then((items) => {
           const nextSuggestions = items.map(toPlace).filter(Boolean);
-          setSuggestions(nextSuggestions);
-          setSearchError(nextSuggestions.length ? '' : '該当する目的地が見つかりませんでした。');
+          const mergedSuggestions = nextSuggestions.length ? nextSuggestions : localMatches;
+          setSuggestions(mergedSuggestions);
+          setSearchError(mergedSuggestions.length ? '' : '該当する場所が見つかりませんでした。');
         })
         .catch((error) => {
           if (error.name === 'AbortError') return;
 
-          const fallback = savedPlaces.filter((place) => {
-            const haystack = `${place.name} ${place.address}`.toLowerCase();
-            return haystack.includes(text.toLowerCase());
-          });
-
-          setSuggestions(fallback);
-          setSearchError(fallback.length ? '' : '検索に失敗しました。もう一度入力してください。');
+          setSuggestions(localMatches);
+          setSearchError(localMatches.length ? '' : '検索に失敗しました。もう一度入力してください。');
         })
         .finally(() => {
           setIsSearching(false);
@@ -157,10 +230,10 @@ export default function LocationSearchPage() {
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [query, selectedDestination?.name]);
+  }, [activeField, pickupQuery, query, selectedDestination, selectedPickup]);
 
   useEffect(() => {
-    if (!selectedDestination) {
+    if (!selectedDestination || !selectedPickup) {
       setRoutePath([]);
       setRouteMetrics(null);
       window.sessionStorage.removeItem('jpTaxiSelectedRoute');
@@ -168,10 +241,28 @@ export default function LocationSearchPage() {
     }
 
     const controller = new AbortController();
+    const [pickupLat, pickupLng] = selectedPickup.position;
     const [destinationLat, destinationLng] = selectedDestination.position;
+    const directDistanceMeters = estimateStraightLineDistanceMeters(selectedPickup.position, selectedDestination.position);
+    const directDistanceStatus = getRouteDistanceStatus(directDistanceMeters);
+
+    if (directDistanceStatus.isTooFar) {
+      setRoutePath([selectedPickup.position, selectedDestination.position]);
+      setRouteMetrics({
+        distance: formatDistance(directDistanceMeters),
+        distanceMeters: directDistanceMeters,
+        duration: '--',
+        fare: '--',
+        isLongDistance: false,
+        isTooFar: true,
+      });
+      setIsRouting(false);
+      return undefined;
+    }
+
     const url = [
       'https://router.project-osrm.org/route/v1/driving',
-      `${userLocation.longitude},${userLocation.latitude};${destinationLng},${destinationLat}`,
+      `${pickupLng},${pickupLat};${destinationLng},${destinationLat}`,
     ].join('/');
     const params = new URLSearchParams({
       overview: 'full',
@@ -192,22 +283,29 @@ export default function LocationSearchPage() {
         const route = data?.routes?.[0];
         const coordinates = route?.geometry?.coordinates ?? [];
         const nextPath = coordinates.map(([lng, lat]) => [lat, lng]);
+        const distanceMeters = Number(route?.distance ?? 0);
+        const routeDistanceStatus = getRouteDistanceStatus(distanceMeters);
 
-        setRoutePath(nextPath.length ? nextPath : [[userLocation.latitude, userLocation.longitude], selectedDestination.position]);
+        setRoutePath(nextPath.length ? nextPath : [selectedPickup.position, selectedDestination.position]);
         setRouteMetrics({
-          distance: formatDistance(route?.distance ?? 0),
-          duration: formatDuration(route?.duration ?? 0, route?.distance ?? 0),
-          fare: estimateFare(route?.distance ?? 0),
+          distance: formatDistance(distanceMeters),
+          distanceMeters,
+          duration: formatDuration(route?.duration ?? 0, distanceMeters),
+          fare: estimateFare(distanceMeters),
+          isLongDistance: routeDistanceStatus.isLongDistance,
+          isTooFar: routeDistanceStatus.isTooFar,
         });
       })
       .catch((error) => {
         if (error.name === 'AbortError') return;
 
-        setRoutePath([[userLocation.latitude, userLocation.longitude], selectedDestination.position]);
+        setRoutePath([selectedPickup.position, selectedDestination.position]);
         setRouteMetrics({
-          distance: '計算中',
-          duration: '計算中',
-          fare: '計算中',
+          distance: t('calculating'),
+          duration: t('calculating'),
+          fare: t('calculating'),
+          isLongDistance: false,
+          isTooFar: false,
         });
       })
       .finally(() => {
@@ -217,41 +315,43 @@ export default function LocationSearchPage() {
     return () => {
       controller.abort();
     };
-  }, [selectedDestination, userLocation.latitude, userLocation.longitude]);
+  }, [selectedDestination, selectedPickup, t]);
 
   useEffect(() => {
-    if (!selectedDestination || !routeMetrics) {
+    if (!selectedDestination || !routeMetrics || !selectedPickup) {
       return;
     }
 
     window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify({
       destination: selectedDestination,
       pickup: {
-        name: '現在位置',
-        position: [userLocation.latitude, userLocation.longitude],
+        name: selectedPickup.name,
+        address: selectedPickup.address,
+        position: selectedPickup.position,
       },
       routePath,
       routeMetrics,
     }));
-  }, [routeMetrics, routePath, selectedDestination, userLocation.latitude, userLocation.longitude]);
+    window.sessionStorage.removeItem('jpTaxiPendingDestination');
+  }, [routeMetrics, routePath, selectedDestination, selectedPickup]);
 
   const mapCenter = useMemo(
-    () => [userLocation.latitude, userLocation.longitude],
-    [userLocation.latitude, userLocation.longitude],
+    () => selectedPickup?.position ?? [demoMapLocation.latitude, demoMapLocation.longitude],
+    [selectedPickup],
   );
 
   const routePoints = useMemo(() => {
-    if (!selectedDestination) {
+    if (!selectedDestination || !selectedPickup) {
       return [];
     }
 
     return [
       {
         key: 'pickup',
-        label: '現在位置',
-        meta: '出発地',
-        time: '現在',
-        position: mapCenter,
+        label: selectedPickup.name,
+        meta: t('pickupPoint'),
+        time: t('now'),
+        position: selectedPickup.position,
         type: 'pickup',
       },
       {
@@ -263,36 +363,150 @@ export default function LocationSearchPage() {
         type: 'destination',
       },
     ];
-  }, [mapCenter, routeMetrics?.duration, selectedDestination]);
+  }, [routeMetrics?.duration, selectedDestination, selectedPickup, t]);
 
-  const visiblePlaces = query.trim().length >= 2 ? suggestions : savedPlaces;
+  const visiblePlaces = savedPlaces.filter((place) => !hiddenHistoryKeys.includes(savedPlaceKey(place)));
+  const activeQuery = activeField === 'pickup' ? pickupQuery : query;
+  const activeSelectedPlace = activeField === 'pickup' ? selectedPickup : selectedDestination;
+  const showInlineSuggestions = activeField === 'pickup'
+    ? Boolean(currentPickup || activeQuery.trim().length >= 2)
+    : Boolean(activeField)
+      && activeQuery.trim().length >= 2
+      && activeSelectedPlace?.name !== activeQuery.trim();
+  const showHistory = !showInlineSuggestions && !selectedDestination;
+  const canContinue = Boolean(
+    selectedDestination
+    && selectedPickup
+    && routeMetrics
+    && !routeMetrics.isTooFar
+    && !isRouting,
+  );
 
-  const handleSelectPlace = (place) => {
+  function selectDestination(place) {
+    window.sessionStorage.removeItem('jpTaxiPendingDestination');
     setSelectedDestination(place);
     setQuery(place.name);
     setSuggestions([]);
-  };
+    setSearchError('');
+    setActiveField(null);
+  }
+
+  function selectSearchResult(place) {
+    if (activeField === 'pickup') {
+      setSelectedPickup(place);
+      setPickupQuery(place.name);
+    } else {
+      selectDestination(place);
+      return;
+    }
+
+    setSuggestions([]);
+    setSearchError('');
+    setActiveField(null);
+  }
+
+  function selectCurrentPickup() {
+    if (!currentPickup) return;
+
+    setSelectedPickup(currentPickup);
+    setPickupQuery(t('currentLocation'));
+    setSuggestions([]);
+    setSearchError('');
+    setActiveField(null);
+  }
+
+  function handleDeleteHistory(event, place) {
+    event.stopPropagation();
+    setHiddenHistoryKeys((current) => [...current, savedPlaceKey(place)]);
+  }
+
+  function renderSuggestions(field) {
+    if (!showInlineSuggestions || activeField !== field) return null;
+
+    return (
+      <div className="zip-inline-suggestions">
+        {field === 'pickup' && currentPickup ? (
+          <button className="zip-suggestion-item current-location-suggestion" onClick={selectCurrentPickup} type="button">
+            <span className="zip-history-icon">現在</span>
+            <span className="zip-history-text">
+              <strong>{t('currentLocation')}</strong>
+              <small>{currentPickup.address}</small>
+            </span>
+          </button>
+        ) : null}
+        {field === 'pickup' && !currentPickup ? (
+          <div className="zip-search-state">{locationError || t('enableLocation')}</div>
+        ) : null}
+        {isSearching ? <div className="zip-search-state">検索しています...</div> : null}
+        {!isSearching && searchError ? <div className="zip-search-state">{searchError}</div> : null}
+        {!isSearching && suggestions.map((item) => (
+          <button className="zip-suggestion-item" key={savedPlaceKey(item)} onClick={() => selectSearchResult(item)} type="button">
+            <span className="zip-history-icon">{item.icon}</span>
+            <span className="zip-history-text">
+              <strong>{item.name}</strong>
+              <small>{item.address}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <PageShell>
       <main className="location-window">
-        <Topbar actions={<><Link to="/home">ホーム</Link><Link to="/user-info">アカウント</Link><img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
+        <Topbar
+          actions={(
+            <>
+              <Link to="/home">{t('navHome')}</Link>
+              <Link to="/user-info">{t('navAccount')}</Link>
+              <img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" />
+            </>
+          )}
+        />
 
         <section className="zip-location-main">
           <section className="zip-location-left">
-            <h1>目的地を検索</h1>
-            <p>目的地を入力するか、履歴から選択してください。</p>
+            <h1>{t('locationSearchTitle')}</h1>
+            <p>{t('locationSearchCopy')}</p>
 
-            <label className="zip-search-box">
-              <span>検索</span>
-              <input
-                autoComplete="off"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="目的地・住所を入力"
-                type="text"
-                value={query}
-              />
-            </label>
+            <div className="zip-search-stack" ref={searchRef}>
+              <div className="zip-search-field">
+                <span className="zip-field-label">{t('pickupPoint')}</span>
+                <label className={`zip-search-box ${activeField === 'pickup' ? 'active' : ''}`}>
+                  <input
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setActiveField('pickup');
+                      setPickupQuery(event.target.value);
+                    }}
+                    onFocus={() => setActiveField('pickup')}
+                    placeholder={t('currentLocation')}
+                    type="text"
+                    value={pickupQuery}
+                  />
+                </label>
+                {renderSuggestions('pickup')}
+              </div>
+
+              <div className="zip-search-field">
+                <span className="zip-field-label">{t('destination')}</span>
+                <label className={`zip-search-box ${activeField === 'destination' ? 'active' : ''}`}>
+                  <input
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setActiveField('destination');
+                      setQuery(event.target.value);
+                    }}
+                    onFocus={() => setActiveField('destination')}
+                    placeholder={t('destinationPlaceholder')}
+                    type="text"
+                    value={query}
+                  />
+                </label>
+                {renderSuggestions('destination')}
+              </div>
+            </div>
 
             <section className="zip-route-card">
               <div className="zip-route-points">
@@ -301,34 +515,58 @@ export default function LocationSearchPage() {
                 <span className="route-end"></span>
               </div>
               <div className="zip-route-fields">
-                <div><span>出発地</span><strong>現在位置</strong></div>
-                <div><span>目的地</span><strong>{selectedDestination?.name ?? '目的地を選択してください'}</strong></div>
+                <div>
+                  <span>{t('pickupPoint')}</span>
+                  <strong>{selectedPickup?.name ?? t('locationUnavailable')}</strong>
+                </div>
+                <div>
+                  <span>{t('destination')}</span>
+                  <strong>{selectedDestination?.name ?? t('destinationPlaceholder')}</strong>
+                </div>
               </div>
             </section>
 
-            <div className="zip-location-results">
-            <h2>{query.trim().length >= 2 ? '検索結果' : '最近の履歴'}</h2>
-            <div className="zip-history-list">
-              {isSearching ? <div className="zip-search-state">検索しています...</div> : null}
-              {!isSearching && searchError ? <div className="zip-search-state">{searchError}</div> : null}
-              {!isSearching && visiblePlaces.map((item) => (
-                <button className="zip-history-item" key={item.id ?? item.name} onClick={() => handleSelectPlace(item)} type="button">
-                  <span className="zip-history-icon">{item.icon}</span>
-                  <span className="zip-history-text"><strong>{item.name}</strong><small>{item.address}</small></span>
-                  <span className="zip-history-time">{item.time ?? '選択'}</span>
-                </button>
-              ))}
-            </div>
+            {!selectedPickup && <div className="location-warning">{locationError || t('enableLocation')}</div>}
 
+            <div className={`zip-location-results ${showHistory ? '' : 'collapsed'}`}>
+              {showHistory && <h2>{t('recentHistory')}</h2>}
+              <div className="zip-history-list">
+                {showHistory && visiblePlaces.map((item) => (
+                  <button className="zip-history-item" key={savedPlaceKey(item)} onClick={() => selectDestination(item)} type="button">
+                    <span className="zip-history-icon">{item.icon}</span>
+                    <span className="zip-history-text">
+                      <strong>{item.name}</strong>
+                      <small>{item.address}</small>
+                    </span>
+                    <span className="zip-history-time">{item.time ?? '選択'}</span>
+                    <span
+                      aria-label={t('deleteHistory')}
+                      className="zip-history-delete"
+                      onClick={(event) => handleDeleteHistory(event, item)}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      ×
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="zip-location-actions">
-              <Link className="flow-back-link" to="/home">戻る</Link>
+              <Link className="flow-back-link" to="/home">{t('back')}</Link>
               <Link
-                className={`zip-continue-button ${selectedDestination ? '' : 'disabled'}`}
-                to={selectedDestination ? '/bill-confirm' : '#'}
+                aria-disabled={!canContinue}
+                className={`zip-continue-button ${canContinue ? '' : 'disabled'}`}
+                onClick={(event) => {
+                  if (!canContinue) {
+                    event.preventDefault();
+                    setSearchError(t('invalidDestination'));
+                  }
+                }}
+                to={canContinue ? '/bill-confirm' : '#'}
               >
-                この目的地で続ける
+                {t('continueWithDestination')}
               </Link>
             </div>
           </section>
@@ -337,8 +575,8 @@ export default function LocationSearchPage() {
             <InteractiveRouteMap
               alternateRoutePath={[]}
               className="location-search-route-map"
-              currentLocation={mapCenter}
-              fitToRoute={Boolean(selectedDestination)}
+              currentLocation={selectedPickup?.position ?? null}
+              fitToRoute={Boolean(selectedDestination && selectedPickup)}
               interactive
               mapCenter={mapCenter}
               mapZoom={15}
@@ -347,17 +585,19 @@ export default function LocationSearchPage() {
               routeSummary={routeMetrics ? `${routeMetrics.distance} - ${routeMetrics.duration}` : null}
               scrollWheelZoom
               showControls
-              showCurrentLocation={!selectedDestination}
+              showCurrentLocation={!selectedDestination && Boolean(selectedPickup)}
               showDetails={false}
               showDriver={false}
-              showMarkers={Boolean(selectedDestination)}
-              showRoute={Boolean(selectedDestination)}
+              showMarkers={Boolean(selectedDestination && selectedPickup)}
+              showRoute={Boolean(selectedDestination && selectedPickup)}
             />
             <div className="zip-map-card">
-              <strong>ルート情報</strong>
-              <div><span>予想所要時間</span><b>{isRouting ? '計算中' : routeMetrics?.duration ?? '--'}</b></div>
-              <div><span>距離</span><b>{isRouting ? '計算中' : routeMetrics?.distance ?? '--'}</b></div>
-              <div><span>概算料金</span><b>{isRouting ? '計算中' : routeMetrics?.fare ?? '--'}</b></div>
+              <strong>{t('routeInfo')}</strong>
+              <div><span>{t('duration')}</span><b>{isRouting ? t('calculating') : routeMetrics?.duration ?? '--'}</b></div>
+              <div><span>{t('distance')}</span><b>{isRouting ? t('calculating') : routeMetrics?.distance ?? '--'}</b></div>
+              <div><span>{t('totalFare')}</span><b>{isRouting ? t('calculating') : routeMetrics?.fare ?? '--'}</b></div>
+              {routeMetrics?.isLongDistance && <p className="route-distance-warning">{t('routeLongWarning')}</p>}
+              {routeMetrics?.isTooFar && <p className="route-distance-warning danger">{t('routeTooFarWarning')}</p>}
             </div>
           </aside>
         </section>

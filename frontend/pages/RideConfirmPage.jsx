@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { getChatPath } from '../utils/chatSession.js';
 import '../styles/app-pages.css';
 
 export default function RideConfirmPage() {
@@ -41,7 +42,7 @@ export default function RideConfirmPage() {
                 <div className="route-step"><span className="step-dot dark">B</span><div><strong>ノイバイ国際空港</strong><span className="muted-small">目的地</span></div></div>
               </div>
               <Link className="submit-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-status">乗車を開始</Link>
-              <Link className="secondary-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/messages/driver">ドライバーに連絡</Link>
+              <Link className="secondary-button stack" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to={getChatPath('driver')}>ドライバーに連絡</Link>
             </aside>
           </div>
         </section>
