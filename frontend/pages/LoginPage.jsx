@@ -20,6 +20,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
+  const [loginRole, setLoginRole] = useState('customer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -121,7 +122,7 @@ export default function LoginPage() {
     try {
       const result = await apiRequest('/login', {
         method: 'POST',
-        body: JSON.stringify({ email: trimmedEmail, password }),
+        body: JSON.stringify({ email: trimmedEmail, password, role: loginRole }),
       });
       const role = result?.role === 'driver' ? 'driver' : 'customer';
 
@@ -238,11 +239,38 @@ export default function LoginPage() {
           <section className="auth-card" aria-labelledby="login-title">
             <div className="form-logo" aria-hidden="true">🚕</div>
             <div className="form-heading">
-              <h2 id="login-title">ログイン</h2>
-              <p>メールアドレスとパスワードを入力して、システムにアクセスしてください。</p>
+              <h2 id="login-title">{loginRole === 'driver' ? 'ドライバーログイン' : 'お客様ログイン'}</h2>
+              <p>{loginRole === 'driver' ? '配車リクエストを受け取るドライバーアカウントでログインしてください。' : '予約を行うお客様アカウントでログインしてください。'}</p>
             </div>
 
             <form className="auth-form" onSubmit={handleSubmit} noValidate>
+              <div className="login-role-switch" role="tablist" aria-label="ログインするアカウントの種類">
+                <button
+                  className={loginRole === 'customer' ? 'active' : ''}
+                  type="button"
+                  role="tab"
+                  aria-selected={loginRole === 'customer'}
+                  onClick={() => {
+                    setLoginRole('customer');
+                    setStatus('');
+                  }}
+                >
+                  お客様
+                </button>
+                <button
+                  className={loginRole === 'driver' ? 'active' : ''}
+                  type="button"
+                  role="tab"
+                  aria-selected={loginRole === 'driver'}
+                  onClick={() => {
+                    setLoginRole('driver');
+                    setStatus('');
+                  }}
+                >
+                  ドライバー
+                </button>
+              </div>
+
               <label>
                 <span>メールアドレス</span>
                 <input
@@ -292,8 +320,14 @@ export default function LoginPage() {
 
               <button className="submit-button" type="submit">ログインする</button>
               <div className="login-register-links">
-                <p className="note-link">アカウントをお持ちでないですか？ <Link to="/register">顧客登録</Link></p>
-                <Link className="driver-register-link" to="/driver-register">運転者登録</Link>
+                {loginRole === 'driver' ? (
+                  <p className="note-link">ドライバーアカウントをお持ちでないですか？ <Link to="/driver-register">運転者登録</Link></p>
+                ) : (
+                  <>
+                    <p className="note-link">アカウントをお持ちでないですか？ <Link to="/register">顧客登録</Link></p>
+                    <p className="note-link driver-register-entry">ドライバーとして働きますか？ <Link className="driver-register-link" to="/driver-register">運転者登録</Link></p>
+                  </>
+                )}
               </div>
             </form>
           </section>

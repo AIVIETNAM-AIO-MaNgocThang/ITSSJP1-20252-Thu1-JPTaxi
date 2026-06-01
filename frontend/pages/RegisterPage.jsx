@@ -88,6 +88,11 @@ export default function RegisterPage() {
           vehicle_color: pendingDriver.vehicleColor || '',
           vehicle_type: pendingDriver.vehicleType || '4',
           license_plate: pendingDriver.licensePlate,
+          portrait_url: pendingDriver.documents?.portrait || undefined,
+          license_front_url: pendingDriver.documents?.licenseFront || undefined,
+          license_back_url: pendingDriver.documents?.licenseBack || undefined,
+          vehicle_photo_url: pendingDriver.documents?.vehiclePhoto || undefined,
+          registration_paper_url: pendingDriver.documents?.registrationPaper || undefined,
         });
       }
 

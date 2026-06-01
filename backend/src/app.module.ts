@@ -26,6 +26,8 @@ import { AdminModule } from './modules/admin/admin.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DriversModule } from './modules/drivers/drivers.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { RatingsModule } from './modules/ratings/ratings.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 
 @Module({
   imports: [
@@ -76,6 +78,8 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     CustomersModule,
     DriversModule,
     UploadsModule,
+    RatingsModule,
+    InvoicesModule,
   ],
 })
 export class AppModule {}

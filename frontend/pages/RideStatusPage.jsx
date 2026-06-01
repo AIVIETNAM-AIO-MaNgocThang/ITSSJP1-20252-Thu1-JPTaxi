@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getCustomerProfile, resolveAssetUrl } from '../api/accounts.js';
 import { getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
+import ProfileAvatarSlot from '../components/ProfileAvatarSlot.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { watchBrowserLocation } from '../utils/geolocation.js';
 import '../styles/app-pages.css';
 
 const fallbackRoute = {
@@ -59,14 +62,28 @@ function readSelectedRoute() {
   }
 }
 
+function normalizeDriverLocation(driver) {
+  const latitude = Number(driver?.location?.latitude ?? driver?.latitude);
+  const longitude = Number(driver?.location?.longitude ?? driver?.longitude);
+  return Number.isFinite(latitude) && Number.isFinite(longitude) ? [latitude, longitude] : null;
+}
+
 export default function RideStatusPage() {
   const navigate = useNavigate();
   const [selectedRoute] = useState(readSelectedRoute);
   const [assignedRide, setAssignedRide] = useState(null);
+  const [customerProfile, setCustomerProfile] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
   const driver = assignedRide?.driver ?? {};
   const vehicle = assignedRide?.vehicle ?? {};
   const driverName = driver.name || 'ドライバー確認中';
-  const driverAvatar = driver.avatarUrl || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
+  const driverAvatar = resolveAssetUrl(driver.avatarUrl) || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
+  const driverLocation = normalizeDriverLocation(driver);
+  const userMapPosition = userLocation ?? selectedRoute.pickup.position;
+  const customerName = [customerProfile?.lastName, customerProfile?.firstName].filter(Boolean).join(' ')
+    || customerProfile?.email
+    || 'Customer';
+  const customerAvatar = resolveAssetUrl(customerProfile?.avatarUrl);
   const vehicleLabel = [vehicle.brand, vehicle.color].filter(Boolean).join(' / ') || '車両情報を確認中';
   const vehiclePlate = vehicle.licensePlate || 'ナンバー確認中';
   const routePoints = [
@@ -96,7 +113,7 @@ export default function RideStatusPage() {
       if (!payload) return false;
       const payloadTripId = Number(payload.tripId);
       const isSameTrip = !currentTripId || !payloadTripId || payloadTripId === currentTripId;
-      return isSameTrip && Date.now() - Number(payload.requestedAt) < 10 * 60 * 1000;
+      return isSameTrip;
     }
 
     function goToPayment(event) {
@@ -167,6 +184,31 @@ export default function RideStatusPage() {
     };
   }, [navigate]);
 
+  useEffect(() => watchBrowserLocation(
+    (location) => setUserLocation([location.latitude, location.longitude]),
+    {
+      fallback: {
+        latitude: selectedRoute.pickup.position[0],
+        longitude: selectedRoute.pickup.position[1],
+      },
+      emitFallback: false,
+    },
+  ), [selectedRoute.pickup.position]);
+
+  useEffect(() => {
+    let ignored = false;
+    getCustomerProfile()
+      .then((profile) => {
+        if (!ignored) setCustomerProfile(profile);
+      })
+      .catch(() => {
+        if (!ignored) setCustomerProfile(null);
+      });
+    return () => {
+      ignored = true;
+    };
+  }, []);
+
   return (
     <PageShell>
       <main className="user-tracking-screen">
@@ -176,7 +218,7 @@ export default function RideStatusPage() {
             <>
               <Link to="/home">ホーム</Link>
               <Link to="/user-info/profile">アカウント</Link>
-              <img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" />
+              <ProfileAvatarSlot slot="topbar" src={customerAvatar} fallbackText={customerName} />
             </>
           )}
         />
@@ -186,12 +228,14 @@ export default function RideStatusPage() {
             alternateRoutePath={[]}
             className="tracking-route-map"
             compact
-            currentLocation={selectedRoute.pickup.position}
+            currentLocation={userMapPosition}
+            driverLocation={driverLocation}
             route={routePoints}
             routePath={selectedRoute.routePath}
             routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
             scrollWheelZoom
-            showCurrentLocation={false}
+            showCurrentLocation={Boolean(userLocation)}
+            showDriver={Boolean(driverLocation)}
             showDetails={false}
           />
 
@@ -205,7 +249,7 @@ export default function RideStatusPage() {
             </div>
 
             <div className="tracking-driver-row">
-              <img src={driverAvatar} alt="" />
+                <ProfileAvatarSlot slot="tracking" src={driverAvatar} fallbackText={driverName} />
               <div>
                 <strong>{driverName}</strong>
                 <small>{vehicleLabel}</small>

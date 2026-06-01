@@ -91,7 +91,7 @@ function createNearbyDriverIcon(active = false) {
 function createCurrentLocationIcon() {
   return L.divIcon({
     className: 'leaflet-current-location',
-    html: '<span></span>',
+    html: '<span><i></i></span>',
     iconSize: [28, 28],
     iconAnchor: [14, 14],
   });
@@ -199,28 +199,37 @@ export default function InteractiveRouteMap({
   mapCenter = center,
   mapZoom = 14,
   nearbyDrivers = [],
+  driverLocation = null,
   currentLocation = null,
   centerOnCurrentLocation = false,
   routePath = routeLine,
   alternateRoutePath = alternateRoute,
   routeSummary = null,
   scrollWheelZoom = interactive,
+  currentLocationLabel = 'Vị trí của bạn',
 }) {
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [routeHovered, setRouteHovered] = useState(false);
   const [browserLocation, setBrowserLocation] = useState(currentPosition);
+  const driverLocationPosition = driverLocation ?? driverPosition;
   const positions = useMemo(() => route.map((point) => point.position), [route]);
   const routeBoundsPositions = useMemo(
-    () => (routePath?.length ? routePath : positions),
-    [positions, routePath],
+    () => {
+      const basePositions = routePath?.length ? [...routePath, ...positions] : positions;
+      return showDriver ? [...basePositions, driverLocationPosition] : basePositions;
+    },
+    [driverLocationPosition, positions, routePath, showDriver],
   );
   const currentLocationPosition = currentLocation ?? browserLocation;
-  const fitControlPositions = showCurrentLocation
-    ? [
+  const displayedBoundsPositions = showCurrentLocation
+    ? [...routeBoundsPositions, currentLocationPosition]
+    : routeBoundsPositions;
+  const fitControlPositions = displayedBoundsPositions.length
+    ? displayedBoundsPositions
+    : [
         [currentLocationPosition[0] - 0.002, currentLocationPosition[1] - 0.002],
         [currentLocationPosition[0] + 0.002, currentLocationPosition[1] + 0.002],
-      ]
-    : routeBoundsPositions;
+      ];
   const resolvedMapCenter = centerOnCurrentLocation ? currentLocationPosition : mapCenter;
   const isRouteHighlighted = routeHovered || hoveredPoint !== null;
 
@@ -284,9 +293,11 @@ export default function InteractiveRouteMap({
               mouseout: () => setHoveredPoint(null),
             }}
             icon={
-              point.type === 'destination'
+              point.type === 'driver'
+                ? createDriverIcon(hoveredPoint === point.key)
+                : point.type === 'destination'
                 ? createMarkerIcon('destination', 'B', hoveredPoint === point.key)
-                : index === 0
+                : point.type === 'pickup' || index === 0
                   ? createMarkerIcon('pickup', 'A', hoveredPoint === point.key)
                   : createMarkerIcon('waypoint', '', hoveredPoint === point.key)
             }
@@ -305,7 +316,7 @@ export default function InteractiveRouteMap({
               mouseout: () => setHoveredPoint(null),
             }}
             icon={createDriverIcon(hoveredPoint === 'driver')}
-            position={driverPosition}
+            position={driverLocationPosition}
           >
             <Tooltip direction="top" offset={[0, -15]} opacity={1}>ドライバー位置</Tooltip>
           </Marker>
@@ -332,16 +343,16 @@ export default function InteractiveRouteMap({
           );
         })}
         {showCurrentLocation && (
-          <Marker icon={createCurrentLocationIcon()} position={currentLocationPosition}>
+          <Marker icon={createCurrentLocationIcon()} position={currentLocationPosition} title={currentLocationLabel}>
             <Tooltip direction="top" offset={[0, -13]} opacity={1}>現在位置</Tooltip>
           </Marker>
         )}
-        {fitToRoute ? <RouteBounds positions={routeBoundsPositions} /> : <FixedMapView centerPosition={resolvedMapCenter} zoom={mapZoom} />}
+        {fitToRoute ? <RouteBounds positions={displayedBoundsPositions} /> : <FixedMapView centerPosition={resolvedMapCenter} zoom={mapZoom} />}
         <MapInteractionLock disabled={!interactive} scrollWheelZoom={scrollWheelZoom} />
         {showControls && (
           <RouteControls
             currentLocationPosition={currentLocationPosition}
-            fitCurrentLocation={showCurrentLocation}
+            fitCurrentLocation={showCurrentLocation && !routeBoundsPositions.length}
             mapZoom={mapZoom}
             positions={fitControlPositions}
           />

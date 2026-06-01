@@ -5,16 +5,8 @@ import { cancelRideRequest, getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { watchBrowserLocation } from '../utils/geolocation.js';
 import '../styles/search-car.css';
-
-const defaultUserLocation = {
-  latitude: 21.02878,
-  longitude: 105.85204,
-};
-
-function isNearTestCustomer() {
-  return (localStorage.getItem('jpTaxiCustomerEmail') || localStorage.getItem('jpTaxiUserEmail') || '').toLowerCase() === 'nearcustomer@jptaxi.dev';
-}
 
 const fallbackSelectedRoute = {
   hasRoute: false,
@@ -99,8 +91,8 @@ export default function SearchCarPage() {
   const navigate = useNavigate();
   const [selectedRoute] = useState(readSelectedRoute);
   const [userLocation, setUserLocation] = useState({
-    latitude: isNearTestCustomer() ? defaultUserLocation.latitude : selectedRoute.pickup.position[0],
-    longitude: isNearTestCustomer() ? defaultUserLocation.longitude : selectedRoute.pickup.position[1],
+    latitude: selectedRoute.pickup.position[0],
+    longitude: selectedRoute.pickup.position[1],
   });
   const [drivers, setDrivers] = useState([]);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(true);
@@ -115,27 +107,20 @@ export default function SearchCarPage() {
   }
 
   useEffect(() => {
-    if (selectedRoute.hasRoute || isNearTestCustomer()) {
-      return;
-    }
-
-    if (!navigator.geolocation) {
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
+    return watchBrowserLocation(
+      (location) => setUserLocation({
+        latitude: location.latitude,
+        longitude: location.longitude,
+      }),
+      {
+        fallback: {
+          latitude: selectedRoute.pickup.position[0],
+          longitude: selectedRoute.pickup.position[1],
+        },
+        emitFallback: false,
       },
-      () => {
-        setUserLocation(defaultUserLocation);
-      },
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
     );
-  }, [selectedRoute.hasRoute]);
+  }, [selectedRoute.pickup.position]);
 
   useEffect(() => {
     let ignore = false;
@@ -209,6 +194,9 @@ export default function SearchCarPage() {
     () => [userLocation.latitude, userLocation.longitude],
     [userLocation.latitude, userLocation.longitude],
   );
+  const displayedRoutePath = useMemo(() => (
+    selectedRoute.hasRoute ? [mapCenter, ...selectedRoute.routePath.slice(1)] : []
+  ), [mapCenter, selectedRoute.hasRoute, selectedRoute.routePath]);
   const routePoints = useMemo(() => [
     {
       key: 'pickup',
@@ -274,11 +262,11 @@ export default function SearchCarPage() {
             mapZoom={15}
             nearbyDrivers={drivers}
             route={routePoints}
-            routePath={selectedRoute.hasRoute ? selectedRoute.routePath : []}
+            routePath={displayedRoutePath}
             routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
             scrollWheelZoom
             showControls
-            showCurrentLocation={!selectedRoute.hasRoute}
+            showCurrentLocation
             showDetails={false}
             showDriver={false}
             showMarkers={selectedRoute.hasRoute}

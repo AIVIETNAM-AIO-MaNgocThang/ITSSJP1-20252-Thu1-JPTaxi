@@ -4,45 +4,23 @@ import { acceptDriverRide, getPendingDriverRide, updateDriverLocation } from '..
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { calculateFareBreakdown, formatYen } from '../utils/fare.js';
+import { DEFAULT_MAP_LOCATION, watchBrowserLocation } from '../utils/geolocation.js';
+import { fetchDrivingRoute, formatDistance as formatRouteDistance, formatDuration } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
 
-function formatDistance(value) {
+function formatPickupDistance(value) {
   const distance = Number(value);
   if (!Number.isFinite(distance)) return '2km以内';
   return `${distance.toFixed(1)} km`;
 }
 
 const defaultDriverLocation = {
-  lat: 21.02878,
-  lng: 105.85204,
+  lat: DEFAULT_MAP_LOCATION.latitude,
+  lng: DEFAULT_MAP_LOCATION.longitude,
 };
 
-function isNearTestDriver() {
-  return (localStorage.getItem('jpTaxiDriverEmail') || localStorage.getItem('jpTaxiUserEmail') || '').toLowerCase() === 'neardriver@jptaxi.dev';
-}
-
-function getDriverLocation() {
-  if (isNearTestDriver()) {
-    return Promise.resolve(defaultDriverLocation);
-  }
-
-  if (!navigator.geolocation) {
-    return Promise.resolve(defaultDriverLocation);
-  }
-
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => resolve({
-        lat: position.coords.latitude,
-        lng: position.coords.longitude,
-      }),
-      () => resolve(defaultDriverLocation),
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
-    );
-  });
-}
-
-function buildSelectedRoute(request) {
+function buildSelectedRoute(request, routePreview) {
   return {
     destination: {
       name: request.dropoffAddress,
@@ -54,17 +32,19 @@ function buildSelectedRoute(request) {
       position: [request.pickupLat, request.pickupLng],
     },
     routeMetrics: {
-      duration: '計算中',
-      distance: formatDistance(request.distanceKm),
-      fare: '自動計算',
+      duration: routePreview?.duration ?? '計算中',
+      distance: routePreview?.distance ?? formatPickupDistance(request.distanceKm),
+      fare: formatYen(calculateFareBreakdown(request.distanceKm).totalJpy),
     },
-    routePath: [
+    routePath: routePreview?.routePath ?? [
       [request.pickupLat, request.pickupLng],
       [request.dropoffLat, request.dropoffLng],
     ],
     passenger: {
+      customerId: request.customerId,
       name: request.actualPassengerName || request.customer?.name || `KH-${request.customerId}`,
       phone: request.actualPassengerPhone || request.customer?.phone || '',
+      avatarUrl: request.customer?.avatarUrl || request.customer?.avatar_url || null,
     },
   };
 }
@@ -72,27 +52,14 @@ function buildSelectedRoute(request) {
 export default function DriverDispatchPage() {
   const navigate = useNavigate();
   const [pendingRide, setPendingRide] = useState(null);
-  const [driverLocation, setDriverLocation] = useState(defaultDriverLocation);
+  const [driverLocation, setDriverLocation] = useState(null);
+  const [routePreview, setRoutePreview] = useState(null);
   const [message, setMessage] = useState('半径2km以内の配車リクエストを検索しています...');
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
 
   useEffect(() => {
     let ignore = false;
-
-    async function refreshDriverLocation() {
-      try {
-        const location = await getDriverLocation();
-        if (!ignore) {
-          setDriverLocation(location);
-          await updateDriverLocation(location);
-        }
-        return location;
-      } catch {
-        /* pending ride polling still works with the latest saved location */
-        return defaultDriverLocation;
-      }
-    }
 
     async function loadPendingRide() {
       try {
@@ -112,15 +79,50 @@ export default function DriverDispatchPage() {
       }
     }
 
-    refreshDriverLocation().finally(loadPendingRide);
-    const locationTimer = window.setInterval(refreshDriverLocation, 30000);
+    const stopWatching = watchBrowserLocation(
+      (location) => {
+        if (ignore || location.isFallback) return;
+        const nextLocation = { lat: location.latitude, lng: location.longitude };
+        setDriverLocation(nextLocation);
+        updateDriverLocation(nextLocation).catch(() => {
+          /* keep the map usable when location syncing is temporarily unavailable */
+        });
+      },
+      { fallback: DEFAULT_MAP_LOCATION, emitFallback: false },
+    );
+
+    loadPendingRide();
     const timer = window.setInterval(loadPendingRide, 2500);
     return () => {
       ignore = true;
-      window.clearInterval(locationTimer);
+      stopWatching();
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!pendingRide) {
+      setRoutePreview(null);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    fetchDrivingRoute(
+      [pendingRide.pickupLat, pendingRide.pickupLng],
+      [pendingRide.dropoffLat, pendingRide.dropoffLng],
+      { signal: controller.signal },
+    )
+      .then((route) => setRoutePreview({
+        routePath: route.routePath,
+        distance: formatRouteDistance(route.distance),
+        duration: formatDuration(route.duration, route.distance),
+      }))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setRoutePreview(null);
+      });
+
+    return () => controller.abort();
+  }, [pendingRide]);
 
   const passengerName = useMemo(() => {
     if (!pendingRide) return '';
@@ -128,13 +130,13 @@ export default function DriverDispatchPage() {
   }, [pendingRide]);
   const passengerPhone = pendingRide?.actualPassengerPhone || pendingRide?.customer?.phone || '';
   const routePoints = pendingRide ? [
-    {
+    ...(driverLocation ? [{
       key: 'driver',
       label: 'ドライバー位置',
       meta: '現在',
       position: [driverLocation.lat, driverLocation.lng],
       type: 'driver',
-    },
+    }] : []),
     {
       key: 'pickup',
       label: pendingRide.pickupAddress,
@@ -152,9 +154,9 @@ export default function DriverDispatchPage() {
   ] : [];
   const mapCenter = pendingRide
     ? [pendingRide.pickupLat, pendingRide.pickupLng]
-    : [driverLocation.lat, driverLocation.lng];
+    : [driverLocation?.lat ?? defaultDriverLocation.lat, driverLocation?.lng ?? defaultDriverLocation.lng];
   const routePath = pendingRide
-    ? [
+    ? routePreview?.routePath ?? [
         [pendingRide.pickupLat, pendingRide.pickupLng],
         [pendingRide.dropoffLat, pendingRide.dropoffLng],
       ]
@@ -169,7 +171,7 @@ export default function DriverDispatchPage() {
       if (result?.tripId) {
         sessionStorage.setItem('jpTaxiTripId', String(result.tripId));
       }
-      sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(buildSelectedRoute(pendingRide)));
+      sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(buildSelectedRoute(pendingRide, routePreview)));
       localStorage.setItem('jpTaxiRideAccepted', JSON.stringify({
         requestId: pendingRide.requestId,
         tripId: result?.tripId,
@@ -185,7 +187,7 @@ export default function DriverDispatchPage() {
 
   return (
     <PageShell>
-      <main className="driver-dispatch-screen">
+      <main className="driver-dispatch-screen driver-dispatch-reference">
         <Topbar
           brandTo="/driver-home"
           actions={(
@@ -215,7 +217,7 @@ export default function DriverDispatchPage() {
                 <section className="dispatch-card">
                   <div className="dispatch-countdown">2km</div>
                   <span>お迎え地点まで</span>
-                  <strong>{formatDistance(pendingRide.distanceKm)}</strong>
+                  <strong>{formatPickupDistance(pendingRide.distanceKm)}</strong>
                   <div className="dispatch-actions">
                     <Link className="dispatch-decline" to="/driver-home">スキップ</Link>
                     <button className="dispatch-accept" type="button" onClick={handleAccept} disabled={isAccepting}>
@@ -247,17 +249,17 @@ export default function DriverDispatchPage() {
             <InteractiveRouteMap
               alternateRoutePath={[]}
               className="dispatch-route-map"
-              currentLocation={[driverLocation.lat, driverLocation.lng]}
+              currentLocation={driverLocation ? [driverLocation.lat, driverLocation.lng] : mapCenter}
               fitToRoute={Boolean(pendingRide)}
               interactive
               mapCenter={mapCenter}
               mapZoom={15}
               route={routePoints}
               routePath={routePath}
-              routeSummary={pendingRide ? `${formatDistance(pendingRide.distanceKm)} - 2 km` : null}
+              routeSummary={pendingRide ? `${routePreview?.distance ?? formatPickupDistance(pendingRide.distanceKm)} - ${routePreview?.duration ?? '計算中'}` : null}
               scrollWheelZoom
               showControls
-              showCurrentLocation={!pendingRide}
+              showCurrentLocation={Boolean(driverLocation)}
               showDetails={false}
               showDriver={false}
               showMarkers={Boolean(pendingRide)}
@@ -276,7 +278,7 @@ export default function DriverDispatchPage() {
                     </div>
                   </div>
                   <div className="dispatch-stats">
-                    <article><span>お迎え</span><strong>{formatDistance(pendingRide.distanceKm)}</strong></article>
+                    <article><span>お迎え</span><strong>{formatPickupDistance(pendingRide.distanceKm)}</strong></article>
                     <article><span>範囲</span><strong>2 km</strong></article>
                     <article><span>状態</span><strong>新規</strong></article>
                   </div>

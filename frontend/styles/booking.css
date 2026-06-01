@@ -68,9 +68,12 @@
 
 .booking-layout {
   display: grid;
-  grid-template-columns: minmax(430px, 520px) minmax(440px, 1fr);
+  grid-template-columns: minmax(400px, 500px) minmax(0, 1fr);
   gap: 18px;
+  align-items: start;
+  width: min(100%, 1600px);
   min-height: calc(100vh - 156px);
+  margin: 0 auto;
   padding: 16px 24px 18px;
   overflow: visible;
 }
@@ -326,10 +329,11 @@
 }
 
 .map-panel {
-  align-self: start;
   position: relative;
+  align-self: start;
+  width: 100%;
   min-height: 0;
-  height: calc(100vh - 190px);
+  height: min(720px, calc(100vh - 118px));
   overflow: hidden;
   background:
     linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.16)),
@@ -338,6 +342,10 @@
   border-radius: 4px;
   position: sticky;
   top: 94px;
+}
+
+.booking-route-map {
+  min-height: 560px;
 }
 
 .route-svg {
@@ -468,6 +476,172 @@
   transform: translateY(0);
 }
 
+/* Bill confirmation reference layout */
+.booking-reference-screen {
+  height: calc(100dvh - 58px);
+  min-height: calc(100dvh - 58px);
+  overflow: hidden;
+  background: #fff;
+}
+
+.booking-reference-screen .topbar {
+  height: 48px;
+  padding: 0 14px;
+}
+
+.booking-reference-screen .brand {
+  gap: 8px;
+  font-size: 20px;
+}
+
+.booking-reference-screen .brand-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  font-size: 16px;
+}
+
+.booking-reference-screen .profile-button img {
+  width: 30px;
+  height: 30px;
+}
+
+.booking-reference-layout {
+  grid-template-columns: clamp(360px, 34vw, 500px) minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  height: calc(100dvh - 106px);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+}
+
+.booking-reference-layout .confirm-panel {
+  gap: 7px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  border-right: 1px solid #e5e7eb;
+}
+
+.booking-reference-layout .page-heading h1 {
+  font-size: 21px;
+}
+
+.booking-reference-layout .page-heading p {
+  font-size: 11px;
+}
+
+.booking-reference-layout .section-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.booking-reference-layout .section-card h2 {
+  margin-bottom: 7px;
+  font-size: 13px;
+}
+
+.booking-reference-layout .trip-summary {
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.booking-reference-layout .trip-summary article {
+  min-height: 42px;
+}
+
+.booking-reference-layout .vehicle-card {
+  padding: 8px 10px;
+}
+
+.booking-reference-layout .vehicle-option {
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.booking-reference-layout .memo-field textarea {
+  min-height: 46px;
+  max-height: 46px;
+}
+
+.booking-reference-layout .fare-card dl {
+  gap: 4px;
+}
+
+.booking-reference-layout .booking-mode {
+  min-height: 32px;
+}
+
+.booking-reference-layout .booking-mode button {
+  min-height: 32px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.booking-reference-layout .action-row {
+  gap: 8px;
+}
+
+.booking-reference-layout .action-row button {
+  min-height: 40px;
+  height: 40px;
+}
+
+.booking-reference-layout .map-panel {
+  top: auto;
+  height: calc(100dvh - 106px);
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.booking-reference-footer .bottom-nav {
+  height: 58px;
+}
+
+.booking-reference-footer .bottom-item {
+  min-width: 180px;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.booking-reference-footer .bottom-icon {
+  font-size: 17px;
+}
+
+.booking-reference-footer .divider {
+  height: 32px;
+}
+
+@media (min-width: 981px) and (max-height: 760px) {
+  .booking-reference-layout .confirm-panel {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .booking-reference-layout .page-heading h1 {
+    font-size: 19px;
+  }
+
+  .booking-reference-layout .section-card {
+    padding: 7px 9px;
+  }
+
+  .booking-reference-layout .memo-field textarea {
+    min-height: 40px;
+    max-height: 40px;
+  }
+
+  .booking-reference-layout .action-row button,
+  .booking-reference-layout .action-row .secondary-button {
+    height: 38px;
+    min-height: 38px;
+  }
+}
+
 @media (max-width: 980px) {
   .booking-layout {
     grid-template-columns: 1fr;
@@ -476,14 +650,41 @@
   .map-panel {
     position: relative;
     top: auto;
+    height: 520px;
+    min-height: 520px;
+  }
+
+  .booking-reference-screen {
     height: auto;
-    min-height: 460px;
+    min-height: calc(100dvh - 58px);
+    overflow: auto;
+  }
+
+  .booking-reference-layout {
+    height: auto;
+  }
+
+  .booking-reference-layout .confirm-panel {
+    overflow-y: visible;
   }
 }
 
 @media (max-width: 560px) {
+  .booking-reference-screen {
+    min-height: calc(100dvh - 56px);
+  }
+
+  .booking-reference-footer .bottom-nav {
+    height: 56px;
+  }
+
   .booking-layout {
-    padding: 18px;
+    padding: 12px;
+  }
+
+  .map-panel {
+    height: 420px;
+    min-height: 420px;
   }
 
   .trip-summary,

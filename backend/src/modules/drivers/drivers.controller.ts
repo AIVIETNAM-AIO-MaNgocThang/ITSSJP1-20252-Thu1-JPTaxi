@@ -13,6 +13,7 @@ import {
 import { DriversService } from './drivers.service';
 import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
+import { UpdateDriverDocumentsDto } from './dto/update-driver-documents.dto';
 import { SearchDriversQueryDto } from './dto/search-drivers.query.dto';
 import { ApplyDriverDto } from './dto/apply-driver.dto';
 
@@ -50,6 +51,14 @@ export class DriversController {
     @Body() dto: UpdateBankAccountDto,
   ) {
     return this.drivers.updateBankAccount(driverId, dto);
+  }
+
+  @Put(':driverId/documents')
+  updateDocuments(
+    @Param('driverId', ParseIntPipe) driverId: number,
+    @Body() dto: UpdateDriverDocumentsDto,
+  ) {
+    return this.drivers.updateDocuments(driverId, dto);
   }
 
 // Logic kiểm tra điều kiện bắt buộc và gửi đơn xét duyệt

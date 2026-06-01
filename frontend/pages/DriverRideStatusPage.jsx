@@ -1,9 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { cancelDriverRide, requestDriverPayment } from '../api/rides.js';
+import { getDriverProfile, resolveAssetUrl } from '../api/accounts.js';
+import { fetchCustomerProfile } from '../api/customers.js';
+import { cancelDriverRide, requestDriverPayment, updateDriverLocation } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
+import ProfileAvatarSlot from '../components/ProfileAvatarSlot.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { DEFAULT_MAP_LOCATION, watchBrowserLocation } from '../utils/geolocation.js';
+import { fetchDrivingRoute } from '../utils/routePlanner.js';
+import { setLastInvoiceTripId } from '../utils/invoiceSession.js';
 import '../styles/app-pages.css';
 
 const fallbackRoute = {
@@ -63,11 +69,24 @@ function readSelectedRoute() {
 export default function DriverRideStatusPage() {
   const navigate = useNavigate();
   const [selectedRoute] = useState(readSelectedRoute);
+  const [driverLocation, setDriverLocation] = useState(null);
+  const [driverRoutePath, setDriverRoutePath] = useState(selectedRoute.routePath);
+  const [driverProfile, setDriverProfile] = useState(null);
+  const [passengerProfile, setPassengerProfile] = useState(null);
   const [isCancellingRide, setIsCancellingRide] = useState(false);
   const [cancelError, setCancelError] = useState('');
   const passenger = selectedRoute.passenger ?? {};
   const passengerName = passenger.name || 'お客様';
   const passengerPhone = passenger.phone || '連絡先を確認中';
+  const passengerAvatar = resolveAssetUrl(passengerProfile?.avatarUrl ?? passenger.avatarUrl);
+  const driverName = [driverProfile?.lastName, driverProfile?.firstName].filter(Boolean).join(' ')
+    || driverProfile?.email
+    || 'Driver';
+  const driverAvatar = resolveAssetUrl(driverProfile?.avatarUrl);
+  const driverMapPosition = useMemo(
+    () => (driverLocation ? [driverLocation.lat, driverLocation.lng] : selectedRoute.pickup.position),
+    [driverLocation, selectedRoute.pickup.position],
+  );
   const routePoints = [
     {
       key: 'pickup',
@@ -87,6 +106,77 @@ export default function DriverRideStatusPage() {
     },
   ];
 
+  useEffect(() => watchBrowserLocation(
+    (location) => {
+      if (location.isFallback) return;
+      const nextLocation = { lat: location.latitude, lng: location.longitude };
+      setDriverLocation(nextLocation);
+      updateDriverLocation(nextLocation).catch(() => {
+        /* keep the live map usable when location syncing is temporarily unavailable */
+      });
+    },
+    { fallback: DEFAULT_MAP_LOCATION, emitFallback: false },
+  ), []);
+
+  useEffect(() => {
+    if (!driverLocation) {
+      setDriverRoutePath(selectedRoute.routePath);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const fallbackPath = [
+      driverMapPosition,
+      selectedRoute.pickup.position,
+      ...selectedRoute.routePath.slice(1),
+    ];
+
+    Promise.all([
+      fetchDrivingRoute(driverMapPosition, selectedRoute.pickup.position, { signal: controller.signal }),
+      fetchDrivingRoute(selectedRoute.pickup.position, selectedRoute.destination.position, { signal: controller.signal }),
+    ])
+      .then(([pickupRoute, destinationRoute]) => setDriverRoutePath([
+        ...pickupRoute.routePath,
+        ...destinationRoute.routePath.slice(1),
+      ]))
+      .catch((error) => {
+        if (error.name !== 'AbortError') setDriverRoutePath(fallbackPath);
+      });
+
+    return () => controller.abort();
+  }, [driverLocation, driverMapPosition, selectedRoute.destination.position, selectedRoute.pickup.position, selectedRoute.routePath]);
+
+  useEffect(() => {
+    let ignored = false;
+    getDriverProfile()
+      .then((profile) => {
+        if (!ignored) setDriverProfile(profile);
+      })
+      .catch(() => {
+        if (!ignored) setDriverProfile(null);
+      });
+    return () => {
+      ignored = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignored = false;
+    const customerId = passenger.customerId ?? passenger.customer_id;
+    if (!customerId || passenger.avatarUrl) return undefined;
+
+    fetchCustomerProfile(customerId)
+      .then((profile) => {
+        if (!ignored) setPassengerProfile(profile);
+      })
+      .catch(() => {
+        if (!ignored) setPassengerProfile(null);
+      });
+    return () => {
+      ignored = true;
+    };
+  }, [passenger.avatarUrl, passenger.customerId, passenger.customer_id]);
+
   async function requestPayment() {
     const tripId = Number(sessionStorage.getItem('jpTaxiTripId'));
     if (!Number.isFinite(tripId) || tripId <= 0) {
@@ -94,6 +184,7 @@ export default function DriverRideStatusPage() {
       return;
     }
 
+    setLastInvoiceTripId(tripId);
     try {
       const result = await requestDriverPayment(tripId);
       localStorage.setItem('jpTaxiPaymentRequested', JSON.stringify({
@@ -144,6 +235,7 @@ export default function DriverRideStatusPage() {
               <Link to="/driver-home">ホーム</Link>
               <Link to="/messages/customer">メッセージ</Link>
               <Link to="/driver-info/basic">アカウント</Link>
+              <ProfileAvatarSlot slot="topbar" className="driver-avatar-top" src={driverAvatar} fallbackText={driverName} />
             </>
           )}
         />
@@ -153,12 +245,14 @@ export default function DriverRideStatusPage() {
             alternateRoutePath={[]}
             className="tracking-route-map"
             compact
-            currentLocation={selectedRoute.pickup.position}
+            currentLocation={driverMapPosition}
+            driverLocation={driverLocation ? driverMapPosition : null}
             route={routePoints}
-            routePath={selectedRoute.routePath}
+            routePath={driverRoutePath}
             routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
             scrollWheelZoom
             showCurrentLocation={false}
+            showDriver={Boolean(driverLocation)}
             showDetails={false}
           />
 
@@ -172,7 +266,7 @@ export default function DriverRideStatusPage() {
             </div>
 
             <div className="tracking-passenger-row">
-              <span>人</span>
+                <ProfileAvatarSlot slot="tracking" src={passengerAvatar} fallbackText={passengerName} />
               <div>
                 <strong>{passengerName} 様</strong>
                 <small>{selectedRoute.pickup.name}で待機中</small>

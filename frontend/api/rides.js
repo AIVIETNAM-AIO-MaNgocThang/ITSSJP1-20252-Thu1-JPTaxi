@@ -14,6 +14,10 @@ export function getActiveRide() {
   return apiRequest('/ride/active');
 }
 
+export function getActiveDriverRide() {
+  return apiRequest('/ride/driver/active');
+}
+
 export function cancelRideRequest(requestId) {
   return apiRequest(`/ride/cancel/${requestId}`, {
     method: 'POST',
@@ -80,7 +84,7 @@ function buildFallbackRide(status = 'ongoing') {
       endTime: status === 'cancelled' ? new Date().toISOString() : null,
       distanceKm: 4.8,
       finalFareVnd: 98000,
-      finalFareJpy: 608,
+      finalFareJpy: 680,
     },
   };
 }

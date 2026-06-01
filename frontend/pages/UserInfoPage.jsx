@@ -1,5 +1,6 @@
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import AvatarCropper from '../components/AvatarCropper.jsx';
 import Footer from '../components/Footer.jsx';
 import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
@@ -28,6 +29,31 @@ const userMenu = [
   { id: 'language', icon: '🌐', to: '/user-info/language' },
   { id: 'logout', icon: '🚪', to: '/user-info/logout' },
 ];
+
+const defaultVisaCard = {
+  holderName: 'JP Taxi User',
+  number: '4111111111114821',
+  expiry: '12/29',
+  securityCode: '',
+  billingAddress: '',
+};
+
+function normalizeCardNumber(value) {
+  return String(value ?? '').replace(/\D/g, '').slice(0, 16);
+}
+
+function formatCardNumber(value) {
+  return normalizeCardNumber(value).replace(/(.{4})/g, '$1 ').trim();
+}
+
+function formatExpiry(value) {
+  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 4);
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function getCardLastFour(value) {
+  return normalizeCardNumber(value).slice(-4) || '4821';
+}
 
 const fallbackProfile = {
   lastName: '山田',
@@ -66,6 +92,12 @@ export default function UserInfoPage() {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [language, setLanguage] = useState(getStoredProfileLanguage);
+  const [visaCard, setVisaCard] = useState(defaultVisaCard);
+  const [avatarFileName, setAvatarFileName] = useState('');
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [croppedAvatarFile, setCroppedAvatarFile] = useState(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const text = profileText[language] || profileText.ja;
   const common = text.common;
   const userText = text.user;
@@ -98,6 +130,10 @@ export default function UserInfoPage() {
     return () => window.removeEventListener(LANGUAGE_EVENT, syncLanguage);
   }, []);
 
+  useEffect(() => () => {
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+  }, [avatarPreviewUrl]);
+
   const fullName = `${profile.lastName} ${profile.firstName}`.trim();
   const avatar = profile.avatarUrl;
 
@@ -127,18 +163,56 @@ export default function UserInfoPage() {
     }));
   }
 
-  async function handleAvatarChange(event) {
+  function handleAvatarChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
+    setAvatarFileName(file.name);
+    setAvatarFile(file);
+    setCroppedAvatarFile(null);
+    setAvatarPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  async function handleAvatarUpload() {
+    if (!avatarFile || !croppedAvatarFile) return;
+    setAvatarUploading(true);
     try {
-      const url = await uploadAvatar(file);
+      const url = await uploadAvatar(croppedAvatarFile);
       if (url) {
-        setProfile((current) => ({ ...current, avatarUrl: url }));
-        setStatus(text.status.avatarUploaded);
+        const updated = await updateCustomerProfile({
+          lastName: profile.lastName,
+          firstName: profile.firstName,
+          gender: profile.gender,
+          birthDate: profile.birthDate,
+          phone: profile.phone,
+          email: profile.email,
+          avatarUrl: url,
+        });
+        setProfile(normalizeProfile(updated));
+        setStatus(text.status.dbSaved);
+        setModal(null);
       }
     } catch (error) {
       setStatus(error.message || text.status.avatarFailed);
+    } finally {
+      setAvatarUploading(false);
     }
+  }
+
+  function updateVisaCardField(field, value) {
+    setVisaCard((current) => ({
+      ...current,
+      [field]:
+        field === 'number'
+          ? normalizeCardNumber(value)
+          : field === 'expiry'
+            ? formatExpiry(value)
+            : field === 'securityCode'
+              ? String(value ?? '').replace(/\D/g, '').slice(0, 4)
+              : value,
+    }));
   }
 
   async function saveProfile() {
@@ -226,9 +300,9 @@ export default function UserInfoPage() {
           <div className="setting-list">
             <button className="account-card" type="button" onClick={() => setModal('card')}>
               <strong>{userText.defaultPayment}</strong>
-              <span>{common.card}</span>
+              <span>{common.visaCard} **** {getCardLastFour(visaCard.number)}</span>
             </button>
-            <button className="submit-button profile-save-button" type="button" onClick={() => setModal('addCard')}>{common.addCard}</button>
+            <button className="submit-button profile-save-button" type="button" onClick={() => setModal('addCard')}>{common.addVisaCard}</button>
           </div>
         </section>
       );
@@ -306,7 +380,7 @@ export default function UserInfoPage() {
               </Link>
               <Link className="account-card profile-info-card" to="/user-info/payment">
                 <span className="account-icon">💳</span>
-                <span><strong>{userText.defaultPayment}</strong><small>{common.card}</small></span>
+                <span><strong>{userText.defaultPayment}</strong><small>{common.visaCard} **** {getCardLastFour(visaCard.number)}</small></span>
               </Link>
               <article className="account-card profile-info-card">
                 <span className="account-icon">🕘</span>
@@ -346,7 +420,7 @@ export default function UserInfoPage() {
                 <strong>{fullName}</strong>
                 <span>{profile.email}</span>
                 <em>{loading ? common.loading : userText.role}</em>
-                <input type="file" accept="image/*" onChange={handleAvatarChange} />
+                <button className="link-btn" type="button" onClick={() => setModal('avatar')}>{common.changeImage}</button>
               </section>
               <nav className="side-menu" aria-label={userText.pageTitle}>
                 {userMenu.map((tab) => (
@@ -382,6 +456,47 @@ export default function UserInfoPage() {
               <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>{common.save}</button>
             </div>
           )}
+          {modal === 'avatar' && (
+            <div className="modal-form zip-modal-form">
+              <div className="profile-avatar profile-avatar-preview">
+                {avatar ? <img src={avatar} alt="" /> : profile.lastName.slice(0, 1)}
+              </div>
+              <label className="avatar-file-picker">
+                <span className="avatar-file-icon">🖼️</span>
+                <span className="avatar-file-copy">
+                  <strong>{common.changeImage}</strong>
+                  <small>{avatarFileName || common.imageFile}</small>
+                </span>
+                <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={handleAvatarChange} />
+              </label>
+              <AvatarCropper src={avatarPreviewUrl} fileName={avatarFileName} onCrop={setCroppedAvatarFile} />
+              <button
+                className="submit-button profile-save-button"
+                type="button"
+                disabled={!croppedAvatarFile || avatarUploading}
+                onClick={handleAvatarUpload}
+              >
+                {avatarUploading ? common.uploading : common.save}
+              </button>
+            </div>
+          )}
+          {(modal === 'card' || modal === 'addCard') && (
+            <div className="modal-form zip-modal-form visa-card-form">
+              <div className="visa-card-preview">
+                <span>VISA</span>
+                <strong>**** **** **** {getCardLastFour(visaCard.number)}</strong>
+                <small>{visaCard.holderName || common.cardHolder} · {visaCard.expiry || 'MM/YY'}</small>
+              </div>
+              <div className="form-grid">
+                <label className="field full"><span>{common.cardHolder}</span><input value={visaCard.holderName} onChange={(event) => updateVisaCardField('holderName', event.target.value)} /></label>
+                <label className="field full"><span>{common.cardNumber}</span><input inputMode="numeric" value={formatCardNumber(visaCard.number)} onChange={(event) => updateVisaCardField('number', event.target.value)} /></label>
+                <label><span>{common.expiryDate}</span><input inputMode="numeric" placeholder="MM/YY" value={visaCard.expiry} onChange={(event) => updateVisaCardField('expiry', event.target.value)} /></label>
+                <label><span>{common.securityCode}</span><input type="password" inputMode="numeric" maxLength={4} value={visaCard.securityCode} onChange={(event) => updateVisaCardField('securityCode', event.target.value)} /></label>
+                <label className="field full"><span>{common.billingAddress}</span><input value={visaCard.billingAddress} onChange={(event) => updateVisaCardField('billingAddress', event.target.value)} /></label>
+              </div>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>{common.saveCard}</button>
+            </div>
+          )}
           {modal === 'password' && (
             <div className="modal-form zip-modal-form">
               <label><span>{userText.modal.currentPassword}</span><input type="password" /></label>
@@ -397,7 +512,7 @@ export default function UserInfoPage() {
               )) : <span>{userText.modal.emptyLoginHistory}</span>}
             </div>
           )}
-          {modal && !['account', 'password', 'loginHistory'].includes(modal) && <p className="modal-copy">{status || userText.modal.defaultCopy}</p>}
+          {modal && !['account', 'avatar', 'card', 'addCard', 'password', 'loginHistory'].includes(modal) && <p className="modal-copy">{status || userText.modal.defaultCopy}</p>}
         </Modal>
       </main>
     </PageShell>

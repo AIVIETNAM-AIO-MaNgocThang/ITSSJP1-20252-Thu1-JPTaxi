@@ -116,6 +116,9 @@ CREATE TABLE ride_request (
     request_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     status ride_request_status_type NOT NULL,
     note_to_driver VARCHAR(255) NULL,
+    estimated_fare_vnd INT NULL,
+    estimated_fare_jpy INT NULL,
+    raw_fare_vnd INT NULL,
     FOREIGN KEY (customer_id) REFERENCES customer(customer_id) ON DELETE RESTRICT
 );
 
@@ -159,7 +162,7 @@ CREATE TABLE rating (
     rating_id SERIAL PRIMARY KEY,
     trip_id INT NOT NULL UNIQUE,
     customer_id INT NOT NULL,
-    score SMALLINT NOT NULL CHECK (score BETWEEN 1 AND 5),
+    score NUMERIC(2, 1) NOT NULL CHECK (score BETWEEN 0.5 AND 5 AND score * 2 = FLOOR(score * 2)),
     comment TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NULL,

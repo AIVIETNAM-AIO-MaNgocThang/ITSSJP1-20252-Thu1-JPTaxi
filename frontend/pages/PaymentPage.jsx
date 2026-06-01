@@ -1,7 +1,9 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useState } from 'react';
-import { processRidePayment } from '../api/rides.js';
+import { useEffect, useState } from 'react';
+import { getActiveRide, getFallbackRide, processRidePayment } from '../api/rides.js';
 import PageShell from '../components/PageShell.jsx';
+import { calculateTripFareBreakdown, formatYen } from '../utils/fare.js';
+import { setLastInvoiceTripId } from '../utils/invoiceSession.js';
 import '../styles/app-pages.css';
 
 const paymentMethodMap = {
@@ -11,6 +13,15 @@ const paymentMethodMap = {
   'Apple Pay': 'VISA',
 };
 
+function readSelectedDistance() {
+  try {
+    const route = JSON.parse(sessionStorage.getItem('jpTaxiSelectedRoute') || 'null');
+    return route?.routeMetrics?.distance ?? 4.8;
+  } catch {
+    return 4.8;
+  }
+}
+
 export default function PaymentPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -18,11 +29,32 @@ export default function PaymentPage() {
   const [methodOpen, setMethodOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState('');
+  const [trip, setTrip] = useState(() => getFallbackRide()?.trip ?? null);
   const methods = ['クレジットカード (**** 4821)', '現金', 'PayPay', 'Apple Pay'];
+  const fare = calculateTripFareBreakdown(trip, readSelectedDistance());
   const backPath =
     searchParams.get('from') === 'driver' || localStorage.getItem('jpTaxiRole') === 'driver'
       ? '/driver-ride-status'
       : '/ride-status';
+
+  useEffect(() => {
+    let ignored = false;
+    getActiveRide()
+      .then((activeRide) => {
+        if (ignored || activeRide?.type !== 'trip') return;
+        setTrip(activeRide.data);
+        if (activeRide.data?.tripId) {
+          sessionStorage.setItem('jpTaxiTripId', String(activeRide.data.tripId));
+          setLastInvoiceTripId(activeRide.data.tripId);
+        }
+      })
+      .catch(() => {
+        if (!ignored) setTrip(getFallbackRide()?.trip ?? null);
+      });
+    return () => {
+      ignored = true;
+    };
+  }, []);
 
   function clearActiveRideState() {
     sessionStorage.removeItem('jpTaxiRideRequestId');
@@ -38,6 +70,7 @@ export default function PaymentPage() {
     setMethodOpen(false);
 
     const tripId = Number(sessionStorage.getItem('jpTaxiTripId'));
+    if (Number.isFinite(tripId) && tripId > 0) setLastInvoiceTripId(tripId);
 
     if (Number.isFinite(tripId) && tripId > 0 && backPath !== '/driver-ride-status') {
       try {
@@ -80,9 +113,10 @@ export default function PaymentPage() {
             </section>
 
             <section className="receipt-billing">
-              <div><span>運賃 (4.8 km)</span><strong>¥620</strong></div>
-              <div><span>予約・サービス料</span><strong>¥60</strong></div>
-              <div className="receipt-total"><span>お支払い合計</span><strong>¥680</strong></div>
+              <div><span>基本運賃</span><strong>{formatYen(fare.baseFareJpy)}</strong></div>
+              <div><span>距離加算 ({fare.distanceKm.toFixed(1)} km)</span><strong>{formatYen(fare.distanceFareJpy)}</strong></div>
+              <div><span>予約手数料</span><strong>{formatYen(fare.reservationFeeJpy)}</strong></div>
+              <div className="receipt-total"><span>お支払い合計</span><strong>{formatYen(fare.totalJpy)}</strong></div>
             </section>
 
             <section className="payment-preview">

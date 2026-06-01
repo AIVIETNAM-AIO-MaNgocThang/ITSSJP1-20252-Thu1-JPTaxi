@@ -80,6 +80,15 @@ export class RideController {
     return this.rideService.getPendingRequestForDriver(req.user.id);
   }
 
+  @Get('ride/driver/active')
+  @UseGuards(AuthGuard('jwt'))
+  getActiveRideForDriver(@Req() req: AuthedRequest) {
+    if (req.user.role !== 'driver') {
+      throw new ForbiddenException('Only drivers can get their active ride.');
+    }
+    return this.rideService.getActiveRideForDriver(req.user.id);
+  }
+
   @Post('ride/driver/location')
   @UseGuards(AuthGuard('jwt'))
   updateDriverLocation(

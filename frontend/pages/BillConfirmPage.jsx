@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { cancelRideRequest, createRideRequest, getActiveRide } from '../api/rides.js';
+import { createRideRequest, getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
+import Footer from '../components/Footer.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { calculateFareBreakdown, formatYen } from '../utils/fare.js';
+import { watchBrowserLocation } from '../utils/geolocation.js';
 import '../styles/booking.css';
 
 const fallbackRoute = {
@@ -60,15 +63,6 @@ function readSelectedRoute() {
   }
 }
 
-const nearTestPickup = {
-  name: 'ハノイ・ホアンキエム周辺',
-  position: [21.02878, 105.85204],
-};
-
-function isNearTestCustomer() {
-  return (localStorage.getItem('jpTaxiCustomerEmail') || localStorage.getItem('jpTaxiUserEmail') || '').toLowerCase() === 'nearcustomer@jptaxi.dev';
-}
-
 export default function BillConfirmPage() {
   const navigate = useNavigate();
   const homePath = '/home';
@@ -81,11 +75,15 @@ export default function BillConfirmPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [proxyPassenger, setProxyPassenger] = useState({ name: '', phone: '' });
   const [selectedRoute] = useState(readSelectedRoute);
+  const [effectivePickup, setEffectivePickup] = useState(selectedRoute.pickup);
   const accountRef = useRef(null);
   const displayDistance = selectedRoute.routeMetrics.distance;
+  const fare = calculateFareBreakdown(displayDistance);
+  const fareLabel = formatYen(fare.totalJpy);
   const routeSummary = `${displayDistance} - ${selectedRoute.routeMetrics.duration}`;
-  const effectivePickup = isNearTestCustomer() ? nearTestPickup : selectedRoute.pickup;
   const pickupPosition = effectivePickup.position;
+  const shouldUseLivePickup = selectedRoute.pickup?.id === 'current-location'
+    || selectedRoute.pickup?.name === '現在位置';
 
   const routePoints = [
     {
@@ -107,7 +105,7 @@ export default function BillConfirmPage() {
   ];
 
   function proceedToSearchCar(requestId) {
-    sessionStorage.setItem('jpTaxiRideRequestId', requestId ? String(requestId) : `demo-${Date.now()}`);
+    sessionStorage.setItem('jpTaxiRideRequestId', String(requestId));
     window.setTimeout(() => navigate('/search-car'), 300);
   }
 
@@ -121,6 +119,25 @@ export default function BillConfirmPage() {
     document.addEventListener('click', closeAccount);
     return () => document.removeEventListener('click', closeAccount);
   }, []);
+
+  useEffect(() => {
+    if (!shouldUseLivePickup) return undefined;
+
+    return watchBrowserLocation(
+      (location) => setEffectivePickup((current) => ({
+        ...current,
+        address: 'GPSで取得した現在位置',
+        position: [location.latitude, location.longitude],
+      })),
+      {
+        fallback: {
+          latitude: selectedRoute.pickup.position[0],
+          longitude: selectedRoute.pickup.position[1],
+        },
+        emitFallback: false,
+      },
+    );
+  }, [selectedRoute.pickup, shouldUseLivePickup]);
 
   function selectMode(mode) {
     setBookingMode(mode);
@@ -150,6 +167,11 @@ export default function BillConfirmPage() {
     sessionStorage.removeItem('jpTaxiTripId');
     localStorage.removeItem('jpTaxiRideAccepted');
     localStorage.removeItem('jpTaxiPaymentRequested');
+    sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify({
+      ...selectedRoute,
+      pickup: effectivePickup,
+      routePath: [pickupPosition, ...selectedRoute.routePath.slice(1)],
+    }));
     const proxyInfoComplete = proxyPassenger.name.trim() && proxyPassenger.phone.trim();
     const finalBookingMode = bookingMode === 'proxy' && proxyInfoComplete ? 'proxy' : 'self';
     if (bookingMode === 'proxy' && finalBookingMode === 'self') {
@@ -165,6 +187,9 @@ export default function BillConfirmPage() {
       dropoffLat: selectedRoute.destination.position[0],
       dropoffLng: selectedRoute.destination.position[1],
       vehicleType: '4',
+      estimatedFareVnd: fare.totalFareVnd,
+      estimatedFareJpy: fare.totalJpy,
+      rawFareVnd: fare.rawFareVnd,
       noteToDriver,
       actualPassengerName: finalBookingMode === 'proxy' ? proxyPassenger.name.trim() : undefined,
       actualPassengerPhone: finalBookingMode === 'proxy' ? proxyPassenger.phone.trim() : undefined,
@@ -179,23 +204,25 @@ export default function BillConfirmPage() {
         const requestId = activeRide?.type === 'request' ? activeRide.data?.requestId : null;
         const requestStatus = activeRide?.data?.status;
         if (requestId && ['pending', 'searching'].includes(requestStatus)) {
-          await cancelRideRequest(requestId);
-          request = await createRideRequest(bookingPayload);
+          request = activeRide.data;
         } else {
           throw error;
         }
       }
 
-      proceedToSearchCar(request?.requestId);
+      if (!request?.requestId) {
+        throw new Error('予約番号を取得できませんでした。もう一度お試しください。');
+      }
+      proceedToSearchCar(request.requestId);
     } catch (error) {
-      setToast('デモモードで予約を続行します');
-      proceedToSearchCar();
+      setToast(error.message || '予約を作成できませんでした。もう一度お試しください。');
+      setIsSubmitting(false);
     }
   }
 
   return (
-    <PageShell>
-      <main className="booking-screen">
+    <PageShell withFooter={false}>
+      <main className="booking-screen booking-reference-screen">
         <Topbar brandTo={homePath}>
           <div className="account-menu" ref={accountRef}>
             <button
@@ -217,7 +244,7 @@ export default function BillConfirmPage() {
           </div>
         </Topbar>
 
-        <section className="booking-layout">
+        <section className="booking-layout booking-reference-layout">
           <section className="confirm-panel" aria-labelledby="page-title">
             <div className="page-heading">
               <h1 id="page-title">予約内容を確認</h1>
@@ -268,7 +295,7 @@ export default function BillConfirmPage() {
                   <strong>スタンダード</strong>
                   <span>快適なセダン・禁煙車</span>
                 </div>
-                <strong className="vehicle-price">{selectedRoute.routeMetrics.fare}</strong>
+                <strong className="vehicle-price">{fareLabel}</strong>
               </div>
             </section>
 
@@ -288,20 +315,20 @@ export default function BillConfirmPage() {
               <dl>
                 <div>
                   <dt>基本運賃</dt>
-                  <dd>¥500</dd>
+                  <dd>{formatYen(fare.baseFareJpy)}</dd>
                 </div>
                 <div>
                   <dt>距離加算</dt>
-                  <dd>{selectedRoute.routeMetrics.distance === fallbackRoute.routeMetrics.distance ? '¥120' : '自動計算'}</dd>
+                  <dd>{formatYen(fare.distanceFareJpy)}</dd>
                 </div>
                 <div>
                   <dt>予約手数料</dt>
-                  <dd>¥60</dd>
+                  <dd>{formatYen(fare.reservationFeeJpy)}</dd>
                 </div>
               </dl>
               <div className="total-row">
                 <span>合計金額</span>
-                <strong>{selectedRoute.routeMetrics.fare}</strong>
+                <strong>{fareLabel}</strong>
               </div>
             </section>
 
@@ -340,7 +367,8 @@ export default function BillConfirmPage() {
               routePath={selectedRoute.routePath}
               routeSummary={routeSummary}
               scrollWheelZoom
-              showCurrentLocation={false}
+              showCurrentLocation={shouldUseLivePickup}
+              showDriver={false}
             />
           </section>
         </section>
@@ -382,6 +410,9 @@ export default function BillConfirmPage() {
 
         <div className={`toast ${toast ? 'show' : ''}`} role="status" aria-live="polite">{toast}</div>
       </main>
+      <div className="booking-reference-footer">
+        <Footer />
+      </div>
     </PageShell>
   );
 }

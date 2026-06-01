@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { calculateFareBreakdown, formatYen } from '../utils/fare.js';
+import { DEFAULT_MAP_LOCATION, getCurrentBrowserLocation, watchBrowserLocation } from '../utils/geolocation.js';
 import '../styles/app-pages.css';
 
-const defaultUserLocation = {
-  latitude: 21.02878,
-  longitude: 105.85204,
-};
+const defaultUserLocation = DEFAULT_MAP_LOCATION;
 
 const defaultPickupPlace = {
   icon: '出発',
@@ -64,8 +63,7 @@ function formatDistance(meters) {
 }
 
 function estimateFare(meters) {
-  const km = meters / 1000;
-  return `¥${Math.max(680, Math.round((420 + km * 85) / 10) * 10)}`;
+  return formatYen(calculateFareBreakdown(meters / 1000).totalJpy);
 }
 
 function hasPosition(position) {
@@ -177,6 +175,7 @@ export default function LocationSearchPage() {
   const [initialRoute] = useState(readSelectedRoute);
   const [selectedPickup, setSelectedPickup] = useState(() => normalizePlace(initialRoute?.pickup));
   const [selectedDestination, setSelectedDestination] = useState(initialRoute?.destination ?? null);
+  const [selfLocation, setSelfLocation] = useState(defaultPickupPlace.position);
   const [pickupQuery, setPickupQuery] = useState(() => normalizePlace(initialRoute?.pickup).name);
   const [destinationQuery, setDestinationQuery] = useState(initialRoute?.destination?.name ?? '');
   const [activeSearchTarget, setActiveSearchTarget] = useState('destination');
@@ -186,34 +185,65 @@ export default function LocationSearchPage() {
   const [routeKey, setRouteKey] = useState(() => buildRouteKey(initialRoute?.pickup, initialRoute?.destination));
   const [isSearching, setIsSearching] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
+  const [isRouteRefreshing, setIsRouteRefreshing] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const routeRefreshTimer = useRef(null);
+  const routeRequestId = useRef(0);
 
-  const isNearTestCustomer = (
-    localStorage.getItem('jpTaxiCustomerEmail') || localStorage.getItem('jpTaxiUserEmail') || ''
-  ).toLowerCase() === 'nearcustomer@jptaxi.dev';
-
-  function resolveCurrentPickup() {
-    if (!navigator.geolocation || isNearTestCustomer) {
-      return Promise.resolve(defaultPickupPlace);
-    }
-
-    return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            ...defaultPickupPlace,
-            address: 'GPSで取得した現在位置',
-            position: [position.coords.latitude, position.coords.longitude],
-          });
-        },
-        () => resolve(defaultPickupPlace),
-        { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
-      );
+  async function resolveCurrentPickupName(position) {
+    const [latitude, longitude] = position;
+    const params = new URLSearchParams({
+      'accept-language': 'ja,vi;q=0.8,en;q=0.6',
+      format: 'json',
+      lat: String(latitude),
+      lon: String(longitude),
+      namedetails: '1',
     });
+
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+
+      const place = toPlace(await response.json());
+      return place
+        ? {
+            ...defaultPickupPlace,
+            ...place,
+            id: defaultPickupPlace.id,
+            position,
+          }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function resolveCurrentPickup() {
+    const location = await getCurrentBrowserLocation({
+      fallback: defaultUserLocation,
+      options: { maximumAge: 0 },
+    });
+    if (location.isFallback) return defaultPickupPlace;
+
+    const gpsPosition = [location.latitude, location.longitude];
+    const place = await resolveCurrentPickupName(gpsPosition);
+    return {
+      ...defaultPickupPlace,
+      ...(place ?? {}),
+      id: defaultPickupPlace.id,
+      address: place?.address || 'GPSで取得した現在位置',
+      position: gpsPosition,
+    };
   }
 
   function updateRoutePreview(nextPickup, nextDestination) {
+    window.clearTimeout(routeRefreshTimer.current);
+    setIsRouteRefreshing(true);
+    routeRefreshTimer.current = window.setTimeout(() => setIsRouteRefreshing(false), 420);
+
     if (!nextDestination) {
       setRoutePath([]);
       setRouteMetrics(null);
@@ -234,21 +264,37 @@ export default function LocationSearchPage() {
     });
   }
 
-  useEffect(() => {
-    if (initialRoute?.pickup || isNearTestCustomer) {
-      return undefined;
-    }
+  useEffect(() => () => window.clearTimeout(routeRefreshTimer.current), []);
 
+  useEffect(() => {
     let cancelled = false;
 
     resolveCurrentPickup().then((pickup) => {
       if (cancelled) return;
-      setSelectedPickup(pickup);
-      setPickupQuery(pickup.name);
+      setSelfLocation(pickup.position);
+      if (!initialRoute?.pickup) {
+        setSelectedPickup(pickup);
+        setPickupQuery(pickup.name);
+      }
     });
+
+    const stopWatching = watchBrowserLocation(
+      (location) => {
+        if (cancelled) return;
+        const position = [location.latitude, location.longitude];
+        setSelfLocation(position);
+        setSelectedPickup((current) => (
+          current.id === defaultPickupPlace.id
+            ? { ...current, position, address: 'GPSで取得した現在位置' }
+            : current
+        ));
+      },
+      { fallback: defaultUserLocation, emitFallback: false },
+    );
 
     return () => {
       cancelled = true;
+      stopWatching();
     };
   }, [initialRoute?.pickup]);
 
@@ -309,6 +355,7 @@ export default function LocationSearchPage() {
 
   useEffect(() => {
     if (!selectedDestination) {
+      routeRequestId.current += 1;
       setRoutePath([]);
       setRouteMetrics(null);
       setRouteKey('');
@@ -317,6 +364,8 @@ export default function LocationSearchPage() {
     }
 
     const controller = new AbortController();
+    const requestId = routeRequestId.current + 1;
+    routeRequestId.current = requestId;
     const requestRouteKey = buildRouteKey(selectedPickup, selectedDestination);
     const [pickupLat, pickupLng] = selectedPickup.position;
     const [destinationLat, destinationLng] = selectedDestination.position;
@@ -329,18 +378,32 @@ export default function LocationSearchPage() {
       geometries: 'geojson',
       steps: 'true',
     });
+    const fallbackRoute = buildFallbackRouteState(selectedPickup, selectedDestination);
 
+    setRoutePath(fallbackRoute.path);
+    setRouteMetrics(fallbackRoute.metrics);
+    setRouteKey(requestRouteKey);
+    saveSelectedRoute({
+      destination: selectedDestination,
+      pickup: selectedPickup,
+      path: fallbackRoute.path,
+      metrics: fallbackRoute.metrics,
+    });
     setIsRouting(true);
-    fetch(`${url}?${params.toString()}`, { signal: controller.signal })
+    const requestRoute = (attempt = 0) => fetch(`${url}?${params.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
       .then((response) => {
         if (!response.ok) throw new Error('route failed');
         return response.json();
       })
       .then((data) => {
+        if (requestId !== routeRequestId.current) return;
+
         const route = data?.routes?.[0];
         const coordinates = route?.geometry?.coordinates ?? [];
         const nextPath = coordinates.map(([lng, lat]) => [lat, lng]);
-        const fallbackRoute = buildFallbackRouteState(selectedPickup, selectedDestination);
         const distance = Number(route?.distance);
         const duration = Number(route?.duration);
         const hasValidRoute = nextPath.length
@@ -369,7 +432,13 @@ export default function LocationSearchPage() {
       })
       .catch((error) => {
         if (error.name === 'AbortError') return;
-        const fallbackRoute = buildFallbackRouteState(selectedPickup, selectedDestination);
+        if (requestId !== routeRequestId.current) return;
+        if (attempt < 1) {
+          return new Promise((resolve) => {
+            window.setTimeout(resolve, 240);
+          }).then(() => requestRoute(attempt + 1));
+        }
+
         setRoutePath(fallbackRoute.path);
         setRouteMetrics(fallbackRoute.metrics);
         setRouteKey(requestRouteKey);
@@ -380,7 +449,11 @@ export default function LocationSearchPage() {
           metrics: fallbackRoute.metrics,
         });
       })
-      .finally(() => setIsRouting(false));
+      .finally(() => {
+        if (requestId === routeRequestId.current) setIsRouting(false);
+      });
+
+    requestRoute();
 
     return () => controller.abort();
   }, [selectedDestination, selectedPickup]);
@@ -430,7 +503,7 @@ export default function LocationSearchPage() {
         {
           ...defaultPickupPlace,
           address: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.address : 'GPSで現在位置を取得',
-          position: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.position : defaultPickupPlace.position,
+          position: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.position : selfLocation,
           time: '現在地',
           useCurrentLocation: true,
         },
@@ -497,10 +570,25 @@ export default function LocationSearchPage() {
 
         <section className="zip-location-main">
           <section className="zip-location-left">
-            <h1>乗車地と目的地を検索</h1>
-            <p>先に乗車地を選択してから目的地を選択してください。乗車地から半径2km以内のドライバーを検索します。</p>
+            <h1>目的地を検索</h1>
+            <p>目的地を入力するか、履歴から選択してください。必要に応じて乗車地も変更できます。</p>
 
             <label className="zip-search-box">
+              <span>目的地</span>
+              <input
+                autoComplete="off"
+                onChange={(event) => {
+                  setActiveSearchTarget('destination');
+                  setDestinationQuery(event.target.value);
+                }}
+                onFocus={() => setActiveSearchTarget('destination')}
+                placeholder="目的地・住所を入力"
+                type="text"
+                value={destinationQuery}
+              />
+            </label>
+
+            <label className="zip-search-box pickup-search-box">
               <span>乗車地</span>
               <input
                 autoComplete="off"
@@ -526,21 +614,6 @@ export default function LocationSearchPage() {
               </button>
             </label>
 
-            <label className="zip-search-box">
-              <span>目的地</span>
-              <input
-                autoComplete="off"
-                onChange={(event) => {
-                  setActiveSearchTarget('destination');
-                  setDestinationQuery(event.target.value);
-                }}
-                onFocus={() => setActiveSearchTarget('destination')}
-                placeholder="目的地・住所を入力"
-                type="text"
-                value={destinationQuery}
-              />
-            </label>
-
             <section className="zip-route-card">
               <div className="zip-route-points">
                 <span className="route-start"></span>
@@ -555,7 +628,7 @@ export default function LocationSearchPage() {
 
             <div className="zip-location-results">
               <h2>{shouldShowSuggestions ? '検索結果' : '最近の履歴'}</h2>
-              <div className="zip-history-list">
+              <div className="zip-history-list" onWheel={(event) => event.stopPropagation()}>
                 {isSearching ? <div className="zip-search-state">検索しています...</div> : null}
                 {!isSearching && searchError ? <div className="zip-search-state">{searchError}</div> : null}
                 {!isSearching && placesWithCurrentLocation.map((item) => (
@@ -580,11 +653,11 @@ export default function LocationSearchPage() {
             </div>
           </section>
 
-          <aside className="zip-location-map">
+          <aside className={`zip-location-map ${isRouteRefreshing ? 'is-refreshing' : ''}`}>
             <InteractiveRouteMap
               alternateRoutePath={[]}
               className="location-search-route-map"
-              currentLocation={selectedPickup.position}
+              currentLocation={selfLocation}
               fitToRoute={Boolean(selectedDestination)}
               interactive
               mapCenter={mapCenter}
@@ -594,7 +667,7 @@ export default function LocationSearchPage() {
               routeSummary={displayedRouteMetrics ? `${displayedRouteMetrics.distance} - ${displayedRouteMetrics.duration}` : null}
               scrollWheelZoom
               showControls
-              showCurrentLocation={!selectedDestination}
+              showCurrentLocation
               showDetails={false}
               showDriver={false}
               showMarkers={Boolean(selectedDestination)}
@@ -607,6 +680,10 @@ export default function LocationSearchPage() {
               <div><span>予想所要時間</span><b>{routeDurationLabel}</b></div>
               <div><span>距離</span><b>{routeDistanceLabel}</b></div>
               <div><span>概算料金</span><b>{routeFareLabel}</b></div>
+            </div>
+            <div className="zip-map-refresh-indicator" aria-hidden={!isRouteRefreshing}>
+              <span></span>
+              <b>ルート更新中</b>
             </div>
           </aside>
         </section>

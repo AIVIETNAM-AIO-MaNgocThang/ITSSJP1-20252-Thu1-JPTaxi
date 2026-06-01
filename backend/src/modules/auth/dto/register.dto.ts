@@ -76,4 +76,24 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   license_plate?: string;
+
+  @IsOptional()
+  @IsString()
+  portrait_url?: string;
+
+  @IsOptional()
+  @IsString()
+  license_front_url?: string;
+
+  @IsOptional()
+  @IsString()
+  license_back_url?: string;
+
+  @IsOptional()
+  @IsString()
+  vehicle_photo_url?: string;
+
+  @IsOptional()
+  @IsString()
+  registration_paper_url?: string;
 }

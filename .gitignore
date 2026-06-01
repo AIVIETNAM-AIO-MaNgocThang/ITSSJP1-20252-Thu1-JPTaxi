@@ -1,18 +1,16 @@
-986DS_Store
+.DS_Store
 .env
 **/.env
 **/.env.local
 *.log
+*.tsbuildinfo
+/package-lock.json
+/github-main-updated/
 backend/node_modules/
 backend/dist/
 backend/uploads/
 frontend/node_modules/
-node_modules/
-dist/
+frontend/dist/
 build/
-.env
-<<<<<<< HEAD
-=======
 package/
 **/target/
->>>>>>> 307550d (update)

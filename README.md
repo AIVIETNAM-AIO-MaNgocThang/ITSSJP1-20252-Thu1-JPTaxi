@@ -1,5 +1,4 @@
 # ITSSJP1-20252-Thu1-JPTaxi
-<<<<<<< HEAD
 
 POT: Yotsuba · DevT: 67
 
@@ -28,6 +27,3 @@ POT: Yotsuba · DevT: 67
 - `GET /admin/drivers`, `GET /admin/customers`, `DELETE /admin/driver/:id` — cần header `Authorization: Bearer <token admin>`
 
 File tĩnh upload phục vụ tại `/uploads/...` (cùng origin với API, ví dụ `http://localhost:3000/uploads/avatars/...`).
-=======
-POT: Yotsuba
->>>>>>> e8f4c04 (Initial commit)

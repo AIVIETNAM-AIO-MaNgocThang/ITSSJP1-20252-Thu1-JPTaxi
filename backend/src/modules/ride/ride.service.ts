@@ -19,9 +19,10 @@ import { RideRequestDispatch, DispatchStatusType } from '../../entities/ride-req
 import { CreateRideRequestDto } from './dto/create-ride-request.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { RideGateway } from './ride.gateway';
+import { calculateRideFare } from '../../common/ride-fare.util';
 
 const DISPATCH_RADIUS_KM = 2;
-const PAYMENT_REQUEST_TTL_MS = 10 * 60 * 1000;
+const ENFORCE_DISPATCH_RADIUS_ON_ACCEPT = false;
 const PENDING_REQUEST_FRESHNESS_MINUTES = 24 * 60;
 
 function distanceKm(fromLat: number, fromLng: number, toLat: number, toLng: number) {
@@ -71,12 +72,7 @@ export class RideService {
       .getOne();
 
     if (activeTrip) {
-      activeTrip.status = TripStatusType.completed;
-      activeTrip.endTime = new Date();
-      await this.tripRepo.save(activeTrip);
-      this.paymentRequests.delete(activeTrip.tripId);
-      activeTrip.rideRequest.status = RideRequestStatusType.completed;
-      await this.rideRequestRepo.save(activeTrip.rideRequest);
+      throw new BadRequestException('Please complete or cancel the active ride before booking another ride.');
     }
 
     // 2. Dọn các yêu cầu cũ chưa thành chuyến để lần đặt mới không bị kẹt ở bill-confirm.
@@ -93,8 +89,7 @@ export class RideService {
     });
 
     if (activeRequest) {
-      activeRequest.status = RideRequestStatusType.failed;
-      await this.rideRequestRepo.save(activeRequest);
+      throw new BadRequestException('Please cancel the active ride request before booking another ride.');
     }
 
     // 3. Khởi tạo yêu cầu mới
@@ -111,6 +106,9 @@ export class RideService {
       actualPassengerName: dto.actualPassengerName || null,
       actualPassengerPhone: dto.actualPassengerPhone || null,
       noteToDriver: dto.noteToDriver || null,
+      estimatedFareVnd: dto.estimatedFareVnd ?? null,
+      estimatedFareJpy: dto.estimatedFareJpy ?? null,
+      rawFareVnd: dto.rawFareVnd ?? null,
       requestTime: new Date(),
     });
 
@@ -146,9 +144,13 @@ export class RideService {
       .getOne();
 
     if (activeTrip) {
-      const [driver, vehicle] = await Promise.all([
+      const [driver, vehicle, latestLocation] = await Promise.all([
         this.driverRepo.findOne({ where: { driverId: activeTrip.driverId } }),
         this.vehicleRepo.findOne({ where: { driverId: activeTrip.driverId } }),
+        this.driverLocationRepo.findOne({
+          where: { driverId: activeTrip.driverId },
+          order: { recordedAt: 'DESC' },
+        }),
       ]);
 
       return {
@@ -162,6 +164,13 @@ export class RideService {
                 phone: driver.phone,
                 avatarUrl: driver.avatarUrl,
                 japaneseLevel: driver.driverJapaneseLevel,
+                location: latestLocation
+                  ? {
+                      latitude: Number(latestLocation.latitude),
+                      longitude: Number(latestLocation.longitude),
+                      recordedAt: latestLocation.recordedAt,
+                    }
+                  : null,
               }
             : null,
           vehicle: vehicle
@@ -187,15 +196,38 @@ export class RideService {
   }
 
   private isPaymentRequested(tripId: number): boolean {
-    const requestedAt = this.paymentRequests.get(tripId);
-    if (!requestedAt) return false;
+    return this.paymentRequests.has(tripId);
+  }
 
-    if (Date.now() - requestedAt > PAYMENT_REQUEST_TTL_MS) {
-      this.paymentRequests.delete(tripId);
-      return false;
-    }
+  async getActiveRideForDriver(driverId: number): Promise<any> {
+    const activeTrip = await this.tripRepo
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
+      .where('trip.driver_id = :driverId', { driverId })
+      .andWhere('trip.status = :status', { status: TripStatusType.ongoing })
+      .getOne();
 
-    return true;
+    if (!activeTrip) return null;
+
+    const customer = await this.customerRepo.findOne({
+      where: { customerId: activeTrip.rideRequest.customerId },
+    });
+
+    return {
+      type: 'trip',
+      data: {
+        ...activeTrip,
+        passenger: customer
+          ? {
+              customerId: customer.customerId,
+              name: [customer.lastName, customer.firstName].filter(Boolean).join(' '),
+              phone: customer.phone,
+              avatarUrl: customer.avatarUrl,
+            }
+          : null,
+      },
+      paymentRequested: this.isPaymentRequested(activeTrip.tripId),
+    };
   }
 
   private mapPendingRequestRow(row: Record<string, string | number | Date | null>) {
@@ -217,6 +249,7 @@ export class RideService {
       customer: {
         name: [row.customerLastName, row.customerFirstName].filter(Boolean).join(' '),
         phone: String(row.customerPhone ?? ''),
+        avatarUrl: row.customerAvatarUrl ? String(row.customerAvatarUrl) : null,
       },
     };
   }
@@ -243,6 +276,7 @@ export class RideService {
         'c.first_name AS "customerFirstName"',
         'c.last_name AS "customerLastName"',
         'c.phone AS "customerPhone"',
+        'c.avatar_url AS "customerAvatarUrl"',
       ])
       .where('rr.status = :status', { status: RideRequestStatusType.searching })
       .andWhere('rr.request_time >= :freshSince', { freshSince })
@@ -339,6 +373,7 @@ export class RideService {
         'c.first_name AS "customerFirstName"',
         'c.last_name AS "customerLastName"',
         'c.phone AS "customerPhone"',
+        'c.avatar_url AS "customerAvatarUrl"',
         `${distanceSql} AS "distanceKm"`,
       ])
       .where('rr.status = :status', { status: RideRequestStatusType.searching })
@@ -410,6 +445,7 @@ export class RideService {
         customer: {
           name: [row.customerLastName, row.customerFirstName].filter(Boolean).join(' '),
           phone: String(row.customerPhone ?? ''),
+          avatarUrl: row.customerAvatarUrl ? String(row.customerAvatarUrl) : null,
         },
       },
     };
@@ -463,7 +499,7 @@ export class RideService {
         Number(request.pickupLng),
       );
 
-      if (pickupDistance > DISPATCH_RADIUS_KM) {
+      if (ENFORCE_DISPATCH_RADIUS_ON_ACCEPT && pickupDistance > DISPATCH_RADIUS_KM) {
         throw new BadRequestException('半径2km以内の配車リクエストのみ承認できます。');
       }
     }
@@ -474,8 +510,10 @@ export class RideService {
       Number(request.dropoffLat),
       Number(request.dropoffLng),
     );
-    const fareVnd = Math.max(30000, Math.round(routeDistance * 12000));
-    const fareJpy = Math.round(fareVnd / 160);
+    const fallbackFare = calculateRideFare(routeDistance);
+    const fareVnd = request.estimatedFareVnd ?? fallbackFare.totalFareVnd;
+    const fareJpy = request.estimatedFareJpy ?? fallbackFare.totalJpy;
+    const rawFareVnd = request.rawFareVnd ?? fallbackFare.rawFareVnd;
 
     request.status = RideRequestStatusType.assigned;
     await this.rideRequestRepo.save(request);
@@ -496,7 +534,7 @@ export class RideService {
       exchangeRateVndToJpy: '160.0000',
       finalFareVnd: fareVnd,
       finalFareJpy: fareJpy,
-      rawFareVnd: fareVnd,
+      rawFareVnd,
       status: TripStatusType.ongoing,
     });
     const savedTrip = await this.tripRepo.save(trip);
@@ -595,6 +633,9 @@ export class RideService {
       actualPassengerName: oldRequest.actualPassengerName,
       actualPassengerPhone: oldRequest.actualPassengerPhone,
       noteToDriver: oldRequest.noteToDriver,
+      estimatedFareVnd: oldRequest.estimatedFareVnd,
+      estimatedFareJpy: oldRequest.estimatedFareJpy,
+      rawFareVnd: oldRequest.rawFareVnd,
       requestTime: new Date(),
     });
     const savedReplacement = await this.rideRequestRepo.save(replacementRequest);

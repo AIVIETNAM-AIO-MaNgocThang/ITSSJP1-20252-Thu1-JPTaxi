@@ -50,6 +50,13 @@ export function updateDriverBankAccount(payload, driverId = getCurrentDriverId()
   });
 }
 
+export function updateDriverDocuments(payload, driverId = getCurrentDriverId()) {
+  return apiRequest(`/drivers/${driverId}/documents`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function resolveAssetUrl(url) {
   if (!url) return '';
   return url.startsWith('http') ? url : `${API_BASE.replace(/\/api$/, '')}${url}`;
@@ -64,4 +71,14 @@ export async function uploadAvatar(file) {
   });
   if (!result?.url) return null;
   return resolveAssetUrl(result.url);
+}
+
+export async function uploadDriverDocument(documentType, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const result = await apiRequest(`/uploads/drivers/${documentType}`, {
+    method: 'POST',
+    body: formData,
+  });
+  return result?.url || null;
 }

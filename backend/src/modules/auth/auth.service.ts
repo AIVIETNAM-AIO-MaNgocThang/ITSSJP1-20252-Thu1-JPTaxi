@@ -83,6 +83,7 @@ export class AuthService {
           isPhoneVerified: false,
           status: DriverStatusType.approved,
           driverJapaneseLevel: dto.japanese_level ?? DriverJapaneseLevelEnum.N3,
+          avatarUrl: dto.portrait_url || null,
         });
         const savedDriver = await this.drivers.save(driverEntity);
 
@@ -94,8 +95,8 @@ export class AuthService {
             brand: dto.vehicle_brand || 'Toyota',
             color: dto.vehicle_color || '',
             manufactureYear: new Date().getFullYear(),
-            vehiclePhotoUrl: null,
-            registrationPaperUrl: null,
+            vehiclePhotoUrl: dto.vehicle_photo_url || null,
+            registrationPaperUrl: dto.registration_paper_url || null,
           }),
         );
 
@@ -107,8 +108,8 @@ export class AuthService {
             issueDate: today,
             issuePlace: dto.license_number,
             expiryDate: dto.license_expiry_date?.slice(0, 10) || today,
-            frontImageUrl: null,
-            backImageUrl: null,
+            frontImageUrl: dto.license_front_url || null,
+            backImageUrl: dto.license_back_url || null,
           }),
         );
 
@@ -163,9 +164,9 @@ export class AuthService {
 
   async login(dto: LoginDto, clientIp?: string | null) {
     const normalizedEmail = dto.email.trim().toLowerCase();
-    const preferredRole = normalizedEmail.includes('driver') || normalizedEmail.includes('taxi')
+    const preferredRole = dto.role ?? (normalizedEmail.includes('driver') || normalizedEmail.includes('taxi')
       ? 'driver'
-      : 'customer';
+      : 'customer');
 
     const customer = await this.customers
       .createQueryBuilder('c')
@@ -187,8 +188,11 @@ export class AuthService {
           { userType: LoginUserType.customer, user: customer },
           { userType: LoginUserType.driver, user: driver },
         ];
+    const allowedCandidates = dto.role
+      ? candidates.filter((candidate) => candidate.userType === dto.role)
+      : candidates;
 
-    for (const candidate of candidates) {
+    for (const candidate of allowedCandidates) {
       const user = candidate.user;
       if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
         continue;

@@ -1,9 +1,65 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { uploadDriverDocument } from '../api/accounts.js';
 import PageShell from '../components/PageShell.jsx';
-import Topbar from '../components/Topbar.jsx';
 import '../styles/auth.css';
 import '../styles/app-pages.css';
+
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp';
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const documentUploads = [
+  { key: 'portrait', type: 'portrait', icon: '🧑', label: '顔写真' },
+  { key: 'licenseFront', type: 'license_front', icon: '📄', label: '免許証（表）' },
+  { key: 'licenseBack', type: 'license_back', icon: '🪪', label: '免許証（裏）' },
+  { key: 'vehiclePhoto', type: 'vehicle_photo', icon: '🚗', label: '車両写真' },
+  { key: 'registrationPaper', type: 'registration_paper', icon: '📘', label: '車検証' },
+];
+
+function formatFileSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileUploadBox({ item, file, onChange }) {
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl('');
+      return undefined;
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setPreviewUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [file]);
+
+  return (
+    <article className={`driver-doc-upload-card ${file ? 'has-file' : ''}`}>
+      <div className="driver-doc-preview">
+        {previewUrl ? <img src={previewUrl} alt={item.label} /> : <span>{item.icon}</span>}
+      </div>
+      <div className="driver-doc-upload-body">
+        <strong>{item.label}</strong>
+        <small>{file ? `${file.name} · ${formatFileSize(file.size)}` : 'JPEG / PNG / WebP · 5MB'}</small>
+      </div>
+      <div className="driver-doc-upload-actions">
+        <label className="secondary-button doc-upload-select">
+          <span>{file ? '変更' : '選択'}</span>
+          <input
+            type="file"
+            accept={IMAGE_ACCEPT}
+            hidden
+            onChange={(event) => {
+              onChange(event.target.files?.[0] ?? null);
+              event.target.value = '';
+            }}
+          />
+        </label>
+        {file && <button className="doc-upload-remove" type="button" onClick={() => onChange(null)}>×</button>}
+      </div>
+    </article>
+  );
+}
 
 export default function DriverRegisterPage() {
   const navigate = useNavigate();
@@ -20,36 +76,60 @@ export default function DriverRegisterPage() {
     vehicleType: '4',
     vehicleColor: '',
   });
+  const [files, setFiles] = useState({
+    portrait: null,
+    licenseFront: null,
+    licenseBack: null,
+    vehiclePhoto: null,
+    registrationPaper: null,
+  });
   const [status, setStatus] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function submitDriverApplication(event) {
+  function updateFile(key, file) {
+    if (file && (!IMAGE_ACCEPT.includes(file.type) || file.size > MAX_FILE_BYTES)) {
+      setStatus('画像はJPEG / PNG / WebP形式、5MB以下にしてください。');
+      return;
+    }
+    setStatus('');
+    setFiles((current) => ({ ...current, [key]: file }));
+  }
+
+  async function submitDriverApplication(event) {
     event.preventDefault();
     if (!form.lastName.trim() || !form.firstName.trim() || !form.phone.trim() || !form.licenseNumber.trim() || !form.licensePlate.trim()) {
       setStatus('必要な情報を入力してください。');
       return;
     }
 
-    sessionStorage.setItem('jpTaxiPendingDriverRegistration', JSON.stringify(form));
-    navigate('/register?role=driver');
+    const missing = documentUploads.find((item) => !files[item.key]);
+    if (missing) {
+      setStatus(`${missing.label}を選択してください。`);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const documents = {};
+      await Promise.all(documentUploads.map(async (item) => {
+        documents[item.key] = await uploadDriverDocument(item.type, files[item.key]);
+      }));
+      sessionStorage.setItem('jpTaxiPendingDriverRegistration', JSON.stringify({ ...form, documents }));
+      navigate('/register?role=driver');
+    } catch (error) {
+      setStatus(error.message || '画像をアップロードできませんでした。');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <PageShell withFooter={false}>
       <main className="driver-register-screen">
-        <Topbar
-          brandTo="/login"
-          actions={(
-            <>
-              <Link to="/login">ログイン</Link>
-              <Link to="/register">顧客登録</Link>
-            </>
-          )}
-        />
-
         <section className="driver-register-layout">
           <div className="driver-register-intro">
             <span className="eyebrow">🚖 ドライバー登録・免許更新</span>
@@ -70,6 +150,7 @@ export default function DriverRegisterPage() {
           </div>
 
           <section className="driver-register-form-card">
+            <Link className="driver-register-login-link" to="/login">← ログインへ戻る</Link>
             <div className="form-logo" aria-hidden="true">🚕</div>
             <div className="form-heading">
               <h2>運転者登録</h2>
@@ -113,11 +194,6 @@ export default function DriverRegisterPage() {
                 </label>
                 <label><span>有効期限</span><input type="date" value={form.licenseExpiryDate} onChange={(event) => updateField('licenseExpiryDate', event.target.value)} /></label>
               </div>
-              <div className="upload-grid">
-                <label className="upload-box">📄<strong>免許証（表）</strong><span>クリックしてアップロード</span><input type="file" hidden /></label>
-                <label className="upload-box">🪪<strong>免許証（裏）</strong><span>クリックしてアップロード</span><input type="file" hidden /></label>
-              </div>
-
               <h3 className="section-title">車両情報</h3>
               <div className="field-grid two">
                 <label><span>車種</span><input placeholder="Toyota Vios" value={form.vehicleBrand} onChange={(event) => updateField('vehicleBrand', event.target.value)} /></label>
@@ -132,9 +208,14 @@ export default function DriverRegisterPage() {
                 </label>
                 <label><span>車両カラー</span><input placeholder="白" value={form.vehicleColor} onChange={(event) => updateField('vehicleColor', event.target.value)} /></label>
               </div>
+              <div className="document-upload-heading">
+                <h3 className="section-title">書類アップロード</h3>
+                <span>{Object.values(files).filter(Boolean).length} / {documentUploads.length}</span>
+              </div>
               <div className="upload-grid">
-                <label className="upload-box">🚗<strong>車両写真</strong><span>車の外観写真をアップロード</span><input type="file" hidden /></label>
-                <label className="upload-box">📘<strong>車検証</strong><span>登録書類をアップロード</span><input type="file" hidden /></label>
+                {documentUploads.map((item) => (
+                  <FileUploadBox item={item} file={files[item.key]} key={item.key} onChange={(file) => updateFile(item.key, file)} />
+                ))}
               </div>
 
               <label className="terms">
@@ -145,7 +226,7 @@ export default function DriverRegisterPage() {
 
               <div className="driver-register-actions">
                 <button className="secondary-button" type="button" onClick={() => navigate('/login')}>戻る</button>
-                <button className="submit-button" type="submit">申請を送信</button>
+                <button className="submit-button" type="submit" disabled={submitting}>{submitting ? '送信中...' : '申請を送信'}</button>
               </div>
             </form>
           </section>

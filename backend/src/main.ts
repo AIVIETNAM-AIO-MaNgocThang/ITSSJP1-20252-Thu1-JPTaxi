@@ -6,10 +6,12 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 function ensureUploadDirs() {
-  const avatars = join(process.cwd(), 'uploads', 'avatars');
-  if (!existsSync(avatars)) {
-    mkdirSync(avatars, { recursive: true });
-  }
+  ['avatars', 'drivers/portraits', 'drivers/licenses', 'drivers/vehicles'].forEach((subdir) => {
+    const destination = join(process.cwd(), 'uploads', subdir);
+    if (!existsSync(destination)) {
+      mkdirSync(destination, { recursive: true });
+    }
+  });
 }
 
 async function bootstrap() {
