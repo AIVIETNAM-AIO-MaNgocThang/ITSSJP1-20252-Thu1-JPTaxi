@@ -4,7 +4,6 @@
 **/.env.local
 *.log
 *.tsbuildinfo
-/package-lock.json
 /github-main-updated/
 backend/node_modules/
 backend/dist/
