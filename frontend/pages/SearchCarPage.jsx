@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { resolveAssetUrl } from '../api/accounts.js';
 import { apiRequest } from '../api/client.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
@@ -11,6 +12,7 @@ const defaultUserLocation = {
   latitude: 21.02878,
   longitude: 105.85204,
 };
+const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
 
 const fallbackSelectedRoute = {
   hasRoute: false,
@@ -114,6 +116,9 @@ function readSelectedRoute() {
 
 export default function SearchCarPage() {
   const { t } = useLanguage();
+  const [topbarAvatar, setTopbarAvatar] = useState(() => (
+    resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar
+  ));
   const [selectedRoute] = useState(readSelectedRoute);
   const [userLocation, setUserLocation] = useState({
     latitude: selectedRoute.pickup.position[0],
@@ -121,6 +126,21 @@ export default function SearchCarPage() {
   });
   const [drivers, setDrivers] = useState(fallbackDrivers);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(true);
+
+  useEffect(() => {
+    function syncTopbarAvatar() {
+      setTopbarAvatar(resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar);
+    }
+
+    syncTopbarAvatar();
+    window.addEventListener('storage', syncTopbarAvatar);
+    window.addEventListener('focus', syncTopbarAvatar);
+
+    return () => {
+      window.removeEventListener('storage', syncTopbarAvatar);
+      window.removeEventListener('focus', syncTopbarAvatar);
+    };
+  }, []);
 
   useEffect(() => {
     if (selectedRoute.hasRoute || !navigator.geolocation) {
@@ -202,12 +222,18 @@ export default function SearchCarPage() {
   return (
     <PageShell>
       <main className="search-screen">
-        <Topbar>
+        <Topbar actions={(
+          <>
+            <Link to="/home">{t('navHome')}</Link>
+            <Link to="/messages/driver">{t('navMessages')}</Link>
+            <Link to="/user-info/profile">{t('navAccount')}</Link>
           <div className="location-chip" aria-label={t('currentLocation')}>
             <span className="location-dot"></span>
             <span>ハノイ・ホアンキエム周辺</span>
           </div>
-        </Topbar>
+            <img className="topbar-avatar" src={topbarAvatar} alt="" />
+          </>
+        )} />
 
         <section className="map-stage" aria-label="配車マップ">
           <InteractiveRouteMap

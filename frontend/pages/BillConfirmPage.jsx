@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { resolveAssetUrl } from '../api/accounts.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import '../styles/booking.css';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { getChatPath, saveActiveChatSession } from '../utils/chatSession.js';
+
+const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
+const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
 
 const fallbackRoute = {
   destination: {
@@ -67,6 +71,10 @@ export default function BillConfirmPage() {
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver';
   const homePath = isDriver ? '/driver-home' : '/home';
   const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
+  const messagePath = isDriver ? '/messages/customer' : '/messages/driver';
+  const avatarStorageKey = isDriver ? 'jpTaxiDriverAvatarUrl' : 'jpTaxiCustomerAvatarUrl';
+  const fallbackAvatar = isDriver ? driverFallbackAvatar : customerFallbackAvatar;
+  const [topbarAvatar, setTopbarAvatar] = useState(() => resolveAssetUrl(localStorage.getItem(avatarStorageKey)) || fallbackAvatar);
   const [bookingMode, setBookingMode] = useState('self');
   const [accountOpen, setAccountOpen] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
@@ -94,6 +102,21 @@ export default function BillConfirmPage() {
       type: 'destination',
     },
   ];
+
+  useEffect(() => {
+    function syncTopbarAvatar() {
+      setTopbarAvatar(resolveAssetUrl(localStorage.getItem(avatarStorageKey)) || fallbackAvatar);
+    }
+
+    syncTopbarAvatar();
+    window.addEventListener('storage', syncTopbarAvatar);
+    window.addEventListener('focus', syncTopbarAvatar);
+
+    return () => {
+      window.removeEventListener('storage', syncTopbarAvatar);
+      window.removeEventListener('focus', syncTopbarAvatar);
+    };
+  }, [avatarStorageKey, fallbackAvatar]);
 
   useEffect(() => {
     function closeAccount(event) {
@@ -140,7 +163,7 @@ export default function BillConfirmPage() {
                 setAccountOpen((current) => !current);
               }}
             >
-              <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" />
+              <img src={topbarAvatar} alt="" />
             </button>
             <div className={`account-dropdown ${accountOpen ? 'open' : ''}`} aria-hidden={!accountOpen}>
               <button type="button" onClick={() => navigate(accountPath)}>会員情報変更</button>

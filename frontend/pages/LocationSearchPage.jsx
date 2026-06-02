@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { resolveAssetUrl } from '../api/accounts.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
@@ -8,6 +9,7 @@ import { DEFAULT_MAP_LOCATION, getCurrentBrowserLocation, watchBrowserLocation }
 import '../styles/app-pages.css';
 
 const defaultUserLocation = DEFAULT_MAP_LOCATION;
+const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
 
 const defaultPickupPlace = {
   icon: '出発',
@@ -172,6 +174,9 @@ function buildRouteKey(pickup, destination) {
 
 export default function LocationSearchPage() {
   const navigate = useNavigate();
+  const [topbarAvatar, setTopbarAvatar] = useState(() => (
+    resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar
+  ));
   const [initialRoute] = useState(readSelectedRoute);
   const [selectedPickup, setSelectedPickup] = useState(() => normalizePlace(initialRoute?.pickup));
   const [selectedDestination, setSelectedDestination] = useState(initialRoute?.destination ?? null);
@@ -190,6 +195,21 @@ export default function LocationSearchPage() {
   const [searchError, setSearchError] = useState('');
   const routeRefreshTimer = useRef(null);
   const routeRequestId = useRef(0);
+
+  useEffect(() => {
+    function syncTopbarAvatar() {
+      setTopbarAvatar(resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar);
+    }
+
+    syncTopbarAvatar();
+    window.addEventListener('storage', syncTopbarAvatar);
+    window.addEventListener('focus', syncTopbarAvatar);
+
+    return () => {
+      window.removeEventListener('storage', syncTopbarAvatar);
+      window.removeEventListener('focus', syncTopbarAvatar);
+    };
+  }, []);
 
   async function resolveCurrentPickupName(position) {
     const [latitude, longitude] = position;
@@ -566,7 +586,7 @@ export default function LocationSearchPage() {
   return (
     <PageShell>
       <main className="location-window">
-        <Topbar actions={<><Link to="/home">ホーム</Link><Link to="/user-info">アカウント</Link><img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
+        <Topbar actions={<><Link to="/home">ホーム</Link><Link to="/messages/driver">メッセージ</Link><Link to="/user-info/profile">アカウント</Link><img className="topbar-avatar" src={topbarAvatar} alt="" /></>} />
 
         <section className="zip-location-main">
           <section className="zip-location-left">
