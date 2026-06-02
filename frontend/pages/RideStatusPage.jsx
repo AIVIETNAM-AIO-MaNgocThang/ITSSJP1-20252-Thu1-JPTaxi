@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { getChatPath } from '../utils/chatSession.js';
+import { fetchDrivingRoute, formatDistance, formatDuration } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
 
 const fallbackRoute = {
@@ -62,7 +63,40 @@ function readSelectedRoute() {
 
 export default function RideStatusPage() {
   const { t } = useLanguage();
-  const [selectedRoute] = useState(readSelectedRoute);
+  const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchDrivingRoute(
+      selectedRoute.pickup.position,
+      selectedRoute.destination.position,
+      { signal: controller.signal },
+    )
+      .then((route) => {
+        setSelectedRoute((current) => {
+          const nextRoute = {
+            ...current,
+            routePath: route.routePath,
+            routeMetrics: {
+              ...current.routeMetrics,
+              distance: formatDistance(route.distance),
+              duration: formatDuration(route.duration, route.distance),
+              distanceMeters: route.distance,
+            },
+          };
+          window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(nextRoute));
+          return nextRoute;
+        });
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          /* Keep the stored route when the routing service is unavailable. */
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedRoute.destination.position, selectedRoute.pickup.position]);
   const routePoints = [
     {
       key: 'pickup',
