@@ -86,6 +86,11 @@ export default function RideStatusPage() {
   const customerAvatar = resolveAssetUrl(customerProfile?.avatarUrl);
   const vehicleLabel = [vehicle.brand, vehicle.color].filter(Boolean).join(' / ') || '車両情報を確認中';
   const vehiclePlate = vehicle.licensePlate || 'ナンバー確認中';
+  const driverPeerId = driver.driverId ?? driver.driver_id;
+  const requestId = assignedRide?.requestId ?? assignedRide?.request_id;
+  const messageLink = Number.isFinite(Number(driverPeerId))
+    ? `/messages/driver?peerId=${driverPeerId}${Number.isFinite(Number(requestId)) ? `&requestId=${requestId}` : ''}`
+    : '/messages/driver';
   const routePoints = [
     {
       key: 'pickup',
@@ -258,8 +263,8 @@ export default function RideStatusPage() {
             </div>
 
             <div className="tracking-actions">
-              <Link className="tracking-call" to="/messages/driver">📞 電話する</Link>
-              <Link className="tracking-message" to="/messages/driver">💬 メッセージ</Link>
+              <Link className="tracking-call" to={messageLink}>📞 電話する</Link>
+              <Link className="tracking-message" to={messageLink}>💬 メッセージ</Link>
             </div>
           </section>
         </section>

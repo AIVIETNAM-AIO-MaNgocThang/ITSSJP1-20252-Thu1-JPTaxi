@@ -83,6 +83,11 @@ export default function DriverRideStatusPage() {
     || driverProfile?.email
     || 'Driver';
   const driverAvatar = resolveAssetUrl(driverProfile?.avatarUrl);
+  const customerPeerId = passenger.customerId ?? passenger.customer_id;
+  const requestId = Number(sessionStorage.getItem('jpTaxiRideRequestId')) || null;
+  const messageLink = Number.isFinite(Number(customerPeerId))
+    ? `/messages/customer?peerId=${customerPeerId}${requestId ? `&requestId=${requestId}` : ''}`
+    : '/messages/customer';
   const driverMapPosition = useMemo(
     () => (driverLocation ? [driverLocation.lat, driverLocation.lng] : selectedRoute.pickup.position),
     [driverLocation, selectedRoute.pickup.position],
@@ -275,7 +280,7 @@ export default function DriverRideStatusPage() {
             </div>
 
             <div className="tracking-actions">
-              <Link className="tracking-call" to="/messages/customer">連絡する</Link>
+              <Link className="tracking-call" to={messageLink}>連絡する</Link>
               <button className="tracking-message" type="button" onClick={requestPayment}>請求書を発行</button>
               <button className="tracking-cancel-ride" type="button" onClick={cancelRideByDriver} disabled={isCancellingRide}>
                 {isCancellingRide ? 'キャンセル中...' : '乗車をキャンセル'}

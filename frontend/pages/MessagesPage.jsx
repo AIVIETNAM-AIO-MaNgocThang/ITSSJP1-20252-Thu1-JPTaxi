@@ -1,38 +1,222 @@
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import {
+  createConversation,
+  listConversationMessages,
+  listConversations,
+  markConversationRead,
+  sendConversationMessage,
+} from '../api/messages.js';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { useChatSocket } from '../hooks/useChatSocket.js';
 import '../styles/app-pages.css';
 
-const conversations = [
-  { initial: '田', name: '田中 ドライバー', time: '14:02', text: 'ありがとうございます。黒色のトヨタ・ヴィオスです。', active: true },
-  { initial: 'サ', name: 'サポートセンター', time: '昨日', text: 'お問い合わせの件につきまして、担当者が確認中です。' },
-];
+const QUICK_REPLIES = ['今どこですか？', '着きました！', '少し遅れます', '了解です'];
+
+function getCurrentRole() {
+  return sessionStorage.getItem('jpTaxiActiveRole') || localStorage.getItem('jpTaxiRole');
+}
+
+function firstChar(name) {
+  return (name || '?').trim().slice(0, 1) || '?';
+}
+
+function formatClock(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+}
 
 export default function MessagesPage() {
   const { audience } = useParams();
-  const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || audience === 'customer';
+  const [searchParams] = useSearchParams();
+  const isDriver = getCurrentRole() === 'driver' || audience === 'customer';
   const homePath = isDriver ? '/driver-home' : '/home';
   const accountPath = isDriver ? '/driver-info/basic' : '/user-info';
   const messagePath = isDriver ? '/messages/customer' : '/messages/driver';
-  const activeChat = isDriver
-    ? { initial: '佐', name: '佐藤 お客様', status: '乗車地点で待機中' }
-    : { initial: '田', name: '田中 ドライバー', status: '走行中 (あと3分で到着)' };
+  const peerIdParam = Number(searchParams.get('peerId'));
+  const requestIdParam = Number(searchParams.get('requestId'));
+  const peerRole = isDriver ? 'customer' : 'driver';
+
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState('');
+  const [loadingConversations, setLoadingConversations] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const viewportRef = useRef(null);
+  const requestedPeerRef = useRef(false);
+
+  const selectedConversation = useMemo(
+    () => conversations.find((c) => c.conversationId === selectedConversationId) || null,
+    [conversations, selectedConversationId],
+  );
+
+  const refreshConversations = useCallback(async () => {
+    setLoadingConversations(true);
+    try {
+      const data = await listConversations();
+      const items = data?.items || [];
+      setConversations(items);
+      if (!selectedConversationId && items.length > 0) {
+        setSelectedConversationId(items[0].conversationId);
+      }
+      return items;
+    } catch (err) {
+      setError(err.message || '会話の取得に失敗しました。');
+      return [];
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, [selectedConversationId]);
+
+  const loadMessages = useCallback(async (conversationId) => {
+    if (!conversationId) {
+      setMessages([]);
+      return;
+    }
+    setLoadingMessages(true);
+    try {
+      const data = await listConversationMessages(conversationId, { limit: 50 });
+      setMessages(data?.items || []);
+      await markConversationRead(conversationId);
+      setConversations((prev) => prev.map((item) => (
+        item.conversationId === conversationId ? { ...item, unreadCount: 0 } : item
+      )));
+    } catch (err) {
+      setError(err.message || 'メッセージの取得に失敗しました。');
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshConversations();
+  }, [refreshConversations]);
+
+  useEffect(() => {
+    if (!Number.isFinite(peerIdParam) || peerIdParam <= 0) return;
+    if (requestedPeerRef.current) return;
+    requestedPeerRef.current = true;
+
+    async function ensureConversation() {
+      try {
+        const detail = await createConversation({
+          peerRole,
+          peerId: peerIdParam,
+          ...(Number.isFinite(requestIdParam) && requestIdParam > 0 ? { requestId: requestIdParam } : {}),
+        });
+        if (detail?.conversationId) {
+          setSelectedConversationId(detail.conversationId);
+        }
+        await refreshConversations();
+      } catch (err) {
+        setError(err.message || '会話の作成に失敗しました。');
+      }
+    }
+
+    ensureConversation();
+  }, [peerIdParam, peerRole, refreshConversations, requestIdParam]);
+
+  useEffect(() => {
+    loadMessages(selectedConversationId);
+  }, [selectedConversationId, loadMessages]);
+
+  useEffect(() => {
+    if (!viewportRef.current) return;
+    viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+  }, [messages]);
+
+  const handleNewMessage = useCallback((payload) => {
+    const incomingConversationId = payload?.conversationId;
+    const incomingMessage = payload?.message;
+    if (!incomingConversationId || !incomingMessage) return;
+
+    setConversations((prev) => prev.map((item) => {
+      if (item.conversationId !== incomingConversationId) return item;
+      return {
+        ...item,
+        lastMessage: incomingMessage,
+        updatedAt: incomingMessage.sentAt,
+        unreadCount: incomingConversationId === selectedConversationId
+          ? 0
+          : (item.unreadCount || 0) + 1,
+      };
+    }));
+
+    if (incomingConversationId === selectedConversationId) {
+      setMessages((prev) => {
+        if (prev.some((msg) => msg.messageId === incomingMessage.messageId)) return prev;
+        return [...prev, incomingMessage];
+      });
+      markConversationRead(selectedConversationId).catch(() => {});
+    }
+  }, [selectedConversationId]);
+
+  useChatSocket({
+    conversationId: selectedConversationId,
+    onNewMessage: handleNewMessage,
+  });
+
+  async function handleSendMessage(event) {
+    event.preventDefault();
+    const body = draft.trim();
+    if (!body || !selectedConversationId || sending) return;
+
+    setSending(true);
+    try {
+      const result = await sendConversationMessage(selectedConversationId, body);
+      const message = result?.data;
+      if (message) {
+        setMessages((prev) => [...prev, message]);
+        setConversations((prev) => prev.map((item) => (
+          item.conversationId === selectedConversationId
+            ? { ...item, lastMessage: message, updatedAt: message.sentAt }
+            : item
+        )));
+      }
+      setDraft('');
+    } catch (err) {
+      setError(err.message || '送信に失敗しました。');
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <PageShell>
       <main className="messages-window">
         <Topbar brandTo={homePath} actions={<><Link to={homePath}>ホーム</Link><Link to={messagePath} className="active-header-link">メッセージ</Link><Link to={accountPath}>アカウント</Link></>} />
+        {error ? <p className="messages-error">{error}</p> : null}
 
         <section className="zip-chat-container">
           <aside className="zip-chat-sidebar">
             <h1>メッセージ</h1>
             <div className="zip-chat-list">
+              {!loadingConversations && conversations.length === 0 ? (
+                <p className="messages-empty">会話がありません</p>
+              ) : null}
               {conversations.map((item) => (
-                <button className={`zip-chat-item ${item.active ? 'active' : ''}`} type="button" key={item.name}>
-                  <span className="zip-avatar">{item.initial}</span>
+                <button
+                  className={`zip-chat-item ${item.conversationId === selectedConversationId ? 'active' : ''}`}
+                  type="button"
+                  key={item.conversationId}
+                  onClick={() => setSelectedConversationId(item.conversationId)}
+                >
+                  <span className="zip-avatar">{firstChar(item.peer?.name)}</span>
                   <span className="zip-chat-info">
-                    <span><strong>{item.name}</strong><small>{item.time}</small></span>
-                    <em>{item.text}</em>
+                    <span>
+                      <strong>{item.peer?.name || 'ユーザー'}</strong>
+                      <small>{formatClock(item.lastMessage?.sentAt || item.updatedAt)}</small>
+                    </span>
+                    <em>
+                      {item.lastMessage?.body || 'メッセージはまだありません'}
+                      {item.unreadCount > 0 ? ` (${item.unreadCount})` : ''}
+                    </em>
                   </span>
                 </button>
               ))}
@@ -40,30 +224,47 @@ export default function MessagesPage() {
           </aside>
 
           <section className="zip-main-chat">
-            <header className="zip-chat-header">
-              <div>
-                <span className="zip-avatar small">{activeChat.initial}</span>
-                <span><strong>{activeChat.name}</strong><small>{activeChat.status}</small></span>
-              </div>
-              <button type="button" aria-label="電話">📞</button>
-            </header>
+            {!selectedConversation ? (
+              <div className="zip-main-chat-empty">左側の会話を選択してください。</div>
+            ) : (
+              <>
+                <header className="zip-chat-header">
+                  <div>
+                    <span className="zip-avatar small">{firstChar(selectedConversation.peer?.name)}</span>
+                    <span><strong>{selectedConversation.peer?.name || 'ユーザー'}</strong><small>オンライン</small></span>
+                  </div>
+                </header>
 
-            <div className="zip-messages-viewport">
-              <p className="msg received">こんにちは、田中です。現在向かっています。<span>14:00</span></p>
-              <p className="msg sent">承知いたしました。ホテルのロビー入り口で待っています。<span>14:01</span></p>
-              <p className="msg received">ありがとうございます。黒色のトヨタ・ヴィオス、ナンバー「30A-123.45」です。まもなく到着します。<span>14:02</span></p>
-            </div>
+                <div className="zip-messages-viewport" ref={viewportRef}>
+                  {!loadingMessages && messages.length === 0 ? (
+                    <p className="messages-empty">メッセージはまだありません</p>
+                  ) : null}
+                  {messages.map((message) => (
+                    <p className={`msg ${message.isMine ? 'sent' : 'received'}`} key={message.messageId}>
+                      {message.body}
+                      <span>{formatClock(message.sentAt)}</span>
+                    </p>
+                  ))}
+                </div>
 
-            <footer className="zip-input-area">
-              <div className="quick-replies">
-                {['今どこですか？', '着きました！', '少し遅れます', '了解です'].map((reply) => <button type="button" key={reply}>{reply}</button>)}
-              </div>
-              <div className="zip-input-box">
-                <span>📎</span>
-                <input type="text" placeholder="メッセージを入力..." />
-                <button type="button">➤</button>
-              </div>
-            </footer>
+                <footer className="zip-input-area">
+                  <div className="quick-replies">
+                    {QUICK_REPLIES.map((reply) => (
+                      <button type="button" key={reply} onClick={() => setDraft(reply)}>{reply}</button>
+                    ))}
+                  </div>
+                  <form className="zip-input-box" onSubmit={handleSendMessage}>
+                    <input
+                      type="text"
+                      placeholder="メッセージを入力..."
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                    />
+                    <button type="submit" disabled={sending || !draft.trim()}>➤</button>
+                  </form>
+                </footer>
+              </>
+            )}
           </section>
         </section>
       </main>

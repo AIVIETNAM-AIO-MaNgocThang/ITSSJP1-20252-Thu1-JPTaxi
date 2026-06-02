@@ -2755,6 +2755,21 @@ button.zip-fast-button {
   border-radius: 12px;
 }
 
+.messages-error {
+  margin: 0;
+  padding: 10px 24px;
+  color: #991b1b;
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+}
+
+.messages-empty {
+  margin: 0;
+  padding: 16px 20px;
+  color: #64748b;
+  font-size: 14px;
+}
+
 .zip-chat-info {
   display: grid;
   min-width: 0;
@@ -2787,6 +2802,14 @@ button.zip-fast-button {
   flex: 1;
   flex-direction: column;
   background: #f8fafc;
+}
+
+.zip-main-chat-empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  padding: 24px;
+  color: #64748b;
 }
 
 .zip-chat-header {
@@ -2931,6 +2954,11 @@ button.zip-fast-button {
   background: #047857;
   border: 0;
   border-radius: 14px;
+}
+
+.zip-input-box button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .invoice-screen {

@@ -20,6 +20,8 @@ import { DriverPayout } from './entities/driver-payout.entity';
 import { SearchHistory } from './entities/search-history.entity';
 import { UserLink } from './entities/user-link.entity';
 import { AuditLog } from './entities/audit-log.entity';
+import { Conversation } from './entities/conversation.entity';
+import { Message } from './entities/message.entity';
 import { AuthModule } from './modules/auth/auth.module';
 import { RideModule } from './modules/ride/ride.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -28,6 +30,7 @@ import { DriversModule } from './modules/drivers/drivers.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { RatingsModule } from './modules/ratings/ratings.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { MessagesModule } from './modules/messages/messages.module';
 
 @Module({
   imports: [
@@ -67,6 +70,8 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
           SearchHistory,
           UserLink,
           AuditLog,
+          Conversation,
+          Message,
         ],
         synchronize: false,
         logging: false,
@@ -80,6 +85,7 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
     UploadsModule,
     RatingsModule,
     InvoicesModule,
+    MessagesModule,
   ],
 })
 export class AppModule {}
