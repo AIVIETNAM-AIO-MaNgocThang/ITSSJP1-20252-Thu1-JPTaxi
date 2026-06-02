@@ -93,7 +93,8 @@ a {
   line-height: 1;
 }
 
-.header-actions {
+.header-actions,
+.topbar-actions {
   display: inline-flex;
   align-items: center;
   gap: 38px;
@@ -102,7 +103,8 @@ a {
   font-weight: 600;
 }
 
-.header-actions a {
+.header-actions a,
+.topbar-actions a {
   color: #334155;
   text-decoration: none;
 }
