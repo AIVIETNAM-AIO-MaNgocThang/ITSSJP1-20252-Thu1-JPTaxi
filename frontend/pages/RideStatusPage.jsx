@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { resolveAssetUrl } from '../api/accounts.js';
 import { getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
@@ -8,6 +9,9 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { getChatPath } from '../utils/chatSession.js';
 import { fetchDrivingRoute, formatDistance, formatDuration } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
+
+const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
+const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
 
 const fallbackRoute = {
   destination: {
@@ -72,6 +76,9 @@ export default function RideStatusPage() {
   const { t } = useLanguage();
   const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
   const [driverPosition, setDriverPosition] = useState(() => parseDriverPosition(readSelectedRoute().driver) || null);
+  const [topbarAvatar, setTopbarAvatar] = useState(() => (
+    resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar
+  ));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,22 +114,45 @@ export default function RideStatusPage() {
   }, [selectedRoute.destination.position, selectedRoute.pickup.position]);
 
   useEffect(() => {
+    function syncTopbarAvatar() {
+      setTopbarAvatar(resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar);
+    }
+
+    syncTopbarAvatar();
+    window.addEventListener('storage', syncTopbarAvatar);
+    window.addEventListener('focus', syncTopbarAvatar);
+
+    return () => {
+      window.removeEventListener('storage', syncTopbarAvatar);
+      window.removeEventListener('focus', syncTopbarAvatar);
+    };
+  }, []);
+
+  useEffect(() => {
     let ignore = false;
 
     async function syncDriverPosition() {
       try {
         const activeRide = await getActiveRide();
         if (ignore) return;
+        const activeDriver = activeRide?.data?.driver;
+        const activeVehicle = activeRide?.data?.vehicle;
         const nextDriverPosition = parseDriverPosition(activeRide?.data?.driver);
-        if (!nextDriverPosition) return;
+        if (!nextDriverPosition && !activeDriver && !activeVehicle) return;
 
-        setDriverPosition(nextDriverPosition);
+        if (nextDriverPosition) {
+          setDriverPosition(nextDriverPosition);
+        }
         setSelectedRoute((current) => {
           const nextRoute = {
             ...current,
             driver: {
               ...(current.driver || {}),
-              ...(activeRide.data.driver || {}),
+              ...(activeDriver || {}),
+            },
+            vehicle: {
+              ...(current.vehicle || {}),
+              ...(activeVehicle || {}),
             },
           };
           window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(nextRoute));
@@ -159,6 +189,12 @@ export default function RideStatusPage() {
       type: 'destination',
     },
   ];
+  const driver = selectedRoute.driver || {};
+  const vehicle = selectedRoute.vehicle || {};
+  const driverName = driver.name || t('driverName');
+  const driverAvatar = resolveAssetUrl(driver.avatarUrl) || driverFallbackAvatar;
+  const driverCar = [vehicle.brand, vehicle.color].filter(Boolean).join(' ') || t('driverCar');
+  const licensePlate = vehicle.licensePlate || '30A-123.45';
 
   return (
     <PageShell>
@@ -168,8 +204,9 @@ export default function RideStatusPage() {
           actions={(
             <>
               <Link to="/home">{t('navHome')}</Link>
+              <Link to={getChatPath('driver')}>{t('navMessages')}</Link>
               <Link to="/user-info/profile">{t('navAccount')}</Link>
-              <img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" />
+              <img className="topbar-avatar" src={topbarAvatar} alt="" />
             </>
           )}
         />
@@ -199,11 +236,11 @@ export default function RideStatusPage() {
             </div>
 
             <div className="tracking-driver-row">
-              <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80" alt="" />
+              <img src={driverAvatar} alt={driverName} />
               <div>
-                <strong>{t('driverName')}</strong>
-                <small>{t('driverCar')}</small>
-                <em>30A-123.45</em>
+                <strong>{driverName}</strong>
+                <small>{driverCar}</small>
+                <em>{licensePlate}</em>
               </div>
             </div>
 
