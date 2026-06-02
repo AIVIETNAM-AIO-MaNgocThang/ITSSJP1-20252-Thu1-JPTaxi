@@ -3,9 +3,13 @@
 **/.env
 **/.env.local
 *.log
+*.tsbuildinfo
+/github-main-updated/
 backend/node_modules/
 backend/dist/
 backend/uploads/
 frontend/node_modules/
+frontend/dist/
+build/
 package/
 **/target/

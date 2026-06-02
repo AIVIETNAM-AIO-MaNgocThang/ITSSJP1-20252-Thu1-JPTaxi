@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getActiveDriverRide, getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
@@ -7,6 +8,7 @@ import '../styles/app-pages.css';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { buildSelectedRoute, geocodePlace, getCurrentPosition, reverseGeocodePosition } from '../utils/routePlanner.js';
 import { readSavedPlaces } from '../utils/savedPlaces.js';
+import { getRideContinuationPath, syncActiveRideSession } from '../utils/activeRideNavigation.js';
 
 const userHome = {
   brandTo: '/home',
@@ -65,6 +67,7 @@ export default function HomeExperience({ mode = 'user' }) {
   const isUserMode = mode !== 'driver';
   const [savedPlaces] = useState(readSavedPlaces);
   const [quickLoading, setQuickLoading] = useState(null);
+  const [rideContinuationPath, setRideContinuationPath] = useState(null);
 
   const quickItems = isUserMode
     ? Object.entries(savedPlaces).map(([key, place]) => ({
@@ -73,6 +76,40 @@ export default function HomeExperience({ mode = 'user' }) {
         title: key === 'work' ? t('quickWork') : key === 'home' ? t('quickHome') : t('quickFavorite'),
       }))
     : content.quickItems;
+
+  useEffect(() => {
+    let ignored = false;
+    const role = isUserMode ? 'customer' : 'driver';
+    const loadActiveRide = isUserMode ? getActiveRide : getActiveDriverRide;
+
+    loadActiveRide()
+      .then((activeRide) => {
+        if (ignored) return;
+        syncActiveRideSession(activeRide);
+        setRideContinuationPath(getRideContinuationPath(role, activeRide));
+      })
+      .catch(() => {
+        if (!ignored) setRideContinuationPath(null);
+      });
+
+    return () => {
+      ignored = true;
+    };
+  }, [isUserMode]);
+
+  async function openRideAwarePath(event, fallbackPath) {
+    event.preventDefault();
+    const role = isUserMode ? 'customer' : 'driver';
+    const loadActiveRide = isUserMode ? getActiveRide : getActiveDriverRide;
+
+    try {
+      const activeRide = await loadActiveRide();
+      syncActiveRideSession(activeRide);
+      navigate(getRideContinuationPath(role, activeRide) || fallbackPath);
+    } catch {
+      navigate(rideContinuationPath || fallbackPath);
+    }
+  }
 
   async function openQuickPlace(item) {
     if (!isUserMode) return;
@@ -143,7 +180,7 @@ export default function HomeExperience({ mode = 'user' }) {
             <h1>{isUserMode ? t('homeGreeting') : content.heading}</h1>
             <p className="zip-home-question">{isUserMode ? t('homeQuestion') : content.question}</p>
 
-            <Link className="zip-search-card" to={content.searchTo}>
+            <Link className="zip-search-card" to={rideContinuationPath || content.searchTo} onClick={(event) => openRideAwarePath(event, content.searchTo)}>
               <span className="zip-search-icon" aria-hidden="true">📍</span>
               <span>
                 <strong>{isUserMode ? t('homeSearchTitle') : content.searchTitle}</strong>
@@ -183,7 +220,7 @@ export default function HomeExperience({ mode = 'user' }) {
               })}
             </div>
 
-            <Link className="zip-fast-button" to={content.fastTo}>
+            <Link className="zip-fast-button" to={rideContinuationPath || content.fastTo} onClick={(event) => openRideAwarePath(event, content.fastTo)}>
               <span aria-hidden="true">🚖</span>
               <span><strong>{isUserMode ? t('callTaxiNow') : content.fastTitle}</strong><small>{isUserMode ? t('bookNow') : content.fastCopy}</small></span>
             </Link>

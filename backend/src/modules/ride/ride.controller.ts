@@ -19,7 +19,6 @@ import type { JwtValidatedUser } from '../auth/jwt.strategy';
 
 type AuthedRequest = Request & { user: JwtValidatedUser };
 import { RouteDto } from './dto/route.dto';
-import { SelectPickupDto } from './dto/select-pickup.dto';
 
 @Controller()
 export class RideController {
@@ -70,6 +69,72 @@ export class RideController {
       throw new ForbiddenException('Chỉ có khách hàng mới có thể lấy thông tin chuyến đi của mình.');
     }
     return this.rideService.getActiveRide(req.user.id);
+  }
+
+  @Get('ride/driver/pending')
+  @UseGuards(AuthGuard('jwt'))
+  getPendingRideForDriver(@Req() req: AuthedRequest) {
+    if (req.user.role !== 'driver') {
+      throw new ForbiddenException('ドライバーのみ配車リクエストを確認できます。');
+    }
+    return this.rideService.getPendingRequestForDriver(req.user.id);
+  }
+
+  @Get('ride/driver/active')
+  @UseGuards(AuthGuard('jwt'))
+  getActiveRideForDriver(@Req() req: AuthedRequest) {
+    if (req.user.role !== 'driver') {
+      throw new ForbiddenException('Only drivers can get their active ride.');
+    }
+    return this.rideService.getActiveRideForDriver(req.user.id);
+  }
+
+  @Post('ride/driver/location')
+  @UseGuards(AuthGuard('jwt'))
+  updateDriverLocation(
+    @Req() req: AuthedRequest,
+    @Body() body: { lat: number; lng: number },
+  ) {
+    if (req.user.role !== 'driver') {
+      throw new ForbiddenException('Only drivers can update their location.');
+    }
+    return this.rideService.updateDriverLocation(req.user.id, Number(body.lat), Number(body.lng));
+  }
+
+  @Post('ride/driver/accept/:requestId')
+  @UseGuards(AuthGuard('jwt'))
+  acceptRideRequest(
+    @Req() req: AuthedRequest,
+    @Param('requestId', ParseIntPipe) requestId: number,
+  ) {
+    if (req.user.role !== 'driver') {
+      throw new ForbiddenException('ドライバーのみ配車リクエストを承認できます。');
+    }
+    return this.rideService.acceptRequest(req.user.id, requestId);
+  }
+
+  @Post('ride/driver/request-payment/:tripId')
+  @UseGuards(AuthGuard('jwt'))
+  requestPaymentFromDriver(
+    @Req() req: AuthedRequest,
+    @Param('tripId', ParseIntPipe) tripId: number,
+  ) {
+    if (req.user.role !== 'driver') {
+      throw new ForbiddenException('ドライバーのみ請求書を発行できます。');
+    }
+    return this.rideService.requestPaymentFromDriver(req.user.id, tripId);
+  }
+
+  @Post('ride/driver/cancel/:tripId')
+  @UseGuards(AuthGuard('jwt'))
+  cancelAcceptedRideByDriver(
+    @Req() req: AuthedRequest,
+    @Param('tripId', ParseIntPipe) tripId: number,
+  ) {
+    if (req.user.role !== 'driver') {
+      throw new ForbiddenException('ドライバーのみ乗車をキャンセルできます。');
+    }
+    return this.rideService.cancelAcceptedRideByDriver(req.user.id, tripId);
   }
 
   /**
@@ -149,22 +214,4 @@ export class RideController {
     // Simple placeholder - có thể thay bằng thư viện polyline sau
     return 'mock_polyline_' + points.length;
   }
-
-  /**
-   *Sprint 3_ID13: Triển khai Logic Chọn / xác nhận vị trí điểm đón
-   * POST /ride/pickup/select
-   */
-  @Post('ride/pickup/select')
-  @UseGuards(AuthGuard('jwt'))
-  async selectPickupLocation(
-    @Req() req: AuthedRequest,
-    @Body() dto: SelectPickupDto,
-  ) {
-    if (req.user.role !== 'customer') {
-      throw new ForbiddenException('受け取り場所はお客様のみが選択できます。'); //Chỉ Khách hàng mới được chọn điểm đón
-    }
-    return this.rideService.selectPickupLocation(req.user.id, dto);
-  }
 }
-
-

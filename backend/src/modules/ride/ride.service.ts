@@ -12,56 +12,31 @@ import { Trip, TripStatusType } from '../../entities/trip.entity';
 import { Customer } from '../../entities/customer.entity';
 import { PaymentTransaction, PaymentStatusType } from '../../entities/payment-transaction.entity';
 import { DriverPayout, PayoutStatusType } from '../../entities/driver-payout.entity';
+import { DriverLocationHistory } from '../../entities/driver-location-history.entity';
+import { Driver } from '../../entities/driver.entity';
+import { Vehicle } from '../../entities/vehicle.entity';
+import { RideRequestDispatch, DispatchStatusType } from '../../entities/ride-request-dispatch.entity';
 import { CreateRideRequestDto } from './dto/create-ride-request.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { RideGateway } from './ride.gateway';
-import { SelectPickupDto } from './dto/select-pickup.dto';
+import { calculateRideFare } from '../../common/ride-fare.util';
+
+const DISPATCH_RADIUS_KM = 2;
+const ENFORCE_DISPATCH_RADIUS_ON_ACCEPT = false;
+const PENDING_REQUEST_FRESHNESS_MINUTES = 24 * 60;
+
+function distanceKm(fromLat: number, fromLng: number, toLat: number, toLng: number) {
+  return (
+    Math.sqrt(
+      Math.pow(toLat - fromLat, 2) + Math.pow(toLng - fromLng, 2),
+    ) * 111
+  );
+}
 
 @Injectable()
 export class RideService {
-    /**
-   *Sprint3_ID13: Chọn / Cập nhật vị trí điểm đón (cho phép chọn khác vị trí hiện tại)
-   */
-  async selectPickupLocation(customerId: number, dto: SelectPickupDto) {
-    const rideRequest = await this.rideRequestRepo.findOne({
-      where: { 
-        requestId: dto.rideRequestId, 
-        customerId 
-      },
-    });
+  private readonly paymentRequests = new Map<number, number>();
 
-    if (!rideRequest) {
-      throw new NotFoundException('乗車依頼が見つかりません。'); 
-      // Không tìm thấy yêu cầu đặt xe
-    }
-
-    if (rideRequest.status !== RideRequestStatusType.pending && 
-        rideRequest.status !== RideRequestStatusType.searching) {
-      throw new BadRequestException('現在の状態では受け取り場所を変更できません。'); 
-      // Không thể thay đổi điểm đón ở trạng thái hiện tại
-    }
-
-    // Cập nhật vị trí đón mới
-    rideRequest.pickupLat = dto.pickupLat.toString();
-    rideRequest.pickupLng = dto.pickupLng.toString();
-    
-    if (dto.pickupAddress) {
-      rideRequest.pickupAddress = dto.pickupAddress;
-    }
-
-    const updatedRequest = await this.rideRequestRepo.save(rideRequest);
-
-    return {
-      success: true,
-      message: '受け取り場所を更新しました。', 
-      // Đã cập nhật vị trí điểm đón thành công
-      pickupLocation: {
-        lat: parseFloat(updatedRequest.pickupLat),
-        lng: parseFloat(updatedRequest.pickupLng),
-        address: updatedRequest.pickupAddress,
-      },
-    };
-  }
   constructor(
     @InjectRepository(RideRequest)
     private readonly rideRequestRepo: Repository<RideRequest>,
@@ -69,6 +44,14 @@ export class RideService {
     private readonly tripRepo: Repository<Trip>,
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(DriverLocationHistory)
+    private readonly driverLocationRepo: Repository<DriverLocationHistory>,
+    @InjectRepository(Driver)
+    private readonly driverRepo: Repository<Driver>,
+    @InjectRepository(Vehicle)
+    private readonly vehicleRepo: Repository<Vehicle>,
+    @InjectRepository(RideRequestDispatch)
+    private readonly dispatchRepo: Repository<RideRequestDispatch>,
     @InjectRepository(PaymentTransaction)
     private readonly paymentTransactionRepo: Repository<PaymentTransaction>,
     @InjectRepository(DriverPayout)
@@ -80,7 +63,19 @@ export class RideService {
    * Tạo yêu cầu đặt xe mới
    */
   async createRequest(customerId: number, dto: CreateRideRequestDto): Promise<RideRequest> {
-    // 1. Kiểm tra xem khách hàng có yêu cầu đặt xe nào đang hoạt động không
+    // 1. Kiểm tra xem khách hàng có chuyến đi nào đang diễn ra (ongoing) không
+    const activeTrip = await this.tripRepo
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
+      .where('rideRequest.customerId = :customerId', { customerId })
+      .andWhere('trip.status = :status', { status: TripStatusType.ongoing })
+      .getOne();
+
+    if (activeTrip) {
+      throw new BadRequestException('Please complete or cancel the active ride before booking another ride.');
+    }
+
+    // 2. Dọn các yêu cầu cũ chưa thành chuyến để lần đặt mới không bị kẹt ở bill-confirm.
     const activeRequest = await this.rideRequestRepo.findOne({
       where: {
         customerId,
@@ -90,22 +85,11 @@ export class RideService {
           RideRequestStatusType.assigned,
         ]),
       },
+      order: { requestTime: 'DESC' },
     });
 
     if (activeRequest) {
-      throw new BadRequestException('Bạn đang có một yêu cầu đặt xe chưa hoàn thành.');
-    }
-
-    // 2. Kiểm tra xem khách hàng có chuyến đi nào đang diễn ra (ongoing) không
-    const activeTrip = await this.tripRepo
-      .createQueryBuilder('trip')
-      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
-      .where('rideRequest.customerId = :customerId', { customerId })
-      .andWhere('trip.status = :status', { status: TripStatusType.ongoing })
-      .getOne();
-
-    if (activeTrip) {
-      throw new BadRequestException('Bạn đang trong một chuyến đi chưa kết thúc.');
+      throw new BadRequestException('Please cancel the active ride request before booking another ride.');
     }
 
     // 3. Khởi tạo yêu cầu mới
@@ -122,6 +106,9 @@ export class RideService {
       actualPassengerName: dto.actualPassengerName || null,
       actualPassengerPhone: dto.actualPassengerPhone || null,
       noteToDriver: dto.noteToDriver || null,
+      estimatedFareVnd: dto.estimatedFareVnd ?? null,
+      estimatedFareJpy: dto.estimatedFareJpy ?? null,
+      rawFareVnd: dto.rawFareVnd ?? null,
       requestTime: new Date(),
     });
 
@@ -144,7 +131,7 @@ export class RideService {
       },
     });
 
-    if (activeRequest) {
+    if (activeRequest && activeRequest.status !== RideRequestStatusType.assigned) {
       return { type: 'request', data: activeRequest };
     }
 
@@ -157,10 +144,524 @@ export class RideService {
       .getOne();
 
     if (activeTrip) {
-      return { type: 'trip', data: activeTrip };
+      const [driver, vehicle, latestLocation] = await Promise.all([
+        this.driverRepo.findOne({ where: { driverId: activeTrip.driverId } }),
+        this.vehicleRepo.findOne({ where: { driverId: activeTrip.driverId } }),
+        this.driverLocationRepo.findOne({
+          where: { driverId: activeTrip.driverId },
+          order: { recordedAt: 'DESC' },
+        }),
+      ]);
+
+      return {
+        type: 'trip',
+        data: {
+          ...activeTrip,
+          driver: driver
+            ? {
+                driverId: driver.driverId,
+                name: [driver.lastName, driver.firstName].filter(Boolean).join(' '),
+                phone: driver.phone,
+                avatarUrl: driver.avatarUrl,
+                japaneseLevel: driver.driverJapaneseLevel,
+                location: latestLocation
+                  ? {
+                      latitude: Number(latestLocation.latitude),
+                      longitude: Number(latestLocation.longitude),
+                      recordedAt: latestLocation.recordedAt,
+                    }
+                  : null,
+              }
+            : null,
+          vehicle: vehicle
+            ? {
+                vehicleId: vehicle.vehicleId,
+                brand: vehicle.brand,
+                color: vehicle.color,
+                licensePlate: vehicle.licensePlate,
+                vehicleType: vehicle.vehicleType,
+                vehiclePhotoUrl: vehicle.vehiclePhotoUrl,
+              }
+            : null,
+        },
+        paymentRequested: this.isPaymentRequested(activeTrip.tripId),
+      };
+    }
+
+    if (activeRequest) {
+      return { type: 'request', data: activeRequest };
     }
 
     return null;
+  }
+
+  private isPaymentRequested(tripId: number): boolean {
+    return this.paymentRequests.has(tripId);
+  }
+
+  async getActiveRideForDriver(driverId: number): Promise<any> {
+    const activeTrip = await this.tripRepo
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
+      .where('trip.driver_id = :driverId', { driverId })
+      .andWhere('trip.status = :status', { status: TripStatusType.ongoing })
+      .getOne();
+
+    if (!activeTrip) return null;
+
+    const customer = await this.customerRepo.findOne({
+      where: { customerId: activeTrip.rideRequest.customerId },
+    });
+
+    return {
+      type: 'trip',
+      data: {
+        ...activeTrip,
+        passenger: customer
+          ? {
+              customerId: customer.customerId,
+              name: [customer.lastName, customer.firstName].filter(Boolean).join(' '),
+              phone: customer.phone,
+              avatarUrl: customer.avatarUrl,
+            }
+          : null,
+      },
+      paymentRequested: this.isPaymentRequested(activeTrip.tripId),
+    };
+  }
+
+  private mapPendingRequestRow(row: Record<string, string | number | Date | null>) {
+    return {
+      requestId: Number(row.requestId),
+      customerId: Number(row.customerId),
+      pickupAddress: String(row.pickupAddress ?? ''),
+      pickupLat: Number(row.pickupLat),
+      pickupLng: Number(row.pickupLng),
+      dropoffAddress: String(row.dropoffAddress ?? ''),
+      dropoffLat: Number(row.dropoffLat),
+      dropoffLng: Number(row.dropoffLng),
+      vehicleType: String(row.vehicleType ?? ''),
+      actualPassengerName: row.actualPassengerName ? String(row.actualPassengerName) : null,
+      actualPassengerPhone: row.actualPassengerPhone ? String(row.actualPassengerPhone) : null,
+      noteToDriver: row.noteToDriver ? String(row.noteToDriver) : null,
+      requestTime: row.requestTime,
+      distanceKm: row.distanceKm != null ? Math.round(Number(row.distanceKm) * 1000) / 1000 : null,
+      customer: {
+        name: [row.customerLastName, row.customerFirstName].filter(Boolean).join(' '),
+        phone: String(row.customerPhone ?? ''),
+        avatarUrl: row.customerAvatarUrl ? String(row.customerAvatarUrl) : null,
+      },
+    };
+  }
+
+  private pendingRequestQuery(driverId?: number) {
+    const freshSince = new Date(Date.now() - PENDING_REQUEST_FRESHNESS_MINUTES * 60 * 1000);
+    const query = this.rideRequestRepo
+      .createQueryBuilder('rr')
+      .innerJoin(Customer, 'c', 'c.customer_id = rr.customer_id')
+      .select([
+        'rr.request_id AS "requestId"',
+        'rr.customer_id AS "customerId"',
+        'rr.pickup_address AS "pickupAddress"',
+        'rr.pickup_lat AS "pickupLat"',
+        'rr.pickup_lng AS "pickupLng"',
+        'rr.dropoff_address AS "dropoffAddress"',
+        'rr.dropoff_lat AS "dropoffLat"',
+        'rr.dropoff_lng AS "dropoffLng"',
+        'rr.vehicle_type AS "vehicleType"',
+        'rr.actual_passenger_name AS "actualPassengerName"',
+        'rr.actual_passenger_phone AS "actualPassengerPhone"',
+        'rr.note_to_driver AS "noteToDriver"',
+        'rr.request_time AS "requestTime"',
+        'c.first_name AS "customerFirstName"',
+        'c.last_name AS "customerLastName"',
+        'c.phone AS "customerPhone"',
+        'c.avatar_url AS "customerAvatarUrl"',
+      ])
+      .where('rr.status = :status', { status: RideRequestStatusType.searching })
+      .andWhere('rr.request_time >= :freshSince', { freshSince })
+      .orderBy('rr.request_time', 'DESC')
+      .limit(1);
+
+    if (driverId) {
+      query.andWhere(
+        `NOT EXISTS (
+          SELECT 1
+          FROM ride_request_dispatch rrd
+          WHERE rrd.request_id = rr.request_id
+            AND rrd.driver_id = :excludedDriverId
+            AND rrd.status IN (:...excludedDispatchStatuses)
+        )`,
+        {
+          excludedDriverId: driverId,
+          excludedDispatchStatuses: [DispatchStatusType.accepted, DispatchStatusType.rejected],
+        },
+      );
+    }
+
+    return query;
+  }
+
+  private async getFallbackPendingRequest(
+    distanceSql?: string,
+    parameters: Record<string, number | Date> = {},
+    driverId?: number,
+  ) {
+    const query = this.pendingRequestQuery(driverId);
+    if (distanceSql) {
+      query.addSelect(`${distanceSql} AS "distanceKm"`).setParameters(parameters);
+    }
+
+    const row = await query.getRawOne<Record<string, string | number | Date | null>>();
+    return row ? this.mapPendingRequestRow(row) : null;
+  }
+
+  async getPendingRequestForDriver(driverId: number): Promise<any> {
+    const latestLocation = await this.driverLocationRepo.findOne({
+      where: { driverId },
+      order: { recordedAt: 'DESC' },
+    });
+
+    if (!latestLocation) {
+      const request = await this.getFallbackPendingRequest(undefined, {}, driverId);
+      if (request) {
+        return {
+          radiusKm: DISPATCH_RADIUS_KM,
+          driverLocation: null,
+          request,
+        };
+      }
+
+      return {
+        request: null,
+        radiusKm: DISPATCH_RADIUS_KM,
+        message: 'ドライバー位置情報がないため、近くの配車を検索できません。',
+      };
+    }
+
+    const driverLat = Number(latestLocation.latitude);
+    const driverLng = Number(latestLocation.longitude);
+    const distanceSql = `(
+      6371.0088 * acos(
+        LEAST(1.0::double precision, GREATEST(-1.0::double precision,
+          cos(radians(:driverLat::double precision))
+          * cos(radians(rr.pickup_lat::double precision))
+          * cos(radians(rr.pickup_lng::double precision) - radians(:driverLng::double precision))
+          + sin(radians(:driverLat::double precision))
+          * sin(radians(rr.pickup_lat::double precision))
+        ))
+      )
+    )`;
+
+    const row = await this.rideRequestRepo
+      .createQueryBuilder('rr')
+      .innerJoin(Customer, 'c', 'c.customer_id = rr.customer_id')
+      .select([
+        'rr.request_id AS "requestId"',
+        'rr.customer_id AS "customerId"',
+        'rr.pickup_address AS "pickupAddress"',
+        'rr.pickup_lat AS "pickupLat"',
+        'rr.pickup_lng AS "pickupLng"',
+        'rr.dropoff_address AS "dropoffAddress"',
+        'rr.dropoff_lat AS "dropoffLat"',
+        'rr.dropoff_lng AS "dropoffLng"',
+        'rr.vehicle_type AS "vehicleType"',
+        'rr.actual_passenger_name AS "actualPassengerName"',
+        'rr.actual_passenger_phone AS "actualPassengerPhone"',
+        'rr.note_to_driver AS "noteToDriver"',
+        'rr.request_time AS "requestTime"',
+        'c.first_name AS "customerFirstName"',
+        'c.last_name AS "customerLastName"',
+        'c.phone AS "customerPhone"',
+        'c.avatar_url AS "customerAvatarUrl"',
+        `${distanceSql} AS "distanceKm"`,
+      ])
+      .where('rr.status = :status', { status: RideRequestStatusType.searching })
+      .andWhere(`${distanceSql} <= :radiusKm`, { radiusKm: DISPATCH_RADIUS_KM })
+      .andWhere('rr.request_time >= :freshSince', {
+        freshSince: new Date(Date.now() - PENDING_REQUEST_FRESHNESS_MINUTES * 60 * 1000),
+      })
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1
+          FROM ride_request_dispatch rrd
+          WHERE rrd.request_id = rr.request_id
+            AND rrd.driver_id = :excludedDriverId
+            AND rrd.status IN (:...excludedDispatchStatuses)
+        )`,
+        {
+          excludedDriverId: driverId,
+          excludedDispatchStatuses: [DispatchStatusType.accepted, DispatchStatusType.rejected],
+        },
+      )
+      .setParameters({ driverLat, driverLng })
+      .orderBy('rr.request_time', 'DESC')
+      .limit(1)
+      .getRawOne<Record<string, string | number | Date | null>>();
+
+    if (!row) {
+      const fallbackRequest = await this.getFallbackPendingRequest(distanceSql, { driverLat, driverLng }, driverId);
+      if (fallbackRequest) {
+        return {
+          radiusKm: DISPATCH_RADIUS_KM,
+          driverLocation: {
+            latitude: driverLat,
+            longitude: driverLng,
+            recordedAt: latestLocation.recordedAt,
+          },
+          request: fallbackRequest,
+        };
+      }
+
+      return {
+        request: null,
+        radiusKm: DISPATCH_RADIUS_KM,
+        message: '半径2km以内の配車リクエストを検索しています。',
+      };
+    }
+
+    return {
+      radiusKm: DISPATCH_RADIUS_KM,
+      driverLocation: {
+        latitude: driverLat,
+        longitude: driverLng,
+        recordedAt: latestLocation.recordedAt,
+      },
+      request: {
+        requestId: Number(row.requestId),
+        customerId: Number(row.customerId),
+        pickupAddress: String(row.pickupAddress ?? ''),
+        pickupLat: Number(row.pickupLat),
+        pickupLng: Number(row.pickupLng),
+        dropoffAddress: String(row.dropoffAddress ?? ''),
+        dropoffLat: Number(row.dropoffLat),
+        dropoffLng: Number(row.dropoffLng),
+        vehicleType: String(row.vehicleType ?? ''),
+        actualPassengerName: row.actualPassengerName ? String(row.actualPassengerName) : null,
+        actualPassengerPhone: row.actualPassengerPhone ? String(row.actualPassengerPhone) : null,
+        noteToDriver: row.noteToDriver ? String(row.noteToDriver) : null,
+        requestTime: row.requestTime,
+        distanceKm: row.distanceKm != null ? Math.round(Number(row.distanceKm) * 1000) / 1000 : null,
+        customer: {
+          name: [row.customerLastName, row.customerFirstName].filter(Boolean).join(' '),
+          phone: String(row.customerPhone ?? ''),
+          avatarUrl: row.customerAvatarUrl ? String(row.customerAvatarUrl) : null,
+        },
+      },
+    };
+  }
+
+  async updateDriverLocation(driverId: number, lat: number, lng: number): Promise<any> {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new BadRequestException('Invalid driver location.');
+    }
+
+    const history = this.driverLocationRepo.create({
+      driverId,
+      latitude: lat.toString(),
+      longitude: lng.toString(),
+      recordedAt: new Date(),
+    });
+    await this.driverLocationRepo.save(history);
+
+    return {
+      driverId,
+      latitude: lat,
+      longitude: lng,
+      recordedAt: history.recordedAt,
+    };
+  }
+
+  async acceptRequest(driverId: number, requestId: number): Promise<any> {
+    const request = await this.rideRequestRepo.findOne({ where: { requestId } });
+    if (!request) {
+      throw new NotFoundException('配車リクエストが見つかりません。');
+    }
+
+    if (request.status !== RideRequestStatusType.searching) {
+      throw new BadRequestException('この配車リクエストはすでに処理されています。');
+    }
+
+    const freshSince = Date.now() - PENDING_REQUEST_FRESHNESS_MINUTES * 60 * 1000;
+    if (new Date(request.requestTime).getTime() < freshSince) {
+      throw new BadRequestException('この配車リクエストは有効期限が切れています。');
+    }
+
+    const latestLocation = await this.driverLocationRepo.findOne({
+      where: { driverId },
+      order: { recordedAt: 'DESC' },
+    });
+    if (latestLocation) {
+      const pickupDistance = distanceKm(
+        Number(latestLocation.latitude),
+        Number(latestLocation.longitude),
+        Number(request.pickupLat),
+        Number(request.pickupLng),
+      );
+
+      if (ENFORCE_DISPATCH_RADIUS_ON_ACCEPT && pickupDistance > DISPATCH_RADIUS_KM) {
+        throw new BadRequestException('半径2km以内の配車リクエストのみ承認できます。');
+      }
+    }
+
+    const routeDistance = distanceKm(
+      Number(request.pickupLat),
+      Number(request.pickupLng),
+      Number(request.dropoffLat),
+      Number(request.dropoffLng),
+    );
+    const fallbackFare = calculateRideFare(routeDistance);
+    const fareVnd = request.estimatedFareVnd ?? fallbackFare.totalFareVnd;
+    const fareJpy = request.estimatedFareJpy ?? fallbackFare.totalJpy;
+    const rawFareVnd = request.rawFareVnd ?? fallbackFare.rawFareVnd;
+
+    request.status = RideRequestStatusType.assigned;
+    await this.rideRequestRepo.save(request);
+    await this.dispatchRepo.save(this.dispatchRepo.create({
+      requestId: request.requestId,
+      driverId,
+      attemptNumber: 1,
+      status: DispatchStatusType.accepted,
+      respondedAt: new Date(),
+    }));
+
+    const trip = this.tripRepo.create({
+      rideRequest: request,
+      driverId,
+      startTime: new Date(),
+      endTime: null,
+      actualDistanceKm: routeDistance.toFixed(2),
+      exchangeRateVndToJpy: '160.0000',
+      finalFareVnd: fareVnd,
+      finalFareJpy: fareJpy,
+      rawFareVnd,
+      status: TripStatusType.ongoing,
+    });
+    const savedTrip = await this.tripRepo.save(trip);
+
+    const payload = {
+      requestId: request.requestId,
+      tripId: savedTrip.tripId,
+      driverId,
+      status: 'assigned',
+    };
+    this.rideGateway.emitToRequest(request.requestId, 'rideAccepted', payload);
+    this.rideGateway.emitToUser(request.customerId, 'customer', 'rideAccepted', payload);
+
+    return {
+      ...payload,
+      trip: savedTrip,
+    };
+  }
+
+  async requestPaymentFromDriver(driverId: number, tripId: number): Promise<any> {
+    const trip = await this.tripRepo
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
+      .where('trip.trip_id = :tripId', { tripId })
+      .getOne();
+
+    if (!trip) {
+      throw new NotFoundException('対象の乗車が見つかりません。');
+    }
+
+    if (trip.driverId !== driverId) {
+      throw new ForbiddenException('この乗車の請求書を発行する権限がありません。');
+    }
+
+    if (trip.status !== TripStatusType.ongoing) {
+      throw new BadRequestException('完了またはキャンセル済みの乗車には請求できません。');
+    }
+
+    const requestedAt = Date.now();
+    this.paymentRequests.set(trip.tripId, requestedAt);
+    this.rideGateway.emitToTrip(trip.tripId, 'paymentRequested', {
+      tripId: trip.tripId,
+      requestedAt,
+    });
+    this.rideGateway.emitToUser(trip.rideRequest.customerId, 'customer', 'paymentRequested', {
+      tripId: trip.tripId,
+      requestedAt,
+    });
+
+    return {
+      tripId: trip.tripId,
+      requestedAt,
+      paymentRequested: true,
+    };
+  }
+
+  async cancelAcceptedRideByDriver(driverId: number, tripId: number): Promise<any> {
+    const trip = await this.tripRepo
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
+      .where('trip.trip_id = :tripId', { tripId })
+      .getOne();
+
+    if (!trip) {
+      throw new NotFoundException('対象の乗車が見つかりません。');
+    }
+
+    if (trip.driverId !== driverId) {
+      throw new ForbiddenException('この乗車をキャンセルする権限がありません。');
+    }
+
+    if (trip.status !== TripStatusType.ongoing) {
+      throw new BadRequestException('完了またはキャンセル済みの乗車はキャンセルできません。');
+    }
+
+    const oldRequest = trip.rideRequest;
+
+    trip.status = TripStatusType.cancelled_by_admin;
+    trip.endTime = new Date();
+    await this.tripRepo.save(trip);
+    this.paymentRequests.delete(trip.tripId);
+
+    oldRequest.status = RideRequestStatusType.failed;
+    await this.rideRequestRepo.save(oldRequest);
+
+    const replacementRequest = this.rideRequestRepo.create({
+      customerId: oldRequest.customerId,
+      pickupAddress: oldRequest.pickupAddress,
+      pickupLat: oldRequest.pickupLat,
+      pickupLng: oldRequest.pickupLng,
+      dropoffAddress: oldRequest.dropoffAddress,
+      dropoffLat: oldRequest.dropoffLat,
+      dropoffLng: oldRequest.dropoffLng,
+      vehicleType: oldRequest.vehicleType,
+      status: RideRequestStatusType.searching,
+      actualPassengerName: oldRequest.actualPassengerName,
+      actualPassengerPhone: oldRequest.actualPassengerPhone,
+      noteToDriver: oldRequest.noteToDriver,
+      estimatedFareVnd: oldRequest.estimatedFareVnd,
+      estimatedFareJpy: oldRequest.estimatedFareJpy,
+      rawFareVnd: oldRequest.rawFareVnd,
+      requestTime: new Date(),
+    });
+    const savedReplacement = await this.rideRequestRepo.save(replacementRequest);
+    await this.dispatchRepo.save(this.dispatchRepo.create({
+      requestId: savedReplacement.requestId,
+      driverId,
+      attemptNumber: 1,
+      status: DispatchStatusType.rejected,
+      respondedAt: new Date(),
+    }));
+
+    const payload = {
+      tripId: trip.tripId,
+      oldRequestId: oldRequest.requestId,
+      requestId: savedReplacement.requestId,
+      driverId,
+      status: 'driver_cancelled',
+    };
+
+    this.rideGateway.emitToTrip(trip.tripId, 'driverCancelledRide', payload);
+    this.rideGateway.emitToUser(oldRequest.customerId, 'customer', 'driverCancelledRide', payload);
+
+    return {
+      ...payload,
+      request: savedReplacement,
+    };
   }
 
   /**
@@ -229,6 +730,7 @@ export class RideService {
     trip.status = TripStatusType.completed;
     trip.endTime = new Date();
     await this.tripRepo.save(trip);
+    this.paymentRequests.delete(trip.tripId);
 
     // Cập nhật trạng thái yêu cầu đặt xe sang hoàn thành
     const rideRequest = trip.rideRequest;
@@ -273,65 +775,6 @@ export class RideService {
       status: 'completed',
       transactionId: transaction.gatewayTransactionId,
       paidAt: transaction.paidAt,
-    };
-  }
-
-      /**
-   * Hoàn thiện logic gán tài xế gần nhất cho yêu cầu đặt xe
-   * Sprint3_ID16 - Hoàn thiện logic gán tài xế
-   */
-  async assignNearestDriver(requestId: number) {
-    const rideRequest = await this.rideRequestRepo.findOne({
-      where: { requestId },
-    });
-
-    if (!rideRequest) {
-      throw new NotFoundException('乗車依頼が見つかりません。'); 
-      // Không tìm thấy yêu cầu đặt xe
-    }
-
-    if (rideRequest.status !== RideRequestStatusType.searching) {
-      throw new BadRequestException('この依頼は現在ドライバーを割り当てられる状態ではありません。'); 
-      // Yêu cầu này hiện không thể gán tài xế
-    }
-
-    // TODO: Logic tìm tài xế gần nhất dựa trên vị trí (sẽ hoàn thiện sau)
-    // Hiện tại tạm gán driverId = 1
-    const driverId = 1;
-
-    // Tạo Trip
-    const trip = this.tripRepo.create({
-      rideRequest: rideRequest,
-      driverId: driverId,
-      startTime: new Date(),
-      status: TripStatusType.ongoing,
-      actualDistanceKm: '0',
-      exchangeRateVndToJpy: '0.0043',
-      finalFareVnd: rideRequest.estimatedFareVnd || 0,     // tạm dùng nếu có
-      finalFareJpy: rideRequest.estimatedFareJpy || 0,
-      rawFareVnd: rideRequest.estimatedFareVnd || 0,
-    });
-
-    const savedTrip = await this.tripRepo.save(trip);
-
-    // Cập nhật trạng thái RideRequest
-    rideRequest.status = RideRequestStatusType.assigned;
-    await this.rideRequestRepo.save(rideRequest);
-
-    // Gửi thông báo realtime
-    this.rideGateway.emitToRequest(rideRequest.requestId, 'driverAssigned', {
-      tripId: savedTrip.tripId,
-      driverId: driverId,
-      message: 'ドライバーが見つかりました。すぐに向かいます。', 
-      // Đã tìm thấy tài xế. Tài xế đang di chuyển đến
-    });
-
-    return {
-      success: true,
-      message: 'ドライバーを割り当てました。', 
-      // Đã gán tài xế thành công
-      tripId: savedTrip.tripId,
-      driverId: driverId,
     };
   }
 }

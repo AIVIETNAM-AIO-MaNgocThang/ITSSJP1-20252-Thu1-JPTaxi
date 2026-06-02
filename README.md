@@ -6,7 +6,7 @@ POT: Yotsuba · DevT: 67
 
 | Thư mục | Nội dung |
 |--------|----------|
-| `frontend/` | React + Vite. Mặc định `http://localhost:8080/api` nếu không cấu hình `.env`. |
+| `frontend/` | React + Vite. Mặc định `http://localhost:3000/api` nếu không cấu hình `.env`. |
 | `database/` | `DB.sql`, `DB_data.sql` |
 | `backend/` | NestJS: auth, profile khách/tài xế, upload avatar, admin (JWT + role), ước giá cước |
 

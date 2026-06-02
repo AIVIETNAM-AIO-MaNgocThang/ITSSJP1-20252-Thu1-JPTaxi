@@ -34,7 +34,7 @@ export function estimateStraightLineDistanceMeters(from, to) {
   return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function formatDuration(seconds, meters = 0) {
+export function formatDuration(seconds, meters = 0) {
   const baseMinutes = Math.max(1, Math.round(seconds / 60));
   const distanceKm = Math.max(0, meters / 1000);
   const trafficBufferMinutes = Math.max(3, Math.round(distanceKm * 1.2));
@@ -42,7 +42,7 @@ function formatDuration(seconds, meters = 0) {
   return `${baseMinutes + trafficBufferMinutes}分`;
 }
 
-function formatDistance(meters) {
+export function formatDistance(meters) {
   if (meters >= 1000) {
     return `${(meters / 1000).toFixed(1)} km`;
   }
@@ -150,6 +150,42 @@ export async function geocodePlace(address) {
     address: parsed.address,
     position: [latitude, longitude],
   };
+}
+
+export async function fetchDrivingRoute(fromPosition, toPosition, options = {}) {
+  const [fromLat, fromLng] = fromPosition.map(Number);
+  const [toLat, toLng] = toPosition.map(Number);
+
+  if (![fromLat, fromLng, toLat, toLng].every(Number.isFinite)) {
+    throw new Error('invalid route coordinates');
+  }
+
+  const url = `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}`;
+  const params = new URLSearchParams({
+    overview: 'full',
+    geometries: 'geojson',
+    steps: 'true',
+  });
+  const response = await fetch(`${url}?${params.toString()}`, {
+    cache: 'no-store',
+    signal: options.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error('route failed');
+  }
+
+  const data = await response.json();
+  const route = data?.routes?.[0];
+  const routePath = (route?.geometry?.coordinates ?? []).map(([lng, lat]) => [lat, lng]);
+  const distance = Number(route?.distance);
+  const duration = Number(route?.duration);
+
+  if (!routePath.length || !Number.isFinite(distance) || !Number.isFinite(duration)) {
+    throw new Error('route failed');
+  }
+
+  return { routePath, distance, duration };
 }
 
 export async function buildSelectedRoute(destination, pickup = defaultUserLocation) {

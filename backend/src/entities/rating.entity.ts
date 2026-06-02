@@ -11,7 +11,15 @@ export class Rating {
   @Column({ name: 'customer_id' })
   customerId: number;
 
-  @Column({ type: 'smallint' })
+  @Column({
+    type: 'numeric',
+    precision: 2,
+    scale: 1,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
   score: number;
 
   @Column({ type: 'text', nullable: true })

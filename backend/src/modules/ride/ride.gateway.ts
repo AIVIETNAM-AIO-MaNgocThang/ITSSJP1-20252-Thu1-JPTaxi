@@ -52,7 +52,7 @@ export class RideGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // 2. Xác thực và giải mã token
       const decoded = this.jwtService.verify(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
+        secret: this.configService.get<string>('JWT_SECRET', 'jp-taxi-dev-secret'),
       });
 
       const userId = decoded.id;

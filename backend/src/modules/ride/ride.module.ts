@@ -9,6 +9,9 @@ import { DriverLocationHistory } from '../../entities/driver-location-history.en
 import { Customer } from '../../entities/customer.entity';
 import { PaymentTransaction } from '../../entities/payment-transaction.entity';
 import { DriverPayout } from '../../entities/driver-payout.entity';
+import { Driver } from '../../entities/driver.entity';
+import { Vehicle } from '../../entities/vehicle.entity';
+import { RideRequestDispatch } from '../../entities/ride-request-dispatch.entity';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -20,6 +23,9 @@ import { AuthModule } from '../auth/auth.module';
       Customer,
       PaymentTransaction,
       DriverPayout,
+      Driver,
+      Vehicle,
+      RideRequestDispatch,
     ]),
     AuthModule,
   ],
@@ -28,6 +34,4 @@ import { AuthModule } from '../auth/auth.module';
   exports: [RideService, RideGateway],
 })
 export class RideModule {}
-
-
 

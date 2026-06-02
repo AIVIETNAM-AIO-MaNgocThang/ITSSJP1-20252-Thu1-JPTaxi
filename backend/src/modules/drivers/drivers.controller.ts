@@ -13,13 +13,14 @@ import {
 import { DriversService } from './drivers.service';
 import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
+import { UpdateDriverDocumentsDto } from './dto/update-driver-documents.dto';
 import { SearchDriversQueryDto } from './dto/search-drivers.query.dto';
 import { ApplyDriverDto } from './dto/apply-driver.dto';
 
 
-import { RolesGuard } from 'src/common/roles.guard';
-import { Roles } from 'src/common/roles.decorator';
-import { JwtAuthGuard } from 'src/common/jwt-auth.guard';
+import { RolesGuard } from '../../common/roles.guard';
+import { Roles } from '../../common/roles.decorator';
+import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
 @Controller('drivers')
 export class DriversController {
@@ -52,6 +53,14 @@ export class DriversController {
     return this.drivers.updateBankAccount(driverId, dto);
   }
 
+  @Put(':driverId/documents')
+  updateDocuments(
+    @Param('driverId', ParseIntPipe) driverId: number,
+    @Body() dto: UpdateDriverDocumentsDto,
+  ) {
+    return this.drivers.updateDocuments(driverId, dto);
+  }
+
 // Logic kiểm tra điều kiện bắt buộc và gửi đơn xét duyệt
   @Post('apply')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -74,5 +83,4 @@ export class DriversController {
     return this.drivers.approveDriver(driverId, status, reason);
   }
 }
-
 

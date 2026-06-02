@@ -110,6 +110,31 @@
   margin-top: 20px;
 }
 
+.login-role-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: #eef2f7;
+  border-radius: 12px;
+}
+
+.login-role-switch button {
+  height: 40px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 900;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+}
+
+.login-role-switch button.active {
+  color: #047857;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
 .field-grid {
   display: grid;
   gap: 12px;
@@ -260,11 +285,11 @@
 
 .driver-register-layout {
   display: grid;
-  grid-template-columns: minmax(520px, 1fr) 460px;
-  gap: 44px;
+  grid-template-columns: minmax(440px, 1fr) minmax(560px, 640px);
+  gap: 32px;
   align-items: center;
-  min-height: calc(100vh - 78px);
-  padding: 34px 56px 46px;
+  min-height: 100vh;
+  padding: 20px 40px;
 }
 
 .driver-register-intro {
@@ -367,10 +392,11 @@
 }
 
 .driver-register-form-card {
+  position: relative;
   width: 100%;
-  max-height: calc(100vh - 118px);
+  max-height: calc(100vh - 40px);
   overflow: auto;
-  padding: 26px 26px 24px;
+  padding: 20px 22px;
   background: rgba(255,255,255,0.98);
   border: 1px solid #e5e7eb;
   border-radius: 28px;
@@ -394,8 +420,8 @@
 }
 
 .driver-register-form {
-  gap: 13px;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .driver-register-form .notice-box {
@@ -409,12 +435,127 @@
 }
 
 .driver-register-form .upload-grid {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .driver-register-form .upload-box {
   min-height: 96px;
   border-radius: 14px;
+}
+
+.driver-register-login-link {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  color: #047857;
+  font-size: 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.driver-register-login-link:hover {
+  text-decoration: underline;
+}
+
+.document-upload-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.document-upload-heading > span {
+  padding: 5px 9px;
+  color: #047857;
+  font-size: 12px;
+  font-weight: 900;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+}
+
+.driver-doc-upload-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: #f8fafc;
+  border: 1px solid #dfe6ee;
+  border-radius: 14px;
+}
+
+.driver-doc-upload-card.has-file {
+  background: #f0fdf4;
+  border-color: #a7f3d0;
+}
+
+.driver-doc-preview {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  color: #047857;
+  font-size: 20px;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+}
+
+.driver-doc-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.driver-doc-upload-body {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.driver-doc-upload-body small {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driver-doc-upload-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+}
+
+.driver-doc-upload-card:not(.has-file) .driver-doc-upload-actions {
+  grid-template-columns: 1fr;
+}
+
+.doc-upload-select,
+.doc-upload-remove {
+  display: grid;
+  place-items: center;
+  height: 34px;
+  cursor: pointer;
+}
+
+.doc-upload-select span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.doc-upload-remove {
+  width: 34px;
+  color: #991b1b;
+  font-size: 20px;
+  font-weight: 900;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
 }
 
 .driver-register-actions {
@@ -453,6 +594,42 @@
     max-height: none;
   }
 
+}
+
+@media (max-width: 1180px) {
+  .driver-register-layout {
+    grid-template-columns: minmax(360px, 1fr) minmax(500px, 560px);
+    gap: 24px;
+    padding-inline: 24px;
+  }
+
+  .driver-register-intro h1 {
+    font-size: 38px;
+  }
+
+  .driver-register-benefits {
+    margin-top: 20px;
+  }
+
+  .driver-register-steps {
+    margin-top: 18px;
+  }
+}
+
+@media (max-width: 980px) {
+  .driver-register-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .driver-register-intro {
+    max-width: none;
+  }
+
+  .driver-register-form-card {
+    max-width: 720px;
+    max-height: none;
+    justify-self: center;
+  }
 }
 
 @media (max-width: 560px) {

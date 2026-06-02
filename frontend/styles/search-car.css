@@ -241,6 +241,126 @@
   background: #fee4e2;
 }
 
+.status-card {
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #edf1f5;
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(12px);
+}
+
+.status-info,
+.status-card .card-actions {
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.status-info {
+  width: 100%;
+  padding: 0;
+}
+
+.status-card .card-actions {
+  display: grid;
+  place-items: center;
+  min-width: 150px;
+  padding: 0;
+}
+
+.status-card .spinner {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+.waiting-title-row {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 14px;
+}
+
+.waiting-title-row h1 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.reservation-cancel-button {
+  min-width: 126px;
+  min-height: 46px;
+  padding: 0 18px;
+  color: #f04438;
+  font-size: 13px;
+  font-weight: 900;
+  background: #fff7f8;
+  border: 1px solid #ffe4e8;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.reservation-cancel-button:hover {
+  background: #fff0f2;
+}
+
+.reservation-cancel-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.driver-cancel-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.driver-cancel-popup {
+  width: min(100%, 420px);
+  padding: 22px;
+  background: #fff;
+  border: 1px solid #e5eaf0;
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.driver-cancel-popup h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.driver-cancel-popup p {
+  margin: 10px 0 18px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.driver-cancel-popup button {
+  width: 100%;
+  min-height: 46px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  background: #047857;
+  border: 0;
+  border-radius: 10px;
+}
+
 @media (max-width: 720px) {
   .search-screen {
     min-height: calc(100vh - 64px);
@@ -271,6 +391,11 @@
   }
 
   .cancel-button {
+    width: 100%;
+  }
+
+  .status-card .card-actions,
+  .reservation-cancel-button {
     width: 100%;
   }
 }

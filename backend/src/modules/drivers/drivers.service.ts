@@ -8,6 +8,7 @@ import { DriverBankAccount } from '../../entities/driver-bank-account.entity';
 import { Trip, TripStatusType } from '../../entities/trip.entity';
 import { UpdateDriverProfileDto } from './dto/update-driver-profile.dto';
 import { UpdateBankAccountDto } from './dto/update-bank-account.dto';
+import { UpdateDriverDocumentsDto } from './dto/update-driver-documents.dto';
 import { DriverSearchSort, SearchDriversQueryDto } from './dto/search-drivers.query.dto';
 import {
   buildNoDriversNotification,
@@ -67,6 +68,7 @@ export class DriversService {
 
     const vehicle = await this.vehicles.findOne({ where: { driverId } });
     const licenseRows = await this.licenses.find({ where: { driverId } });
+    const primaryLicense = licenseRows[0] ?? null;
     const bank = await this.banks.findOne({ where: { driverId } });
     const tripRows = await this.trips.find({
       where: { driverId },
@@ -76,6 +78,7 @@ export class DriversService {
     });
 
     return {
+      driverId: d.driverId,
       lastName: d.lastName,
       firstName: d.firstName,
       nationality: d.nationality,
@@ -92,13 +95,26 @@ export class DriversService {
             color: vehicle.color,
             licensePlate: vehicle.licensePlate,
             vehicleType: vehicle.vehicleType,
+            manufactureYear: vehicle.manufactureYear,
+            vehiclePhotoUrl: vehicle.vehiclePhotoUrl,
+            registrationPaperUrl: vehicle.registrationPaperUrl,
           }
         : null,
       licenses: licenseRows.map((l) => ({
         licenseType: l.licenseType,
         issueDate: l.issueDate,
         expiryDate: l.expiryDate,
+        issuePlace: l.issuePlace,
+        frontImageUrl: l.frontImageUrl,
+        backImageUrl: l.backImageUrl,
       })),
+      documents: {
+        portrait: d.avatarUrl,
+        licenseFront: primaryLicense?.frontImageUrl ?? null,
+        licenseBack: primaryLicense?.backImageUrl ?? null,
+        vehiclePhoto: vehicle?.vehiclePhotoUrl ?? null,
+        registrationPaper: vehicle?.registrationPaperUrl ?? null,
+      },
       bankAccount: bank
         ? {
             bankName: bank.bankName,
@@ -107,6 +123,7 @@ export class DriversService {
           }
         : null,
       trips: tripRows.map((t) => ({
+        tripId: t.tripId,
         status: this.mapTripStatus(t.status),
         pickupAddress: t.rideRequest.pickupAddress,
         dropoffAddress: t.rideRequest.dropoffAddress,
@@ -154,6 +171,34 @@ export class DriversService {
       row.accountHolder = dto.accountHolder;
     }
     await this.banks.save(row);
+    return this.getProfile(driverId);
+  }
+
+  async updateDocuments(driverId: number, dto: UpdateDriverDocumentsDto) {
+    const driver = await this.drivers.findOne({ where: { driverId } });
+    if (!driver) throw new NotFoundException();
+
+    if (dto.portrait !== undefined) {
+      driver.avatarUrl = dto.portrait;
+      await this.drivers.save(driver);
+    }
+
+    if (dto.licenseFront !== undefined || dto.licenseBack !== undefined) {
+      const license = await this.licenses.findOne({ where: { driverId } });
+      if (!license) throw new NotFoundException('Driver license not found');
+      if (dto.licenseFront !== undefined) license.frontImageUrl = dto.licenseFront;
+      if (dto.licenseBack !== undefined) license.backImageUrl = dto.licenseBack;
+      await this.licenses.save(license);
+    }
+
+    if (dto.vehiclePhoto !== undefined || dto.registrationPaper !== undefined) {
+      const vehicle = await this.vehicles.findOne({ where: { driverId } });
+      if (!vehicle) throw new NotFoundException('Vehicle not found');
+      if (dto.vehiclePhoto !== undefined) vehicle.vehiclePhotoUrl = dto.vehiclePhoto;
+      if (dto.registrationPaper !== undefined) vehicle.registrationPaperUrl = dto.registrationPaper;
+      await this.vehicles.save(vehicle);
+    }
+
     return this.getProfile(driverId);
   }
 
