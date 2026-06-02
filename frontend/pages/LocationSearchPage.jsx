@@ -1,48 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { calculateFareBreakdown, formatYen } from '../utils/fare.js';
+import { DEFAULT_MAP_LOCATION, getCurrentBrowserLocation, watchBrowserLocation } from '../utils/geolocation.js';
 import '../styles/app-pages.css';
-import { useLanguage } from '../context/LanguageContext.jsx';
-import { estimateStraightLineDistanceMeters, getRouteDistanceStatus } from '../utils/routePlanner.js';
 
-const demoMapLocation = {
-  latitude: 21.02878,
-  longitude: 105.85204,
+const defaultUserLocation = DEFAULT_MAP_LOCATION;
+
+const defaultPickupPlace = {
+  icon: '出発',
+  id: 'current-location',
+  name: '現在位置',
+  address: 'ハノイ・ホアンキエム周辺',
+  position: [defaultUserLocation.latitude, defaultUserLocation.longitude],
 };
 
 const savedPlaces = [
-  { icon: '履歴', name: 'ロッテホテル ハノイ', address: '54 Liễu Giai, Ba Đình, Hà Nội', time: '昨日', position: [21.03205, 105.81283] },
-  { icon: '履歴', name: 'チャンティエンプラザ', address: '24 Hai Bà Trưng, Hoàn Kiếm, Hà Nội', time: '2日前', position: [21.02482, 105.85672] },
-  { icon: '履歴', name: '日本レストラン 山田', address: 'Đống Đa, Hà Nội', time: '先週', position: [21.01878, 105.82914] },
-  { icon: '保存', name: 'ノイバイ国際空港', address: 'Phú Minh, Sóc Sơn, Hà Nội', time: '保存済み', position: [21.21871, 105.80417] },
-  { icon: '履歴', name: 'Viettel', address: 'Hoàng Quốc Việt, Nghĩa Đô, Hà Nội', time: '最近', position: [21.04618, 105.78931] },
-  { icon: '履歴', name: 'Cầu Giấy', address: 'Hà Nội', time: '最近', position: [21.03594, 105.79464] },
+  { icon: '履歴', name: 'ロッテホテル ハノイ', address: '54 Lieu Giai, Ba Dinh, Hanoi', time: '昨日', position: [21.03205, 105.81283] },
+  { icon: '履歴', name: 'チャンティエンプラザ', address: '24 Hai Ba Trung, Hoan Kiem, Hanoi', time: '2日前', position: [21.02482, 105.85672] },
+  { icon: '履歴', name: '日本レストラン 山田', address: 'Dong Da, Hanoi', time: '先週', position: [21.01878, 105.82914] },
+  { icon: '保存', name: 'ノイバイ国際空港', address: 'Phu Minh, Soc Son, Hanoi', time: '保存済み', position: [21.21871, 105.80417] },
 ];
-
-const savedPlaceKey = (place) => place.id ?? `${place.name}-${place.address}`;
-
-function readPendingDestination() {
-  try {
-    const stored = JSON.parse(window.sessionStorage.getItem('jpTaxiPendingDestination') || 'null');
-
-    if (!stored || !Array.isArray(stored.position)) {
-      return null;
-    }
-
-    return {
-      icon: stored.icon || '保存',
-      id: stored.id || `pending-${stored.name}`,
-      name: stored.name,
-      address: stored.address,
-      position: stored.position,
-      query: stored.query || stored.address || stored.name,
-    };
-  } catch {
-    return null;
-  }
-}
 
 function toPlace(result) {
   const latitude = Number(result.lat);
@@ -55,7 +35,7 @@ function toPlace(result) {
   const displayParts = String(result.display_name ?? '').split(',').map((part) => part.trim()).filter(Boolean);
   const namedetails = result.namedetails ?? {};
   const japaneseName = namedetails['name:ja'] || namedetails['official_name:ja'] || namedetails['alt_name:ja'];
-  const primaryName = japaneseName || result.name || displayParts[0] || '目的地';
+  const primaryName = japaneseName || result.name || displayParts[0] || '選択地点';
 
   return {
     icon: '候補',
@@ -83,108 +63,252 @@ function formatDistance(meters) {
 }
 
 function estimateFare(meters) {
-  const km = meters / 1000;
-  return `¥${Math.max(680, Math.round((420 + km * 85) / 10) * 10)}`;
+  return formatYen(calculateFareBreakdown(meters / 1000).totalJpy);
+}
+
+function hasPosition(position) {
+  return Array.isArray(position)
+    && position.length >= 2
+    && Number.isFinite(Number(position[0]))
+    && Number.isFinite(Number(position[1]));
+}
+
+function normalizePlace(place, fallback = defaultPickupPlace) {
+  if (!place || !hasPosition(place.position)) {
+    return fallback;
+  }
+
+  return {
+    ...fallback,
+    ...place,
+    position: place.position.map(Number),
+  };
+}
+
+function distanceMeters(from, to) {
+  const [fromLat, fromLng] = from;
+  const [toLat, toLng] = to;
+  const distanceKm = Math.sqrt(
+    Math.pow(toLat - fromLat, 2) + Math.pow(toLng - fromLng, 2),
+  ) * 111;
+  return Math.max(0, distanceKm * 1000);
+}
+
+function buildFallbackRouteMetrics(from, to) {
+  const meters = distanceMeters(from, to);
+  return {
+    distance: formatDistance(meters),
+    duration: formatDuration((meters / 30000) * 3600, meters),
+    fare: estimateFare(meters),
+  };
+}
+
+function buildFallbackRouteState(pickup, destination) {
+  const path = [pickup.position, destination.position];
+  return {
+    path,
+    metrics: buildFallbackRouteMetrics(pickup.position, destination.position),
+  };
+}
+
+function hasRouteMetrics(metrics) {
+  return Boolean(metrics?.distance && metrics?.duration && metrics?.fare);
+}
+
+function readSelectedRoute() {
+  try {
+    const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
+    if (!rawRoute) return null;
+
+    const parsedRoute = JSON.parse(rawRoute);
+    if (!hasPosition(parsedRoute?.pickup?.position) || !hasPosition(parsedRoute?.destination?.position)) {
+      return null;
+    }
+
+    const pickup = normalizePlace(parsedRoute.pickup);
+    const destination = normalizePlace(parsedRoute.destination, {
+      icon: '候補',
+      name: '目的地',
+      address: '',
+      position: parsedRoute.destination.position,
+    });
+    const fallbackRoute = buildFallbackRouteState(pickup, destination);
+
+    return {
+      destination,
+      pickup,
+      routePath: Array.isArray(parsedRoute.routePath) && parsedRoute.routePath.length
+        ? parsedRoute.routePath
+        : fallbackRoute.path,
+      routeMetrics: hasRouteMetrics(parsedRoute.routeMetrics)
+        ? parsedRoute.routeMetrics
+        : fallbackRoute.metrics,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveSelectedRoute({ destination, pickup, path, metrics }) {
+  if (!destination || !pickup || !metrics) return;
+  window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify({
+    destination,
+    pickup,
+    routePath: path?.length ? path : [pickup.position, destination.position],
+    routeMetrics: metrics,
+  }));
+}
+
+function buildRouteKey(pickup, destination) {
+  if (!pickup || !destination || !hasPosition(pickup.position) || !hasPosition(destination.position)) {
+    return '';
+  }
+
+  return [
+    pickup.position.map((value) => Number(value).toFixed(6)).join(','),
+    destination.position.map((value) => Number(value).toFixed(6)).join(','),
+  ].join('|');
 }
 
 export default function LocationSearchPage() {
-  const { t } = useLanguage();
-  const [pendingDestination] = useState(readPendingDestination);
-  const [pickupQuery, setPickupQuery] = useState('');
-  const [query, setQuery] = useState(pendingDestination?.query ?? '');
-  const [activeField, setActiveField] = useState(null);
-  const [currentPickup, setCurrentPickup] = useState(null);
-  const [selectedPickup, setSelectedPickup] = useState(null);
-  const [selectedDestination, setSelectedDestination] = useState(pendingDestination);
-  const [routePath, setRoutePath] = useState([]);
-  const [routeMetrics, setRouteMetrics] = useState(null);
+  const navigate = useNavigate();
+  const [initialRoute] = useState(readSelectedRoute);
+  const [selectedPickup, setSelectedPickup] = useState(() => normalizePlace(initialRoute?.pickup));
+  const [selectedDestination, setSelectedDestination] = useState(initialRoute?.destination ?? null);
+  const [selfLocation, setSelfLocation] = useState(defaultPickupPlace.position);
+  const [pickupQuery, setPickupQuery] = useState(() => normalizePlace(initialRoute?.pickup).name);
+  const [destinationQuery, setDestinationQuery] = useState(initialRoute?.destination?.name ?? '');
+  const [activeSearchTarget, setActiveSearchTarget] = useState('destination');
   const [suggestions, setSuggestions] = useState([]);
-  const [hiddenHistoryKeys, setHiddenHistoryKeys] = useState([]);
+  const [routePath, setRoutePath] = useState(initialRoute?.routePath ?? []);
+  const [routeMetrics, setRouteMetrics] = useState(initialRoute?.routeMetrics ?? null);
+  const [routeKey, setRouteKey] = useState(() => buildRouteKey(initialRoute?.pickup, initialRoute?.destination));
   const [isSearching, setIsSearching] = useState(false);
   const [isRouting, setIsRouting] = useState(false);
+  const [isRouteRefreshing, setIsRouteRefreshing] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [searchError, setSearchError] = useState('');
-  const [locationError, setLocationError] = useState('');
-  const searchRef = useRef(null);
+  const routeRefreshTimer = useRef(null);
+  const routeRequestId = useRef(0);
 
-  useEffect(() => {
-    function closeSuggestions(event) {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setSuggestions([]);
-        setSearchError('');
-        setActiveField(null);
-      }
+  async function resolveCurrentPickupName(position) {
+    const [latitude, longitude] = position;
+    const params = new URLSearchParams({
+      'accept-language': 'ja,vi;q=0.8,en;q=0.6',
+      format: 'json',
+      lat: String(latitude),
+      lon: String(longitude),
+      namedetails: '1',
+    });
+
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+
+      const place = toPlace(await response.json());
+      return place
+        ? {
+            ...defaultPickupPlace,
+            ...place,
+            id: defaultPickupPlace.id,
+            position,
+          }
+        : null;
+    } catch {
+      return null;
     }
+  }
 
-    document.addEventListener('pointerdown', closeSuggestions);
-    return () => document.removeEventListener('pointerdown', closeSuggestions);
-  }, []);
+  async function resolveCurrentPickup() {
+    const location = await getCurrentBrowserLocation({
+      fallback: defaultUserLocation,
+      options: { maximumAge: 0 },
+    });
+    if (location.isFallback) return defaultPickupPlace;
 
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setSelectedPickup(null);
-      setLocationError(t('enableLocation'));
+    const gpsPosition = [location.latitude, location.longitude];
+    const place = await resolveCurrentPickupName(gpsPosition);
+    return {
+      ...defaultPickupPlace,
+      ...(place ?? {}),
+      id: defaultPickupPlace.id,
+      address: place?.address || 'GPSで取得した現在位置',
+      position: gpsPosition,
+    };
+  }
+
+  function updateRoutePreview(nextPickup, nextDestination) {
+    window.clearTimeout(routeRefreshTimer.current);
+    setIsRouteRefreshing(true);
+    routeRefreshTimer.current = window.setTimeout(() => setIsRouteRefreshing(false), 420);
+
+    if (!nextDestination) {
+      setRoutePath([]);
+      setRouteMetrics(null);
+      setRouteKey('');
+      window.sessionStorage.removeItem('jpTaxiSelectedRoute');
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const nextPickup = {
-          id: 'current-location',
-          icon: '現在',
-          name: t('currentLocation'),
-          address: t('currentLocation'),
-          position: [position.coords.latitude, position.coords.longitude],
-        };
+    const fallbackRoute = buildFallbackRouteState(nextPickup, nextDestination);
+    setRouteKey(buildRouteKey(nextPickup, nextDestination));
+    setRoutePath(fallbackRoute.path);
+    setRouteMetrics(fallbackRoute.metrics);
+    saveSelectedRoute({
+      destination: nextDestination,
+      pickup: nextPickup,
+      path: fallbackRoute.path,
+      metrics: fallbackRoute.metrics,
+    });
+  }
 
-        setCurrentPickup(nextPickup);
-        setLocationError('');
-      },
-      () => {
-        setCurrentPickup(null);
-        setSelectedPickup(null);
-        setLocationError(t('enableLocation'));
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
-    );
-  }, [t]);
+  useEffect(() => () => window.clearTimeout(routeRefreshTimer.current), []);
 
   useEffect(() => {
-    if (!activeField) {
-      setSuggestions([]);
-      setSearchError('');
-      setIsSearching(false);
-      return undefined;
-    }
+    let cancelled = false;
 
-    const text = (activeField === 'pickup' ? pickupQuery : query).trim();
-    const selectedPlace = activeField === 'pickup' ? selectedPickup : selectedDestination;
-    const selectedText = selectedPlace?.query || selectedPlace?.name || '';
-
-    if (selectedPlace && text !== selectedText && text !== selectedPlace.name) {
-      if (activeField === 'pickup') {
-        setSelectedPickup(null);
-      } else {
-        setSelectedDestination(null);
+    resolveCurrentPickup().then((pickup) => {
+      if (cancelled) return;
+      setSelfLocation(pickup.position);
+      if (!initialRoute?.pickup) {
+        setSelectedPickup(pickup);
+        setPickupQuery(pickup.name);
       }
-
-      setRoutePath([]);
-      setRouteMetrics(null);
-      window.sessionStorage.removeItem('jpTaxiSelectedRoute');
-    }
-
-    if (text.length < 2 || selectedPlace?.name === text) {
-      setSuggestions([]);
-      setSearchError('');
-      setIsSearching(false);
-      return undefined;
-    }
-
-    const localMatches = savedPlaces.filter((place) => {
-      const haystack = `${place.name} ${place.address}`.toLowerCase();
-      return haystack.includes(text.toLowerCase());
     });
 
-    setSuggestions(localMatches);
+    const stopWatching = watchBrowserLocation(
+      (location) => {
+        if (cancelled) return;
+        const position = [location.latitude, location.longitude];
+        setSelfLocation(position);
+        setSelectedPickup((current) => (
+          current.id === defaultPickupPlace.id
+            ? { ...current, position, address: 'GPSで取得した現在位置' }
+            : current
+        ));
+      },
+      { fallback: defaultUserLocation, emitFallback: false },
+    );
+
+    return () => {
+      cancelled = true;
+      stopWatching();
+    };
+  }, [initialRoute?.pickup]);
+
+  useEffect(() => {
+    const text = (activeSearchTarget === 'pickup' ? pickupQuery : destinationQuery).trim();
+    const currentSelection = activeSearchTarget === 'pickup' ? selectedPickup : selectedDestination;
+
+    if (text.length < 2 || currentSelection?.name === text) {
+      setSuggestions([]);
+      setSearchError('');
+      setIsSearching(false);
+      return undefined;
+    }
+
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => {
       setIsSearching(true);
@@ -203,63 +327,48 @@ export default function LocationSearchPage() {
         signal: controller.signal,
       })
         .then((response) => {
-          if (!response.ok) {
-            throw new Error('search failed');
-          }
-
+          if (!response.ok) throw new Error('search failed');
           return response.json();
         })
         .then((items) => {
           const nextSuggestions = items.map(toPlace).filter(Boolean);
-          const mergedSuggestions = nextSuggestions.length ? nextSuggestions : localMatches;
-          setSuggestions(mergedSuggestions);
-          setSearchError(mergedSuggestions.length ? '' : '該当する場所が見つかりませんでした。');
+          setSuggestions(nextSuggestions);
+          setSearchError(nextSuggestions.length ? '' : '該当する地点が見つかりませんでした。');
         })
         .catch((error) => {
           if (error.name === 'AbortError') return;
-
-          setSuggestions(localMatches);
-          setSearchError(localMatches.length ? '' : '検索に失敗しました。もう一度入力してください。');
+          const fallback = savedPlaces.filter((place) => {
+            const haystack = `${place.name} ${place.address}`.toLowerCase();
+            return haystack.includes(text.toLowerCase());
+          });
+          setSuggestions(fallback);
+          setSearchError(fallback.length ? '' : '検索に失敗しました。もう一度入力してください。');
         })
-        .finally(() => {
-          setIsSearching(false);
-        });
+        .finally(() => setIsSearching(false));
     }, 350);
 
     return () => {
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [activeField, pickupQuery, query, selectedDestination, selectedPickup]);
+  }, [activeSearchTarget, destinationQuery, pickupQuery, selectedDestination, selectedPickup]);
 
   useEffect(() => {
-    if (!selectedDestination || !selectedPickup) {
+    if (!selectedDestination) {
+      routeRequestId.current += 1;
       setRoutePath([]);
       setRouteMetrics(null);
+      setRouteKey('');
       window.sessionStorage.removeItem('jpTaxiSelectedRoute');
       return undefined;
     }
 
     const controller = new AbortController();
+    const requestId = routeRequestId.current + 1;
+    routeRequestId.current = requestId;
+    const requestRouteKey = buildRouteKey(selectedPickup, selectedDestination);
     const [pickupLat, pickupLng] = selectedPickup.position;
     const [destinationLat, destinationLng] = selectedDestination.position;
-    const directDistanceMeters = estimateStraightLineDistanceMeters(selectedPickup.position, selectedDestination.position);
-    const directDistanceStatus = getRouteDistanceStatus(directDistanceMeters);
-
-    if (directDistanceStatus.isTooFar) {
-      setRoutePath([selectedPickup.position, selectedDestination.position]);
-      setRouteMetrics({
-        distance: formatDistance(directDistanceMeters),
-        distanceMeters: directDistanceMeters,
-        duration: '--',
-        fare: '--',
-        isLongDistance: false,
-        isTooFar: true,
-      });
-      setIsRouting(false);
-      return undefined;
-    }
-
     const url = [
       'https://router.project-osrm.org/route/v1/driving',
       `${pickupLng},${pickupLat};${destinationLng},${destinationLat}`,
@@ -269,79 +378,99 @@ export default function LocationSearchPage() {
       geometries: 'geojson',
       steps: 'true',
     });
+    const fallbackRoute = buildFallbackRouteState(selectedPickup, selectedDestination);
 
+    setRoutePath(fallbackRoute.path);
+    setRouteMetrics(fallbackRoute.metrics);
+    setRouteKey(requestRouteKey);
+    saveSelectedRoute({
+      destination: selectedDestination,
+      pickup: selectedPickup,
+      path: fallbackRoute.path,
+      metrics: fallbackRoute.metrics,
+    });
     setIsRouting(true);
-    fetch(`${url}?${params.toString()}`, { signal: controller.signal })
+    const requestRoute = (attempt = 0) => fetch(`${url}?${params.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
       .then((response) => {
-        if (!response.ok) {
-          throw new Error('route failed');
-        }
-
+        if (!response.ok) throw new Error('route failed');
         return response.json();
       })
       .then((data) => {
+        if (requestId !== routeRequestId.current) return;
+
         const route = data?.routes?.[0];
         const coordinates = route?.geometry?.coordinates ?? [];
         const nextPath = coordinates.map(([lng, lat]) => [lat, lng]);
-        const distanceMeters = Number(route?.distance ?? 0);
-        const routeDistanceStatus = getRouteDistanceStatus(distanceMeters);
+        const distance = Number(route?.distance);
+        const duration = Number(route?.duration);
+        const hasValidRoute = nextPath.length
+          && Number.isFinite(distance)
+          && distance > 0
+          && Number.isFinite(duration)
+          && duration > 0;
+        const nextMetrics = hasValidRoute
+          ? {
+              distance: formatDistance(distance),
+              duration: formatDuration(duration, distance),
+              fare: estimateFare(distance),
+            }
+          : fallbackRoute.metrics;
+        const finalPath = hasValidRoute ? nextPath : fallbackRoute.path;
 
-        setRoutePath(nextPath.length ? nextPath : [selectedPickup.position, selectedDestination.position]);
-        setRouteMetrics({
-          distance: formatDistance(distanceMeters),
-          distanceMeters,
-          duration: formatDuration(route?.duration ?? 0, distanceMeters),
-          fare: estimateFare(distanceMeters),
-          isLongDistance: routeDistanceStatus.isLongDistance,
-          isTooFar: routeDistanceStatus.isTooFar,
+        setRoutePath(finalPath);
+        setRouteMetrics(nextMetrics);
+        setRouteKey(requestRouteKey);
+        saveSelectedRoute({
+          destination: selectedDestination,
+          pickup: selectedPickup,
+          path: finalPath,
+          metrics: nextMetrics,
         });
       })
       .catch((error) => {
         if (error.name === 'AbortError') return;
+        if (requestId !== routeRequestId.current) return;
+        if (attempt < 1) {
+          return new Promise((resolve) => {
+            window.setTimeout(resolve, 240);
+          }).then(() => requestRoute(attempt + 1));
+        }
 
-        setRoutePath([selectedPickup.position, selectedDestination.position]);
-        setRouteMetrics({
-          distance: t('calculating'),
-          duration: t('calculating'),
-          fare: t('calculating'),
-          isLongDistance: false,
-          isTooFar: false,
+        setRoutePath(fallbackRoute.path);
+        setRouteMetrics(fallbackRoute.metrics);
+        setRouteKey(requestRouteKey);
+        saveSelectedRoute({
+          destination: selectedDestination,
+          pickup: selectedPickup,
+          path: fallbackRoute.path,
+          metrics: fallbackRoute.metrics,
         });
       })
       .finally(() => {
-        setIsRouting(false);
+        if (requestId === routeRequestId.current) setIsRouting(false);
       });
 
-    return () => {
-      controller.abort();
-    };
-  }, [selectedDestination, selectedPickup, t]);
+    requestRoute();
 
-  useEffect(() => {
-    if (!selectedDestination || !routeMetrics || !selectedPickup) {
-      return;
-    }
+    return () => controller.abort();
+  }, [selectedDestination, selectedPickup]);
 
-    window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify({
-      destination: selectedDestination,
-      pickup: {
-        name: selectedPickup.name,
-        address: selectedPickup.address,
-        position: selectedPickup.position,
-      },
-      routePath,
-      routeMetrics,
-    }));
-    window.sessionStorage.removeItem('jpTaxiPendingDestination');
-  }, [routeMetrics, routePath, selectedDestination, selectedPickup]);
-
-  const mapCenter = useMemo(
-    () => selectedPickup?.position ?? [demoMapLocation.latitude, demoMapLocation.longitude],
-    [selectedPickup],
-  );
+  const fallbackRouteState = useMemo(() => (
+    selectedDestination ? buildFallbackRouteState(selectedPickup, selectedDestination) : null
+  ), [selectedDestination, selectedPickup]);
+  const currentRouteKey = buildRouteKey(selectedPickup, selectedDestination);
+  const hasCurrentRouteResult = Boolean(currentRouteKey && routeKey === currentRouteKey);
+  const displayedRoutePath = hasCurrentRouteResult && routePath.length ? routePath : (fallbackRouteState?.path ?? []);
+  const displayedRouteMetrics = hasCurrentRouteResult && routeMetrics ? routeMetrics : fallbackRouteState?.metrics ?? null;
+  const mapCenter = selectedDestination
+    ? selectedPickup.position
+    : selectedPickup.position;
 
   const routePoints = useMemo(() => {
-    if (!selectedDestination || !selectedPickup) {
+    if (!selectedDestination) {
       return [];
     }
 
@@ -349,8 +478,8 @@ export default function LocationSearchPage() {
       {
         key: 'pickup',
         label: selectedPickup.name,
-        meta: t('pickupPoint'),
-        time: t('now'),
+        meta: '出発地',
+        time: '現在',
         position: selectedPickup.position,
         type: 'pickup',
       },
@@ -358,155 +487,132 @@ export default function LocationSearchPage() {
         key: 'destination',
         label: selectedDestination.name,
         meta: selectedDestination.address,
-        time: routeMetrics?.duration ? `約${routeMetrics.duration}` : '',
+        time: displayedRouteMetrics?.duration ? `約${displayedRouteMetrics.duration}` : '',
         position: selectedDestination.position,
         type: 'destination',
       },
     ];
-  }, [routeMetrics?.duration, selectedDestination, selectedPickup, t]);
+  }, [displayedRouteMetrics?.duration, selectedDestination, selectedPickup]);
 
-  const visiblePlaces = savedPlaces.filter((place) => !hiddenHistoryKeys.includes(savedPlaceKey(place)));
-  const activeQuery = activeField === 'pickup' ? pickupQuery : query;
-  const activeSelectedPlace = activeField === 'pickup' ? selectedPickup : selectedDestination;
-  const showInlineSuggestions = activeField === 'pickup'
-    ? Boolean(currentPickup || activeQuery.trim().length >= 2)
-    : Boolean(activeField)
-      && activeQuery.trim().length >= 2
-      && activeSelectedPlace?.name !== activeQuery.trim();
-  const showHistory = !showInlineSuggestions && !selectedDestination;
-  const canContinue = Boolean(
-    selectedDestination
-    && selectedPickup
-    && routeMetrics
-    && !routeMetrics.isTooFar
-    && !isRouting,
-  );
+  const activeQuery = activeSearchTarget === 'pickup' ? pickupQuery : destinationQuery;
+  const activeSelection = activeSearchTarget === 'pickup' ? selectedPickup : selectedDestination;
+  const shouldShowSuggestions = activeQuery.trim().length >= 2 && activeSelection?.name !== activeQuery.trim();
+  const visiblePlaces = shouldShowSuggestions ? suggestions : savedPlaces;
+  const placesWithCurrentLocation = activeSearchTarget === 'pickup'
+    ? [
+        {
+          ...defaultPickupPlace,
+          address: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.address : 'GPSで現在位置を取得',
+          position: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.position : selfLocation,
+          time: '現在地',
+          useCurrentLocation: true,
+        },
+        ...visiblePlaces,
+      ]
+    : visiblePlaces;
+  const routeDurationLabel = displayedRouteMetrics?.duration ?? (isRouting ? '計算中' : '--');
+  const routeDistanceLabel = displayedRouteMetrics?.distance ?? (isRouting ? '計算中' : '--');
+  const routeFareLabel = displayedRouteMetrics?.fare ?? (isRouting ? '計算中' : '--');
 
-  function selectDestination(place) {
-    window.sessionStorage.removeItem('jpTaxiPendingDestination');
-    setSelectedDestination(place);
-    setQuery(place.name);
-    setSuggestions([]);
-    setSearchError('');
-    setActiveField(null);
+  async function handleUseCurrentLocation() {
+    setIsLocating(true);
+    setActiveSearchTarget('pickup');
+
+    try {
+      const pickup = await resolveCurrentPickup();
+      setSelectedPickup(pickup);
+      setPickupQuery(pickup.name);
+      setSuggestions([]);
+      setSearchError('');
+      updateRoutePreview(pickup, selectedDestination);
+    } finally {
+      setIsLocating(false);
+    }
   }
 
-  function selectSearchResult(place) {
-    if (activeField === 'pickup') {
-      setSelectedPickup(place);
-      setPickupQuery(place.name);
-    } else {
-      selectDestination(place);
+  function handleSelectPlace(place) {
+    if (place.useCurrentLocation) {
+      handleUseCurrentLocation();
       return;
     }
 
+    const nextPickup = activeSearchTarget === 'pickup' ? normalizePlace(place) : selectedPickup;
+    const nextDestination = activeSearchTarget === 'destination' ? normalizePlace(place, place) : selectedDestination;
+
+    if (activeSearchTarget === 'pickup') {
+      setSelectedPickup(nextPickup);
+      setPickupQuery(nextPickup.name);
+    } else {
+      setSelectedDestination(nextDestination);
+      setDestinationQuery(nextDestination.name);
+    }
+
     setSuggestions([]);
-    setSearchError('');
-    setActiveField(null);
+    updateRoutePreview(nextPickup, nextDestination);
   }
 
-  function selectCurrentPickup() {
-    if (!currentPickup) return;
-
-    setSelectedPickup(currentPickup);
-    setPickupQuery(t('currentLocation'));
-    setSuggestions([]);
-    setSearchError('');
-    setActiveField(null);
-  }
-
-  function handleDeleteHistory(event, place) {
-    event.stopPropagation();
-    setHiddenHistoryKeys((current) => [...current, savedPlaceKey(place)]);
-  }
-
-  function renderSuggestions(field) {
-    if (!showInlineSuggestions || activeField !== field) return null;
-
-    return (
-      <div className="zip-inline-suggestions">
-        {field === 'pickup' && currentPickup ? (
-          <button className="zip-suggestion-item current-location-suggestion" onClick={selectCurrentPickup} type="button">
-            <span className="zip-history-icon">現在</span>
-            <span className="zip-history-text">
-              <strong>{t('currentLocation')}</strong>
-              <small>{currentPickup.address}</small>
-            </span>
-          </button>
-        ) : null}
-        {field === 'pickup' && !currentPickup ? (
-          <div className="zip-search-state">{locationError || t('enableLocation')}</div>
-        ) : null}
-        {isSearching ? <div className="zip-search-state">検索しています...</div> : null}
-        {!isSearching && searchError ? <div className="zip-search-state">{searchError}</div> : null}
-        {!isSearching && suggestions.map((item) => (
-          <button className="zip-suggestion-item" key={savedPlaceKey(item)} onClick={() => selectSearchResult(item)} type="button">
-            <span className="zip-history-icon">{item.icon}</span>
-            <span className="zip-history-text">
-              <strong>{item.name}</strong>
-              <small>{item.address}</small>
-            </span>
-          </button>
-        ))}
-      </div>
-    );
+  function continueToBillConfirm(event) {
+    event.preventDefault();
+    if (!selectedDestination || !displayedRouteMetrics) return;
+    saveSelectedRoute({
+      destination: selectedDestination,
+      pickup: selectedPickup,
+      path: displayedRoutePath,
+      metrics: displayedRouteMetrics,
+    });
+    navigate('/bill-confirm');
   }
 
   return (
     <PageShell>
       <main className="location-window">
-        <Topbar
-          actions={(
-            <>
-              <Link to="/home">{t('navHome')}</Link>
-              <Link to="/user-info">{t('navAccount')}</Link>
-              <img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" />
-            </>
-          )}
-        />
+        <Topbar actions={<><Link to="/home">ホーム</Link><Link to="/user-info">アカウント</Link><img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
 
         <section className="zip-location-main">
           <section className="zip-location-left">
-            <h1>{t('locationSearchTitle')}</h1>
-            <p>{t('locationSearchCopy')}</p>
+            <h1>目的地を検索</h1>
+            <p>目的地を入力するか、履歴から選択してください。必要に応じて乗車地も変更できます。</p>
 
-            <div className="zip-search-stack" ref={searchRef}>
-              <div className="zip-search-field">
-                <span className="zip-field-label">{t('pickupPoint')}</span>
-                <label className={`zip-search-box ${activeField === 'pickup' ? 'active' : ''}`}>
-                  <input
-                    autoComplete="off"
-                    onChange={(event) => {
-                      setActiveField('pickup');
-                      setPickupQuery(event.target.value);
-                    }}
-                    onFocus={() => setActiveField('pickup')}
-                    placeholder={t('currentLocation')}
-                    type="text"
-                    value={pickupQuery}
-                  />
-                </label>
-                {renderSuggestions('pickup')}
-              </div>
+            <label className="zip-search-box">
+              <span>目的地</span>
+              <input
+                autoComplete="off"
+                onChange={(event) => {
+                  setActiveSearchTarget('destination');
+                  setDestinationQuery(event.target.value);
+                }}
+                onFocus={() => setActiveSearchTarget('destination')}
+                placeholder="目的地・住所を入力"
+                type="text"
+                value={destinationQuery}
+              />
+            </label>
 
-              <div className="zip-search-field">
-                <span className="zip-field-label">{t('destination')}</span>
-                <label className={`zip-search-box ${activeField === 'destination' ? 'active' : ''}`}>
-                  <input
-                    autoComplete="off"
-                    onChange={(event) => {
-                      setActiveField('destination');
-                      setQuery(event.target.value);
-                    }}
-                    onFocus={() => setActiveField('destination')}
-                    placeholder={t('destinationPlaceholder')}
-                    type="text"
-                    value={query}
-                  />
-                </label>
-                {renderSuggestions('destination')}
-              </div>
-            </div>
+            <label className="zip-search-box pickup-search-box">
+              <span>乗車地</span>
+              <input
+                autoComplete="off"
+                onChange={(event) => {
+                  setActiveSearchTarget('pickup');
+                  setPickupQuery(event.target.value);
+                }}
+                onFocus={() => setActiveSearchTarget('pickup')}
+                placeholder="迎えに来てほしい場所"
+                type="text"
+                value={pickupQuery}
+              />
+              <button
+                className="zip-current-location-button"
+                disabled={isLocating}
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleUseCurrentLocation();
+                }}
+                type="button"
+              >
+                {isLocating ? '取得中...' : '現在位置'}
+              </button>
+            </label>
 
             <section className="zip-route-card">
               <div className="zip-route-points">
@@ -515,89 +621,69 @@ export default function LocationSearchPage() {
                 <span className="route-end"></span>
               </div>
               <div className="zip-route-fields">
-                <div>
-                  <span>{t('pickupPoint')}</span>
-                  <strong>{selectedPickup?.name ?? t('locationUnavailable')}</strong>
-                </div>
-                <div>
-                  <span>{t('destination')}</span>
-                  <strong>{selectedDestination?.name ?? t('destinationPlaceholder')}</strong>
-                </div>
+                <div><span>乗車地</span><strong>{selectedPickup.name}</strong></div>
+                <div><span>目的地</span><strong>{selectedDestination?.name ?? '目的地を選択してください'}</strong></div>
               </div>
             </section>
 
-            {!selectedPickup && <div className="location-warning">{locationError || t('enableLocation')}</div>}
-
-            <div className={`zip-location-results ${showHistory ? '' : 'collapsed'}`}>
-              {showHistory && <h2>{t('recentHistory')}</h2>}
-              <div className="zip-history-list">
-                {showHistory && visiblePlaces.map((item) => (
-                  <button className="zip-history-item" key={savedPlaceKey(item)} onClick={() => selectDestination(item)} type="button">
+            <div className="zip-location-results">
+              <h2>{shouldShowSuggestions ? '検索結果' : '最近の履歴'}</h2>
+              <div className="zip-history-list" onWheel={(event) => event.stopPropagation()}>
+                {isSearching ? <div className="zip-search-state">検索しています...</div> : null}
+                {!isSearching && searchError ? <div className="zip-search-state">{searchError}</div> : null}
+                {!isSearching && placesWithCurrentLocation.map((item) => (
+                  <button className="zip-history-item" key={item.id ?? item.name} onClick={() => handleSelectPlace(item)} type="button">
                     <span className="zip-history-icon">{item.icon}</span>
-                    <span className="zip-history-text">
-                      <strong>{item.name}</strong>
-                      <small>{item.address}</small>
-                    </span>
+                    <span className="zip-history-text"><strong>{item.name}</strong><small>{item.address}</small></span>
                     <span className="zip-history-time">{item.time ?? '選択'}</span>
-                    <span
-                      aria-label={t('deleteHistory')}
-                      className="zip-history-delete"
-                      onClick={(event) => handleDeleteHistory(event, item)}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      ×
-                    </span>
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="zip-location-actions">
-              <Link className="flow-back-link" to="/home">{t('back')}</Link>
+              <Link className="flow-back-link" to="/home">戻る</Link>
               <Link
-                aria-disabled={!canContinue}
-                className={`zip-continue-button ${canContinue ? '' : 'disabled'}`}
-                onClick={(event) => {
-                  if (!canContinue) {
-                    event.preventDefault();
-                    setSearchError(t('invalidDestination'));
-                  }
-                }}
-                to={canContinue ? '/bill-confirm' : '#'}
+                className={`zip-continue-button ${selectedDestination ? '' : 'disabled'}`}
+                to={selectedDestination ? '/bill-confirm' : '#'}
+                onClick={continueToBillConfirm}
               >
-                {t('continueWithDestination')}
+                このルートで続ける
               </Link>
             </div>
           </section>
 
-          <aside className="zip-location-map">
+          <aside className={`zip-location-map ${isRouteRefreshing ? 'is-refreshing' : ''}`}>
             <InteractiveRouteMap
               alternateRoutePath={[]}
               className="location-search-route-map"
-              currentLocation={selectedPickup?.position ?? null}
-              fitToRoute={Boolean(selectedDestination && selectedPickup)}
+              currentLocation={selfLocation}
+              fitToRoute={Boolean(selectedDestination)}
               interactive
               mapCenter={mapCenter}
               mapZoom={15}
               route={routePoints}
-              routePath={routePath}
-              routeSummary={routeMetrics ? `${routeMetrics.distance} - ${routeMetrics.duration}` : null}
+              routePath={displayedRoutePath}
+              routeSummary={displayedRouteMetrics ? `${displayedRouteMetrics.distance} - ${displayedRouteMetrics.duration}` : null}
               scrollWheelZoom
               showControls
-              showCurrentLocation={!selectedDestination && Boolean(selectedPickup)}
+              showCurrentLocation
               showDetails={false}
               showDriver={false}
-              showMarkers={Boolean(selectedDestination && selectedPickup)}
-              showRoute={Boolean(selectedDestination && selectedPickup)}
+              showMarkers={Boolean(selectedDestination)}
+              showRoute={Boolean(selectedDestination)}
             />
             <div className="zip-map-card">
-              <strong>{t('routeInfo')}</strong>
-              <div><span>{t('duration')}</span><b>{isRouting ? t('calculating') : routeMetrics?.duration ?? '--'}</b></div>
-              <div><span>{t('distance')}</span><b>{isRouting ? t('calculating') : routeMetrics?.distance ?? '--'}</b></div>
-              <div><span>{t('totalFare')}</span><b>{isRouting ? t('calculating') : routeMetrics?.fare ?? '--'}</b></div>
-              {routeMetrics?.isLongDistance && <p className="route-distance-warning">{t('routeLongWarning')}</p>}
-              {routeMetrics?.isTooFar && <p className="route-distance-warning danger">{t('routeTooFarWarning')}</p>}
+              <div><span>乗車地</span><b>{selectedPickup.name}</b></div>
+              <div><span>目的地</span><b>{selectedDestination?.name ?? '--'}</b></div>
+              <strong>ルート情報</strong>
+              <div><span>予想所要時間</span><b>{routeDurationLabel}</b></div>
+              <div><span>距離</span><b>{routeDistanceLabel}</b></div>
+              <div><span>概算料金</span><b>{routeFareLabel}</b></div>
+            </div>
+            <div className="zip-map-refresh-indicator" aria-hidden={!isRouteRefreshing}>
+              <span></span>
+              <b>ルート更新中</b>
             </div>
           </aside>
         </section>
