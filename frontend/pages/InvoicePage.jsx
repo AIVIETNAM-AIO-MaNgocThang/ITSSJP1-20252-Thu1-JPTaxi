@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getTripInvoice } from '../api/invoices.js';
+import { requestDriverPayment } from '../api/rides.js';
 import InvoiceTemplate from '../components/InvoiceTemplate.jsx';
 import PageShell from '../components/PageShell.jsx';
 import {
@@ -68,6 +69,7 @@ function buildFallbackInvoice(tripId) {
 
 export default function InvoicePage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || location.pathname.startsWith('/driver');
   const closePath = isDriver ? '/driver-home' : '/driver-review';
   const closeLabel = isDriver ? '閉じる' : 'ドライバー評価へ';
@@ -75,6 +77,7 @@ export default function InvoicePage() {
   const fallbackInvoice = useMemo(() => buildFallbackInvoice(tripId), [tripId]);
   const [invoice, setInvoice] = useState(null);
   const [status, setStatus] = useState('');
+  const [isRequestingPayment, setIsRequestingPayment] = useState(false);
   const displayedInvoice = invoice || (!tripId ? fallbackInvoice : null);
 
   useEffect(() => {
@@ -93,6 +96,25 @@ export default function InvoicePage() {
     };
   }, [tripId]);
 
+  async function handleRequestPayment() {
+    if (!isDriver || !tripId || isRequestingPayment) return;
+    setIsRequestingPayment(true);
+    setStatus('');
+
+    try {
+      const result = await requestDriverPayment(tripId);
+      localStorage.setItem('jpTaxiPaymentRequested', JSON.stringify({
+        tripId,
+        requestedAt: result?.requestedAt || Date.now(),
+      }));
+      setStatus('支払い依頼を送信しました。お客様は支払い画面へ移動します。');
+      navigate('/driver-ride-status');
+    } catch (error) {
+      setStatus(error.message || '支払い依頼を送信できませんでした。');
+      setIsRequestingPayment(false);
+    }
+  }
+
   return (
     <PageShell withFooter={false}>
       <main className="invoice-screen">
@@ -103,6 +125,16 @@ export default function InvoicePage() {
             <button type="button">📄 PDF保存</button>
             <button type="button">📧 メールで送信</button>
           </div>
+          {isDriver && (
+            <button
+              className="invoice-close"
+              disabled={!tripId || isRequestingPayment}
+              onClick={handleRequestPayment}
+              type="button"
+            >
+              {isRequestingPayment ? '送信中...' : '支払いを依頼する'}
+            </button>
+          )}
           <Link className="invoice-close" to={closePath}>{closeLabel}</Link>
         </section>
       </main>

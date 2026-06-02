@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { resolveAssetUrl } from '../api/accounts.js';
 import { getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
@@ -73,6 +73,7 @@ function parseDriverPosition(driver) {
 }
 
 export default function RideStatusPage() {
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
   const [driverPosition, setDriverPosition] = useState(() => parseDriverPosition(readSelectedRoute().driver) || null);
@@ -137,6 +138,15 @@ export default function RideStatusPage() {
         if (ignore) return;
         const activeDriver = activeRide?.data?.driver;
         const activeVehicle = activeRide?.data?.vehicle;
+        if (activeRide?.paymentRequested && activeRide?.data?.tripId) {
+          localStorage.setItem('jpTaxiPaymentRequested', JSON.stringify({
+            tripId: activeRide.data.tripId,
+            requestedAt: Date.now(),
+          }));
+          sessionStorage.setItem('jpTaxiTripId', String(activeRide.data.tripId));
+          navigate('/payment');
+          return;
+        }
         const nextDriverPosition = parseDriverPosition(activeRide?.data?.driver);
         if (!nextDriverPosition && !activeDriver && !activeVehicle) return;
 
@@ -170,7 +180,7 @@ export default function RideStatusPage() {
       ignore = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [navigate]);
   const routePoints = [
     {
       key: 'pickup',

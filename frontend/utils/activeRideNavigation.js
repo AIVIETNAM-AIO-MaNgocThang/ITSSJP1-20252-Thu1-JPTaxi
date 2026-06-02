@@ -122,13 +122,13 @@ export function getActiveRideRedirect(role, activeRide, pathname) {
   if (activeRide?.type !== 'trip') return null;
 
   if (role === 'customer') {
-    const allowedPaths = ['/home', '/ride-status', '/messages', '/user-info'];
     if (hasOutstandingPayment(activeRide)) {
-      allowedPaths.push('/payment');
+      return pathMatches(pathname, ['/payment']) ? null : '/payment';
     }
+    const allowedPaths = ['/home', '/ride-status', '/messages', '/user-info'];
     return pathMatches(pathname, allowedPaths)
       ? null
-      : (hasOutstandingPayment(activeRide) ? '/payment' : '/ride-status');
+      : '/ride-status';
   }
 
   if (role === 'driver') {

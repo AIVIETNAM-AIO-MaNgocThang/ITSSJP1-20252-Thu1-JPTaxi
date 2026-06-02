@@ -39,20 +39,26 @@ export default function ActiveRideNavigationGuard({ children }) {
     sessionStorage.setItem('jpTaxiActiveRole', role);
     setState((current) => ({ ...current, checking: true, role }));
 
-    loadActiveRide(role)
-      .then((activeRide) => {
-        if (ignored) return;
-        syncActiveRideSession(activeRide);
-        setState({ checking: false, role, activeRide });
-      })
-      .catch(() => {
-        if (!ignored) {
-          setState({ checking: false, role, activeRide: null });
-        }
-      });
+    function checkActiveRide() {
+      loadActiveRide(role)
+        .then((activeRide) => {
+          if (ignored) return;
+          syncActiveRideSession(activeRide);
+          setState({ checking: false, role, activeRide });
+        })
+        .catch(() => {
+          if (!ignored) {
+            setState({ checking: false, role, activeRide: null });
+          }
+        });
+    }
+
+    checkActiveRide();
+    const timer = window.setInterval(checkActiveRide, 5000);
 
     return () => {
       ignored = true;
+      window.clearInterval(timer);
     };
   }, [location.pathname, role, token]);
 
