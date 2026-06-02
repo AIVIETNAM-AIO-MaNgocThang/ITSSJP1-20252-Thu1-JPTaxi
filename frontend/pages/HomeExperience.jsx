@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { resolveAssetUrl } from '../api/accounts.js';
 import { getActiveDriverRide, getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
@@ -9,6 +10,9 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { buildSelectedRoute, geocodePlace, getCurrentPosition, reverseGeocodePosition } from '../utils/routePlanner.js';
 import { readSavedPlaces } from '../utils/savedPlaces.js';
 import { getRideContinuationPath, syncActiveRideSession } from '../utils/activeRideNavigation.js';
+
+const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
+const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
 
 const userHome = {
   brandTo: '/home',
@@ -65,6 +69,9 @@ export default function HomeExperience({ mode = 'user' }) {
   const { t } = useLanguage();
   const content = mode === 'driver' ? driverHome : userHome;
   const isUserMode = mode !== 'driver';
+  const avatarStorageKey = isUserMode ? 'jpTaxiCustomerAvatarUrl' : 'jpTaxiDriverAvatarUrl';
+  const fallbackAvatar = isUserMode ? customerFallbackAvatar : driverFallbackAvatar;
+  const [topbarAvatar, setTopbarAvatar] = useState(() => resolveAssetUrl(localStorage.getItem(avatarStorageKey)) || fallbackAvatar);
   const [savedPlaces] = useState(readSavedPlaces);
   const [quickLoading, setQuickLoading] = useState(null);
   const [rideContinuationPath, setRideContinuationPath] = useState(null);
@@ -76,6 +83,21 @@ export default function HomeExperience({ mode = 'user' }) {
         title: key === 'work' ? t('quickWork') : key === 'home' ? t('quickHome') : t('quickFavorite'),
       }))
     : content.quickItems;
+
+  useEffect(() => {
+    function syncTopbarAvatar() {
+      setTopbarAvatar(resolveAssetUrl(localStorage.getItem(avatarStorageKey)) || fallbackAvatar);
+    }
+
+    syncTopbarAvatar();
+    window.addEventListener('storage', syncTopbarAvatar);
+    window.addEventListener('focus', syncTopbarAvatar);
+
+    return () => {
+      window.removeEventListener('storage', syncTopbarAvatar);
+      window.removeEventListener('focus', syncTopbarAvatar);
+    };
+  }, [avatarStorageKey, fallbackAvatar]);
 
   useEffect(() => {
     let ignored = false;
@@ -155,10 +177,19 @@ export default function HomeExperience({ mode = 'user' }) {
     }
   }
 
+  const topbarActions = (
+    <>
+      <Link to={isUserMode ? '/home' : '/driver-home'}>{t('navHome')}</Link>
+      <Link to={isUserMode ? '/messages/driver' : '/messages/customer'}>{t('navMessages')}</Link>
+      <Link to={isUserMode ? '/user-info/profile' : '/driver-info/basic'}>{t('navAccount')}</Link>
+      <img className="topbar-avatar" src={topbarAvatar} alt="" />
+    </>
+  );
+
   return (
     <PageShell>
       <main className="home-window">
-        <Topbar brandTo={content.brandTo} actions={content.actions} />
+        <Topbar brandTo={content.brandTo} actions={topbarActions} />
 
         <section className="zip-home-hero">
           <InteractiveRouteMap
