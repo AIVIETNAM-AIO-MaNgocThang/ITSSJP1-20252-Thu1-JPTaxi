@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
@@ -61,9 +62,16 @@ function readSelectedRoute() {
   }
 }
 
+function parseDriverPosition(driver) {
+  const latitude = Number(driver?.location?.latitude ?? driver?.latitude);
+  const longitude = Number(driver?.location?.longitude ?? driver?.longitude);
+  return Number.isFinite(latitude) && Number.isFinite(longitude) ? [latitude, longitude] : null;
+}
+
 export default function RideStatusPage() {
   const { t } = useLanguage();
   const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
+  const [driverPosition, setDriverPosition] = useState(() => parseDriverPosition(readSelectedRoute().driver) || null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -97,6 +105,42 @@ export default function RideStatusPage() {
 
     return () => controller.abort();
   }, [selectedRoute.destination.position, selectedRoute.pickup.position]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function syncDriverPosition() {
+      try {
+        const activeRide = await getActiveRide();
+        if (ignore) return;
+        const nextDriverPosition = parseDriverPosition(activeRide?.data?.driver);
+        if (!nextDriverPosition) return;
+
+        setDriverPosition(nextDriverPosition);
+        setSelectedRoute((current) => {
+          const nextRoute = {
+            ...current,
+            driver: {
+              ...(current.driver || {}),
+              ...(activeRide.data.driver || {}),
+            },
+          };
+          window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(nextRoute));
+          return nextRoute;
+        });
+      } catch {
+        /* Keep the last known driver position when the active ride API is unavailable. */
+      }
+    }
+
+    syncDriverPosition();
+    const timer = window.setInterval(syncDriverPosition, 5000);
+
+    return () => {
+      ignore = true;
+      window.clearInterval(timer);
+    };
+  }, []);
   const routePoints = [
     {
       key: 'pickup',
@@ -136,6 +180,7 @@ export default function RideStatusPage() {
             className="tracking-route-map"
             compact
             currentLocation={selectedRoute.pickup.position}
+            driverPosition={driverPosition || selectedRoute.pickup.position}
             route={routePoints}
             routePath={selectedRoute.routePath}
             routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}

@@ -57,7 +57,7 @@ const alternateRoute = [
   [21.03205, 105.81283],
 ];
 
-const driverPosition = [21.03046, 105.82418];
+const defaultDriverPosition = [21.03046, 105.82418];
 const currentPosition = [21.02878, 105.85204];
 const center = [21.0296, 105.8324];
 
@@ -199,6 +199,7 @@ export default function InteractiveRouteMap({
   mapCenter = center,
   mapZoom = 14,
   nearbyDrivers = [],
+  driverPosition = defaultDriverPosition,
   currentLocation = null,
   centerOnCurrentLocation = false,
   routePath = routeLine,
@@ -299,7 +300,7 @@ export default function InteractiveRouteMap({
             </Tooltip>
           </Marker>
         ))}
-        {showDriver && (
+        {showDriver && Array.isArray(driverPosition) && (
           <Marker
             eventHandlers={{
               mouseover: () => setHoveredPoint('driver'),

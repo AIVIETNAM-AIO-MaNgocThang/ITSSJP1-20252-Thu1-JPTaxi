@@ -26,6 +26,13 @@ function buildStoredRoute(activeRide) {
 
   const distanceKm = Number(trip.actualDistanceKm);
   const passenger = trip.passenger ?? {};
+  const driverLocation = trip.driver?.location
+    ? {
+        latitude: Number(trip.driver.location.latitude),
+        longitude: Number(trip.driver.location.longitude),
+        recordedAt: trip.driver.location.recordedAt,
+      }
+    : null;
 
   return {
     pickup: {
@@ -43,6 +50,10 @@ function buildStoredRoute(activeRide) {
       fare: trip.finalFareJpy ? `¥${trip.finalFareJpy.toLocaleString()}` : '',
     },
     routePath: [pickupPosition, destinationPosition],
+    driver: {
+      ...(trip.driver || {}),
+      location: driverLocation,
+    },
     passenger: {
       customerId: passenger.customerId ?? request.customerId,
       name: passenger.name,
