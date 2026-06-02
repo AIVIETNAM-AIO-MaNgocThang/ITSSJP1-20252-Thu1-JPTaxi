@@ -1,55 +1,150 @@
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import AvatarCropper from '../components/AvatarCropper.jsx';
 import Modal from '../components/Modal.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
-import { useLanguage } from '../context/LanguageContext.jsx';
-import { readSavedPlaces, writeSavedPlaces } from '../utils/savedPlaces.js';
+import {
+  getCustomerProfile,
+  resolveAssetUrl,
+  updateCustomerProfile,
+  uploadAvatar,
+} from '../api/accounts.js';
+import { useLanguage } from '../i18n/LanguageProvider.jsx';
 import '../styles/app-pages.css';
+import { readSavedPlaces, writeSavedPlaces } from '../utils/savedPlaces.js';
 
 const userMenu = [
-  { id: 'profile', icon: '👤', labelKey: 'profile', to: '/user-info/profile' },
-  { id: 'security', icon: '🔒', labelKey: 'security', to: '/user-info/security' },
-  { id: 'notifications', icon: '🔔', labelKey: 'notifications', to: '/user-info/notifications' },
-  { id: 'payment', icon: '💳', labelKey: 'paymentMethod', to: '/user-info/payment' },
-  { id: 'language', icon: '🌐', labelKey: 'languageSettings', to: '/user-info/language' },
-  { id: 'logout', icon: '🚪', labelKey: 'logout', to: '/user-info/logout' },
+  { id: 'profile', icon: '👤', to: '/user-info/profile' },
+  { id: 'security', icon: '🔒', to: '/user-info/security' },
+  { id: 'notifications', icon: '🔔', to: '/user-info/notifications' },
+  { id: 'payment', icon: '💳', to: '/user-info/payment' },
+  { id: 'language', icon: '🌐', to: '/user-info/language' },
+  { id: 'logout', icon: '🚪', to: '/user-info/logout' },
 ];
 
-const savedPlaceTitleKeys = {
-  work: 'quickWork',
-  home: 'quickHome',
-  favorite: 'quickFavorite',
+const defaultVisaCard = {
+  holderName: 'JP Taxi User',
+  number: '4111111111114821',
+  expiry: '12/29',
+  securityCode: '',
+  billingAddress: '',
 };
 
+function normalizeCardNumber(value) {
+  return String(value ?? '').replace(/\D/g, '').slice(0, 16);
+}
+
+function formatCardNumber(value) {
+  return normalizeCardNumber(value).replace(/(.{4})/g, '$1 ').trim();
+}
+
+function formatExpiry(value) {
+  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 4);
+  return digits.length <= 2 ? digits : `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function getCardLastFour(value) {
+  return normalizeCardNumber(value).slice(-4) || '4821';
+}
+
+const fallbackProfile = {
+  lastName: localStorage.getItem('jpTaxiCustomerLastName') || '',
+  firstName: localStorage.getItem('jpTaxiCustomerFirstName') || '',
+  email: localStorage.getItem('jpTaxiUserEmail') || 'yamada@example.com',
+  gender: 'Male',
+  phone: '+84123456789',
+  birthDate: '1990-01-01',
+  avatarUrl: '',
+  createdAt: '2026-03-10',
+  loginHistory: [],
+};
+
+function normalizeProfile(profile = fallbackProfile) {
+  return {
+    ...fallbackProfile,
+    ...profile,
+    birthDate: profile.birthDate ? String(profile.birthDate).slice(0, 10) : fallbackProfile.birthDate,
+    avatarUrl: resolveAssetUrl(profile.avatarUrl),
+    loginHistory: Array.isArray(profile.loginHistory) ? profile.loginHistory : [],
+  };
+}
+
+function rememberCustomerProfile(profile) {
+  if (!profile) return;
+  localStorage.setItem('jpTaxiCustomerFirstName', profile.firstName || '');
+  localStorage.setItem('jpTaxiCustomerLastName', profile.lastName || '');
+  localStorage.setItem('jpTaxiCustomerAvatarUrl', resolveAssetUrl(profile.avatarUrl) || '');
+}
+
+function formatDate(value, locale = 'ja-JP') {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString(locale);
+}
+
 export default function UserInfoPage() {
-  const { section } = useParams();
   const navigate = useNavigate();
-  const { language, setLanguage, t } = useLanguage();
+  const { section } = useParams();
   const activeSection = userMenu.some((item) => item.id === section) ? section : 'profile';
   const [modal, setModal] = useState(null);
+  const [profile, setProfile] = useState(fallbackProfile);
   const [savedPlaces, setSavedPlaces] = useState(readSavedPlaces);
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(true);
+  const { language, languageOptions, profileText: text, setLanguage } = useLanguage();
+  const [visaCard, setVisaCard] = useState(defaultVisaCard);
+  const [avatarFileName, setAvatarFileName] = useState('');
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [croppedAvatarFile, setCroppedAvatarFile] = useState(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const common = text.common;
+  const userText = text.user;
 
-  const modalTitles = {
-    account: t('changeAccountInfo'),
-    avatar: t('changeAvatar'),
-    password: t('passwordChange'),
-    loginHistory: t('loginHistory'),
-    card: t('cardInfo'),
-    addCard: t('addCard'),
-    logout: t('logoutQuestion'),
-    saved: t('saved'),
-  };
-  const modalTitle = modalTitles[modal];
+  useEffect(() => {
+    let ignore = false;
+    async function loadProfile() {
+      setLoading(true);
+      try {
+        const data = await getCustomerProfile();
+        if (!ignore) {
+          const normalized = normalizeProfile(data);
+          rememberCustomerProfile(normalized);
+          setProfile(normalized);
+        }
+      } catch (error) {
+        if (!ignore) setStatus(error.message || text.status.userDemo);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+    loadProfile();
+    return () => {
+      ignore = true;
+    };
+  }, [text.status.userDemo]);
 
-  function closeModal() {
-    setModal(null);
-  }
+  useEffect(() => () => {
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+  }, [avatarPreviewUrl]);
 
-  function confirmLogout() {
-    localStorage.removeItem('jpTaxiRole');
-    localStorage.removeItem('jpTaxiLoginEmail');
-    navigate('/login', { replace: true });
+  const fullName = `${profile.lastName} ${profile.firstName}`.trim();
+  const avatar = profile.avatarUrl;
+
+  const modalTitle = {
+    account: userText.modal.account,
+    avatar: userText.modal.avatar,
+    password: userText.modal.password,
+    loginHistory: userText.modal.loginHistory,
+    card: userText.modal.card,
+    addCard: userText.modal.addCard,
+    logout: userText.modal.logout,
+    saved: userText.modal.saved,
+    error: userText.modal.error,
+  }[modal];
+
+  function updateField(field, value) {
+    setProfile((current) => ({ ...current, [field]: value }));
   }
 
   function updateSavedPlace(key, value) {
@@ -62,230 +157,120 @@ export default function UserInfoPage() {
     }));
   }
 
-  function saveProfile() {
+  function handleAvatarChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setAvatarFileName(file.name);
+    setAvatarFile(file);
+    setCroppedAvatarFile(null);
+    setAvatarPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  async function handleAvatarUpload() {
+    const fileToUpload = croppedAvatarFile || avatarFile;
+    if (!fileToUpload) return;
+    setAvatarUploading(true);
+    try {
+      const url = await uploadAvatar(fileToUpload);
+      if (url) {
+        const updated = await updateCustomerProfile({
+          lastName: profile.lastName,
+          firstName: profile.firstName,
+          gender: profile.gender,
+          birthDate: profile.birthDate,
+          phone: profile.phone,
+          email: profile.email,
+          avatarUrl: url,
+        });
+        const normalized = normalizeProfile(updated);
+        rememberCustomerProfile(normalized);
+        setProfile(normalized);
+        setStatus(text.status.dbSaved);
+        setModal(null);
+      }
+    } catch (error) {
+      setStatus(error.message || text.status.avatarFailed);
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
+  function updateVisaCardField(field, value) {
+    setVisaCard((current) => ({
+      ...current,
+      [field]:
+        field === 'number'
+          ? normalizeCardNumber(value)
+          : field === 'expiry'
+            ? formatExpiry(value)
+            : field === 'securityCode'
+              ? String(value ?? '').replace(/\D/g, '').slice(0, 4)
+              : value,
+    }));
+  }
+
+  async function saveProfile() {
     writeSavedPlaces(savedPlaces);
-    setModal('saved');
+    try {
+      const updated = await updateCustomerProfile({
+        lastName: profile.lastName,
+        firstName: profile.firstName,
+        gender: profile.gender,
+        birthDate: profile.birthDate,
+        phone: profile.phone,
+        email: profile.email,
+        avatarUrl: profile.avatarUrl || null,
+      });
+      const normalized = normalizeProfile(updated);
+      rememberCustomerProfile(normalized);
+      setProfile(normalized);
+      setModal('saved');
+      setStatus(text.status.dbSaved);
+    } catch (error) {
+      setModal('error');
+      setStatus(error.message || text.status.userSaveFailed);
+    }
   }
 
-  function renderNotificationSettings() {
-    return (
-      <div className="setting-list">
-        {[
-          ['🔔', t('dispatchNotification'), t('dispatchNotificationCopy')],
-          ['💬', t('messageNotification'), t('messageNotificationCopy')],
-          ['📧', t('emailNotification'), t('emailNotificationCopy')],
-        ].map(([icon, title, sub]) => (
-          <label className="setting-row" key={title}>
-            <span className="icon-box">{icon}</span>
-            <span>
-              <strong>{title}</strong>
-              <small>{sub}</small>
-            </span>
-            <span className="switch"><input type="checkbox" defaultChecked /><span></span></span>
-          </label>
-        ))}
-      </div>
-    );
+  function changeLanguage(nextLanguage) {
+    setLanguage(nextLanguage);
   }
 
-  function renderSecuritySettings(compact = false) {
-    return (
-      <div className="security-list">
-        <article className="security-item">
-          <strong>{t('passwordChange')}</strong>
-          <span>{t('passwordSecurityCopy')}</span>
-          <button className="link-btn" type="button" onClick={() => setModal('password')}>{t('change')}</button>
-        </article>
-        {compact ? (
-          <article className="security-item">
-            <strong>{t('twoFactor')}</strong>
-            <span>{t('twoFactorCopy')}</span>
-            <button className="link-btn" type="button" onClick={() => setModal('twoFactor')}>{t('configure')}</button>
-          </article>
-        ) : (
-          <article className="security-item">
-            <strong>{t('accountInfo')}</strong>
-            <span>{t('accountEditCopy')}</span>
-            <button className="link-btn" type="button" onClick={() => setModal('account')}>{t('edit')}</button>
-          </article>
-        )}
-        <article className="security-item">
-          <strong>{t('loginHistory')}</strong>
-          <span>{t('loginHistoryCopy')}</span>
-          <button className="link-btn" type="button" onClick={() => setModal('loginHistory')}>{t('check')}</button>
-        </article>
-      </div>
-    );
-  }
-
-  function renderPaymentPanel() {
-    return (
-      <div className="profile-settings-grid">
-        <section className="panel zip-profile-panel settings-primary-panel">
-          <div className="settings-panel-heading">
-            <span className="settings-panel-icon">💳</span>
-            <div>
-              <h2 className="panel-title">{t('paymentMethod')}</h2>
-              <p>{t('paymentPageCopy')}</p>
-            </div>
-          </div>
-          <button className="payment-profile-card" type="button" onClick={() => setModal('card')}>
-            <span className="payment-card-brand">JP</span>
-            <span>
-              <strong>{t('activeCard')}</strong>
-              <small>Credit Card **** 4821</small>
-            </span>
-            <em>{t('expires')} 08/28</em>
-          </button>
-          <button className="submit-button settings-wide-button" type="button" onClick={() => setModal('addCard')}>{t('addCard')}</button>
-        </section>
-
-        <section className="panel zip-profile-panel settings-side-panel">
-          <span className="settings-panel-icon">🔒</span>
-          <h2 className="panel-title">{t('billingSecurity')}</h2>
-          <p className="muted-copy">{t('billingSecurityCopy')}</p>
-          <div className="settings-status-pill">{t('savedInBrowser')}</div>
-        </section>
-      </div>
-    );
-  }
-
-  function renderLanguagePanel() {
-    return (
-      <div className="profile-settings-grid">
-        <section className="panel zip-profile-panel settings-primary-panel">
-          <div className="settings-panel-heading">
-            <span className="settings-panel-icon">🌐</span>
-            <div>
-              <h2 className="panel-title">{t('languageSettings')}</h2>
-              <p>{t('languagePageCopy')}</p>
-            </div>
-          </div>
-          <div className="language-choice-list" role="radiogroup" aria-label={t('displayLanguage')}>
-            {[
-              ['ja', t('japanese'), t('languageOptionJapaneseCopy')],
-              ['vi', t('vietnamese'), t('languageOptionVietnameseCopy')],
-            ].map(([value, label, copy]) => (
-              <label className={`language-choice-card ${language === value ? 'active' : ''}`} key={value}>
-                <input
-                  checked={language === value}
-                  name="profile-language"
-                  onChange={() => setLanguage(value)}
-                  type="radio"
-                  value={value}
-                />
-                <span className="language-choice-mark">{value.toUpperCase()}</span>
-                <span>
-                  <strong>{label}</strong>
-                  <small>{copy}</small>
-                </span>
-              </label>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel zip-profile-panel settings-side-panel">
-          <span className="settings-panel-icon">✓</span>
-          <h2 className="panel-title">{t('currentLanguage')}</h2>
-          <strong className="settings-current-value">{language === 'vi' ? t('vietnamese') : t('japanese')}</strong>
-          <p className="muted-copy">{t('savedInBrowser')}</p>
-        </section>
-      </div>
-    );
-  }
-
-  function renderLogoutPanel() {
-    return (
-      <section className="panel zip-profile-panel logout-inline-panel">
-        <span className="settings-panel-icon danger">🚪</span>
-        <h2 className="panel-title">{t('logoutQuestion')}</h2>
-        <p className="muted-copy">{t('confirmLogoutCopy')}</p>
-        <div className="logout-account-card">
-          <span className="logout-avatar">山</span>
-          <span>
-            <strong>{t('signedInAs')}</strong>
-            <small>山田 太郎 · yamada@example.com</small>
-          </span>
-        </div>
-        <div className="logout-confirm-actions">
-          <Link className="secondary-button settings-action-link" to="/user-info/profile">{t('noCancel')}</Link>
-          <button className="submit-button settings-danger-button" type="button" onClick={confirmLogout}>{t('yesLogout')}</button>
-        </div>
-      </section>
-    );
-  }
-
-  function renderProfilePanel() {
-    return (
-      <div className="profile-reference-grid">
-        <div>
-          <section className="panel zip-profile-panel">
-            <h2 className="panel-title">{t('personalInfo')}</h2>
-            <div className="form-grid">
-              <label><span>{t('surname')}</span><input defaultValue="山田" /></label>
-              <label><span>{t('givenName')}</span><input defaultValue="太郎" /></label>
-              <label className="field full"><span>{t('emailAddress')}</span><input defaultValue="yamada@example.com" /></label>
-              <label><span>{t('gender')}</span><select defaultValue="male"><option value="male">{t('male')}</option><option value="female">{t('female')}</option></select></label>
-              <label><span>{t('phoneNumber')}</span><input defaultValue="+84 123 456 789" /></label>
-              <label className="field full"><span>{t('address')}</span><input defaultValue="Ba Dinh, Ha Noi" /></label>
-            </div>
-          </section>
-
-          <section className="panel zip-profile-panel stack">
-            <h2 className="panel-title">{t('quickAddress')}</h2>
-            <div className="saved-address-grid">
-              {Object.entries(savedPlaces).map(([key, place]) => {
-                const title = t(savedPlaceTitleKeys[key] ?? 'quickFavorite');
-                return (
-                  <label className="saved-address-row" key={key}>
-                    <span className="saved-address-icon">{place.icon}</span>
-                    <span>
-                      <strong>{title}</strong>
-                      <input
-                        onChange={(event) => updateSavedPlace(key, event.target.value)}
-                        placeholder={`${title}${t('inputAddressFor')}`}
-                        value={place.address}
-                      />
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            <button className="submit-button saved-address-save" type="button" onClick={saveProfile}>{t('saveAddress')}</button>
-          </section>
-
-          <section className="panel zip-profile-panel stack">
-            <h2 className="panel-title">{t('notifications')}</h2>
-            {renderNotificationSettings()}
-          </section>
-        </div>
-
-        <div>
-          <section className="panel zip-profile-panel">
-            <h2 className="panel-title">{t('accountInfo')}</h2>
-            <div className="setting-list">
-              <button className="account-card" type="button" onClick={() => setModal('account')}><strong>{t('loginAccount')}</strong><span>yamada@example.com</span></button>
-              <Link className="account-card" to="/user-info/language"><strong>{t('displayLanguage')}</strong><span>{language === 'vi' ? t('vietnamese') : t('japanese')}</span></Link>
-              <Link className="account-card" to="/user-info/payment"><strong>{t('paymentMethod')}</strong><span>カード **** 4821</span></Link>
-              <article className="account-card"><strong>{t('registeredDate')}</strong><span>2026年03月10日</span></article>
-            </div>
-          </section>
-
-          <section className="panel zip-profile-panel stack">
-            <h2 className="panel-title">{t('security')}</h2>
-            {renderSecuritySettings(true)}
-          </section>
-        </div>
-      </div>
-    );
+  function handleLogout() {
+    localStorage.removeItem('jpTaxiToken');
+    localStorage.removeItem('jpTaxiRole');
+    localStorage.removeItem('jpTaxiUserEmail');
+    localStorage.removeItem('jpTaxiCustomerId');
+    localStorage.removeItem('jpTaxiDriverId');
+    localStorage.removeItem('jpTaxiFallbackRide');
+    localStorage.removeItem('jpTaxiPaymentRequested');
+    sessionStorage.removeItem('jpTaxiRideRequestId');
+    sessionStorage.removeItem('jpTaxiTripId');
+    sessionStorage.removeItem('jpTaxiSelectedRoute');
+    navigate('/login', { replace: true });
   }
 
   function renderContent() {
     if (activeSection === 'security') {
       return (
         <section className="panel zip-profile-panel">
-          <h2 className="panel-title">{t('security')}</h2>
-          {renderSecuritySettings()}
+          <h2 className="panel-title">{common.security}</h2>
+          <div className="security-list">
+            {userText.security.map(([title, copy, action], index) => (
+              <article className="security-item" key={title}>
+                <strong>{title}</strong>
+                <span>{copy}</span>
+                {index === 1 ? (
+                  <NavLink className="link-btn" to="/user-info/profile">{action}</NavLink>
+                ) : (
+                  <button className="link-btn" type="button" onClick={() => setModal(index === 0 ? 'password' : 'loginHistory')}>{action}</button>
+                )}
+              </article>
+            ))}
+          </div>
         </section>
       );
     }
@@ -293,37 +278,154 @@ export default function UserInfoPage() {
     if (activeSection === 'notifications') {
       return (
         <section className="panel zip-profile-panel">
-          <h2 className="panel-title">{t('notifications')}</h2>
-          {renderNotificationSettings()}
+          <h2 className="panel-title">{userText.menu.notifications}</h2>
+          <div className="setting-list">
+            {userText.notifications.map(([icon, title, sub]) => (
+              <label className="setting-row" key={title}>
+                <span className="icon-box">{icon}</span>
+                <span><strong>{title}</strong><small>{sub}</small></span>
+                <span className="switch"><input type="checkbox" defaultChecked /><span></span></span>
+              </label>
+            ))}
+          </div>
         </section>
       );
     }
 
-    if (activeSection === 'payment') return renderPaymentPanel();
-    if (activeSection === 'language') return renderLanguagePanel();
-    if (activeSection === 'logout') return renderLogoutPanel();
+    if (activeSection === 'payment') {
+      return (
+        <section className="panel zip-profile-panel narrow-panel">
+          <h2 className="panel-title">{userText.paymentTitle}</h2>
+          <div className="setting-list">
+            <button className="account-card" type="button" onClick={() => setModal('card')}>
+              <strong>{userText.defaultPayment}</strong>
+              <span>{common.visaCard} **** {getCardLastFour(visaCard.number)}</span>
+            </button>
+            <button className="submit-button profile-save-button" type="button" onClick={() => setModal('addCard')}>{common.addVisaCard}</button>
+          </div>
+        </section>
+      );
+    }
 
-    return renderProfilePanel();
+    if (activeSection === 'language') {
+      return (
+        <section className="panel zip-profile-panel narrow-panel">
+          <h2 className="panel-title">{userText.languageTitle}</h2>
+          <label>
+            <span>{userText.displayLanguage}</span>
+            <select value={language} onChange={(event) => changeLanguage(event.target.value)}>
+              {languageOptions.map((option) => (
+                <option value={option.value} key={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </section>
+      );
+    }
+
+    if (activeSection === 'logout') {
+      return (
+        <section className="panel zip-profile-panel narrow-panel">
+          <h2 className="panel-title">{common.logout}</h2>
+          <p className="muted-copy">{userText.logoutCopy}</p>
+          <button className="submit-button profile-save-button" type="button" onClick={handleLogout}>{common.logout}</button>
+        </section>
+      );
+    }
+
+    return (
+      <div className="profile-reference-grid">
+        <div>
+          <section className="panel zip-profile-panel">
+            <h2 className="panel-title">{userText.personalInfo}</h2>
+            <div className="form-grid">
+              <label><span>{common.lastName}</span><input value={profile.lastName} onChange={(event) => updateField('lastName', event.target.value)} /></label>
+              <label><span>{common.firstName}</span><input value={profile.firstName} onChange={(event) => updateField('firstName', event.target.value)} /></label>
+              <label className="field full"><span>{common.email}</span><input type="email" value={profile.email} onChange={(event) => updateField('email', event.target.value)} /></label>
+              <label>
+                <span>{common.gender}</span>
+                <select value={profile.gender} onChange={(event) => updateField('gender', event.target.value)}>
+                  <option value="Male">{common.male}</option>
+                  <option value="Female">{common.female}</option>
+                  <option value="Other">{common.other}</option>
+                </select>
+              </label>
+              <label><span>{common.phone}</span><input value={profile.phone} onChange={(event) => updateField('phone', event.target.value)} /></label>
+              <label className="field full"><span>{userText.address}</span><input defaultValue="Ba Dinh, Ha Noi" /></label>
+            </div>
+          </section>
+
+          <section className="panel zip-profile-panel stack">
+            <h2 className="panel-title">{userText.menu.notifications}</h2>
+            <div className="setting-list">
+              {userText.notifications.map(([icon, title, sub]) => (
+                <label className="setting-row" key={title}>
+                  <span className="icon-box">{icon}</span>
+                  <span><strong>{title}</strong><small>{sub}</small></span>
+                  <span className="switch"><input type="checkbox" defaultChecked /><span></span></span>
+                </label>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <div>
+          <section className="panel zip-profile-panel">
+            <h2 className="panel-title">{userText.accountInfo}</h2>
+            <div className="setting-list">
+              <Link className="account-card profile-info-card" to="/user-info/language">
+                <span className="account-icon">🌐</span>
+                <span><strong>{userText.displayLanguage}</strong><small>{languageOptions.find((item) => item.value === language)?.label || '日本語'}</small></span>
+              </Link>
+              <Link className="account-card profile-info-card" to="/user-info/payment">
+                <span className="account-icon">💳</span>
+                <span><strong>{userText.defaultPayment}</strong><small>{common.visaCard} **** {getCardLastFour(visaCard.number)}</small></span>
+              </Link>
+              <article className="account-card profile-info-card">
+                <span className="account-icon">🕘</span>
+                <span><strong>{userText.registeredDate}</strong><small>{formatDate(profile.createdAt, text.locale) || '2026/03/10'}</small></span>
+              </article>
+            </div>
+          </section>
+
+          <section className="panel zip-profile-panel stack">
+            <h2 className="panel-title">{common.security}</h2>
+            <div className="security-list">
+              {userText.securityHome.map(([title, copy, action], index) => (
+                <article className="security-item" key={title}>
+                  <strong>{title}</strong>
+                  <span>{copy}</span>
+                  <button className="link-btn" type="button" onClick={() => setModal(index === 0 ? 'password' : 'loginHistory')}>{action}</button>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
   }
 
   return (
     <PageShell>
       <main className="app-screen zip-profile-screen">
         <div className="profile-window">
-          <Topbar actions={<><Link to="/home">{t('navHome')}</Link><Link to="/messages/driver">{t('navMessages')}</Link><img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" /></>} />
+          <Topbar actions={<><Link to="/home">{common.home}</Link><Link to="/messages/driver">{common.messages}</Link><Link to="/user-info/profile" className="active-header-link">{common.account || 'アカウント'}</Link>{avatar ? <img className="topbar-avatar" src={avatar} alt="" /> : <span className="topbar-avatar" />}</>} />
           <section className="profile-page-shell zip-profile-shell">
             <aside className="profile-sidebar">
               <section className="profile-card zip-profile-card">
-                <div className="profile-avatar">山</div>
-                <strong>山田 太郎</strong>
-                <span>yamada@example.com</span>
-                <em>{t('generalUser')}</em>
+                <div className="profile-avatar">
+                  {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : profile.lastName.slice(0, 1)}
+                </div>
+                <strong>{fullName}</strong>
+                <span>{profile.email}</span>
+                <em>{loading ? common.loading : userText.role}</em>
+                <button className="link-btn" type="button" onClick={() => setModal('avatar')}>{common.changeImage}</button>
               </section>
-              <nav className="side-menu" aria-label={t('profileMenu')}>
+              <nav className="side-menu" aria-label={userText.pageTitle}>
                 {userMenu.map((tab) => (
                   <NavLink className={({ isActive }) => `side-item ${isActive || activeSection === tab.id ? 'active' : ''}`} to={tab.to} key={tab.id}>
                     <span>{tab.icon}</span>
-                    <span>{t(tab.labelKey)}</span>
+                    <span>{userText.menu[tab.id]}</span>
                   </NavLink>
                 ))}
               </nav>
@@ -332,36 +434,83 @@ export default function UserInfoPage() {
             <section className="profile-content">
               <div className="profile-header zip-profile-header">
                 <div>
-                  <h1>{t('profileSettings')}</h1>
-                  <p>{t('profileCopy')}</p>
+                  <h1>{userText.pageTitle}</h1>
+                  <p>{userText.pageSubtitle}</p>
+                  {status && <p className="muted-copy">{status}</p>}
                 </div>
-                <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>{t('saveChanges')}</button>
+                <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>{common.saveChanges}</button>
               </div>
               {renderContent()}
             </section>
           </section>
         </div>
 
-        <Modal open={Boolean(modal)} title={modalTitle || t('saved')} onClose={closeModal}>
+        <Modal open={Boolean(modal)} title={modalTitle || userText.modal.saved} onClose={() => setModal(null)}>
           {modal === 'account' && (
             <div className="modal-form zip-modal-form">
-              <label><span>{t('loginId')}</span><input defaultValue="yamada_taro" /></label>
-              <label><span>{t('emailAddress')}</span><input type="email" defaultValue="yamada@example.com" /></label>
-              <label><span>{t('phoneNumber')}</span><input defaultValue="+84 123 456 789" /></label>
-              <label><span>{t('displayName')}</span><input defaultValue="山田 太郎" /></label>
-              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>{t('saveChanges')}</button>
+              <label><span>{common.email}</span><input type="email" value={profile.email} onChange={(event) => updateField('email', event.target.value)} /></label>
+              <label><span>{common.phone}</span><input value={profile.phone} onChange={(event) => updateField('phone', event.target.value)} /></label>
+              <label><span>{userText.modal.displayName}</span><input value={fullName} readOnly /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={saveProfile}>{common.save}</button>
+            </div>
+          )}
+          {modal === 'avatar' && (
+            <div className="modal-form zip-modal-form">
+              <div className="profile-avatar profile-avatar-preview">
+                {avatar ? <img src={avatar} alt="" /> : profile.lastName.slice(0, 1)}
+              </div>
+              <label className="avatar-file-picker">
+                <span className="avatar-file-icon">🖼️</span>
+                <span className="avatar-file-copy">
+                  <strong>{common.changeImage}</strong>
+                  <small>{avatarFileName || common.imageFile}</small>
+                </span>
+                <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={handleAvatarChange} />
+              </label>
+              <AvatarCropper src={avatarPreviewUrl} fileName={avatarFileName} onCrop={setCroppedAvatarFile} />
+              <button
+                className="submit-button profile-save-button"
+                type="button"
+                disabled={!avatarFile || avatarUploading}
+                onClick={handleAvatarUpload}
+              >
+                {avatarUploading ? common.uploading : common.save}
+              </button>
+            </div>
+          )}
+          {(modal === 'card' || modal === 'addCard') && (
+            <div className="modal-form zip-modal-form visa-card-form">
+              <div className="visa-card-preview">
+                <span>VISA</span>
+                <strong>**** **** **** {getCardLastFour(visaCard.number)}</strong>
+                <small>{visaCard.holderName || common.cardHolder} · {visaCard.expiry || 'MM/YY'}</small>
+              </div>
+              <div className="form-grid">
+                <label className="field full"><span>{common.cardHolder}</span><input value={visaCard.holderName} onChange={(event) => updateVisaCardField('holderName', event.target.value)} /></label>
+                <label className="field full"><span>{common.cardNumber}</span><input inputMode="numeric" value={formatCardNumber(visaCard.number)} onChange={(event) => updateVisaCardField('number', event.target.value)} /></label>
+                <label><span>{common.expiryDate}</span><input inputMode="numeric" placeholder="MM/YY" value={visaCard.expiry} onChange={(event) => updateVisaCardField('expiry', event.target.value)} /></label>
+                <label><span>{common.securityCode}</span><input type="password" inputMode="numeric" maxLength={4} value={visaCard.securityCode} onChange={(event) => updateVisaCardField('securityCode', event.target.value)} /></label>
+                <label className="field full"><span>{common.billingAddress}</span><input value={visaCard.billingAddress} onChange={(event) => updateVisaCardField('billingAddress', event.target.value)} /></label>
+              </div>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>{common.saveCard}</button>
             </div>
           )}
           {modal === 'password' && (
             <div className="modal-form zip-modal-form">
-              <label><span>{t('currentPassword')}</span><input type="password" /></label>
-              <label><span>{t('newPassword')}</span><input type="password" /></label>
-              <label><span>{t('confirmNewPassword')}</span><input type="password" /></label>
-              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>{t('saveChanges')}</button>
+              <label><span>{userText.modal.currentPassword}</span><input type="password" /></label>
+              <label><span>{userText.modal.newPassword}</span><input type="password" /></label>
+              <label><span>{userText.modal.confirmPassword}</span><input type="password" /></label>
+              <button className="submit-button profile-save-button" type="button" onClick={() => setModal(null)}>{common.save}</button>
             </div>
           )}
-          {modal === 'loginHistory' && <div className="modal-list"><span>2026/05/14 21:30 - Chrome / Windows</span><span>2026/05/12 08:15 - Mobile Safari</span></div>}
-          {modal && !['account', 'password', 'loginHistory'].includes(modal) && <p className="modal-copy">{t('saveContentCopy')}</p>}
+          {modal === 'loginHistory' && (
+            <div className="modal-list">
+              {profile.loginHistory.length ? profile.loginHistory.map((item) => (
+                <span key={`${item.loginTime}-${item.ipAddress}`}>{formatDate(item.loginTime, text.locale)} - {item.ipAddress || 'unknown'}</span>
+              )) : <span>{userText.modal.emptyLoginHistory}</span>}
+            </div>
+          )}
+          {modal && !['account', 'avatar', 'card', 'addCard', 'password', 'loginHistory'].includes(modal) && <p className="modal-copy">{status || userText.modal.defaultCopy}</p>}
         </Modal>
       </main>
     </PageShell>

@@ -10,6 +10,7 @@ CREATE TYPE dispatch_status_type AS ENUM ('pending', 'accepted', 'rejected', 'ti
 CREATE TYPE payment_status_type AS ENUM ('pending', 'success', 'failed');
 CREATE TYPE payout_status_type AS ENUM ('pending', 'processed', 'failed');
 CREATE TYPE user_type_enum AS ENUM ('customer', 'driver');
+CREATE TYPE chat_sender_role_enum AS ENUM ('customer', 'driver');
 CREATE TYPE license_type_enum AS ENUM ('B', 'C1', 'C', 'D1', 'D2', 'D');
 CREATE TYPE payment_method_enum AS ENUM ('VISA', 'MASTER', 'JCB', 'VNPAY');
 CREATE TYPE vehicle_type_enum AS ENUM ('4', '7', '9');  -- số chỗ ngồi
@@ -116,6 +117,9 @@ CREATE TABLE ride_request (
     request_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     status ride_request_status_type NOT NULL,
     note_to_driver VARCHAR(255) NULL,
+    estimated_fare_vnd INT NULL,
+    estimated_fare_jpy INT NULL,
+    raw_fare_vnd INT NULL,
     FOREIGN KEY (customer_id) REFERENCES customer(customer_id) ON DELETE RESTRICT
 );
 
@@ -150,6 +154,19 @@ CREATE TABLE trip (
     FOREIGN KEY (driver_id) REFERENCES driver(driver_id) ON DELETE RESTRICT
 );
 
+-- Tin nhắn chat theo chuyến đi
+CREATE TABLE chat_message (
+    message_id SERIAL PRIMARY KEY,
+    trip_id INT NOT NULL,
+    sender_role chat_sender_role_enum NOT NULL,
+    sender_id INT NOT NULL,
+    sender_display_name VARCHAR(100) NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (trip_id) REFERENCES trip(trip_id) ON DELETE CASCADE
+);
+CREATE INDEX idx_chat_message_trip_time ON chat_message(trip_id, created_at);
+
 -- =====================================================
 -- 4. Bảng thanh toán, chi trả, đánh giá
 -- =====================================================
@@ -159,7 +176,7 @@ CREATE TABLE rating (
     rating_id SERIAL PRIMARY KEY,
     trip_id INT NOT NULL UNIQUE,
     customer_id INT NOT NULL,
-    score SMALLINT NOT NULL CHECK (score BETWEEN 1 AND 5),
+    score NUMERIC(2, 1) NOT NULL CHECK (score BETWEEN 0.5 AND 5 AND score * 2 = FLOOR(score * 2)),
     comment TEXT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NULL,

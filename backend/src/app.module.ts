@@ -20,12 +20,16 @@ import { DriverPayout } from './entities/driver-payout.entity';
 import { SearchHistory } from './entities/search-history.entity';
 import { UserLink } from './entities/user-link.entity';
 import { AuditLog } from './entities/audit-log.entity';
+import { ChatMessage } from './entities/chat-message.entity';
 import { AuthModule } from './modules/auth/auth.module';
 import { RideModule } from './modules/ride/ride.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DriversModule } from './modules/drivers/drivers.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { RatingsModule } from './modules/ratings/ratings.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [
@@ -44,7 +48,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
         host: config.get<string>('DB_HOST', 'localhost'),
         port: parseInt(config.get<string>('DB_PORT', '5432'), 10),
         username: config.get<string>('DB_USER', 'postgres'),
-        password: config.get<string>('DB_PASS', ''),
+        password: config.get<string>('DB_PASS') ?? '123456',
         database: config.get<string>('DB_NAME', 'JPTaxi'),
         entities: [
           Customer,
@@ -65,6 +69,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
           SearchHistory,
           UserLink,
           AuditLog,
+          ChatMessage,
         ],
         synchronize: false,
         logging: false,
@@ -76,6 +81,9 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     CustomersModule,
     DriversModule,
     UploadsModule,
+    RatingsModule,
+    InvoicesModule,
+    ChatModule,
   ],
 })
 export class AppModule {}

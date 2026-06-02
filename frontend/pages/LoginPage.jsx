@@ -16,33 +16,11 @@ const loginMessages = {
   success: 'ログイン情報を確認しました。',
 };
 
-function detectRoleByEmail(email) {
-  const normalizedEmail = email.trim().toLowerCase();
-  return normalizedEmail.includes('driver') || normalizedEmail.includes('taxi') ? 'driver' : 'user';
-}
-
-function readJwtPayload(token) {
-  try {
-    const [, payload] = token.split('.');
-    if (!payload) return null;
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const json = window.atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function normalizeAppRole(role, email) {
-  if (role === 'driver') return 'driver';
-  if (role === 'customer' || role === 'user') return 'user';
-  return detectRoleByEmail(email);
-}
-
 export default function LoginPage() {
   const navigate = useNavigate();
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
+  const [loginRole, setLoginRole] = useState('customer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -133,44 +111,45 @@ export default function LoginPage() {
       return;
     }
 
+    if (remember) {
+      localStorage.setItem('jpTaxiLoginEmail', email.trim());
+    } else {
+      localStorage.removeItem('jpTaxiLoginEmail');
+    }
+
+    const trimmedEmail = email.trim();
+
     try {
-      const loginResult = await apiRequest('/login', {
+      const result = await apiRequest('/login', {
         method: 'POST',
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-        }),
+        body: JSON.stringify({ email: trimmedEmail, password, role: loginRole }),
       });
-      const token = loginResult?.token;
-      const jwtPayload = token ? readJwtPayload(token) : null;
-      const backendRole = loginResult?.user?.role || jwtPayload?.role;
-      const role = normalizeAppRole(backendRole, email);
-      const userId =
-        loginResult?.user?.id ??
-        loginResult?.user?.customerId ??
-        loginResult?.user?.driverId ??
-        jwtPayload?.id;
+      const role = result?.role === 'driver' ? 'driver' : 'customer';
 
-      if (remember) {
-        localStorage.setItem('jpTaxiLoginEmail', email.trim());
-      } else {
-        localStorage.removeItem('jpTaxiLoginEmail');
-      }
-
-      if (token) {
-        localStorage.setItem('jpTaxiToken', token);
-      }
-      if (userId != null) {
-        localStorage.setItem('jpTaxiUserId', String(userId));
-      }
-      localStorage.setItem('jpTaxiAuthRole', backendRole || (role === 'driver' ? 'driver' : 'customer'));
+      localStorage.setItem('jpTaxiToken', result.token);
       localStorage.setItem('jpTaxiRole', role);
-      localStorage.setItem('jpTaxiUserEmail', email.trim());
+      localStorage.setItem('jpTaxiUserEmail', trimmedEmail);
+      localStorage.setItem(role === 'driver' ? 'jpTaxiDriverToken' : 'jpTaxiCustomerToken', result.token);
+      localStorage.setItem(role === 'driver' ? 'jpTaxiDriverEmail' : 'jpTaxiCustomerEmail', trimmedEmail);
+      localStorage.setItem(role === 'driver' ? 'jpTaxiDriverFirstName' : 'jpTaxiCustomerFirstName', result?.user?.firstName || '');
+      localStorage.setItem(role === 'driver' ? 'jpTaxiDriverLastName' : 'jpTaxiCustomerLastName', result?.user?.lastName || '');
+      sessionStorage.setItem('jpTaxiActiveRole', role);
+
+      if (result?.user?.customerId) {
+        localStorage.setItem('jpTaxiCustomerId', String(result.user.customerId));
+      }
+      if (result?.user?.driverId) {
+        localStorage.setItem('jpTaxiDriverId', String(result.user.driverId));
+      }
+
       setStatus(loginMessages.success);
       navigate(role === 'driver' ? '/driver-home' : '/home');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Login failed';
-      setStatus(message);
+      localStorage.removeItem('jpTaxiToken');
+      localStorage.removeItem('jpTaxiRole');
+      localStorage.removeItem('jpTaxiUserEmail');
+      sessionStorage.removeItem('jpTaxiActiveRole');
+      setStatus(error.message || 'ログインできませんでした。');
     }
   }
 
@@ -262,11 +241,38 @@ export default function LoginPage() {
           <section className="auth-card" aria-labelledby="login-title">
             <div className="form-logo" aria-hidden="true">🚕</div>
             <div className="form-heading">
-              <h2 id="login-title">ログイン</h2>
-              <p>メールアドレスとパスワードを入力して、システムにアクセスしてください。</p>
+              <h2 id="login-title">{loginRole === 'driver' ? 'ドライバーログイン' : 'お客様ログイン'}</h2>
+              <p>{loginRole === 'driver' ? '配車リクエストを受け取るドライバーアカウントでログインしてください。' : '予約を行うお客様アカウントでログインしてください。'}</p>
             </div>
 
             <form className="auth-form" onSubmit={handleSubmit} noValidate>
+              <div className="login-role-switch" role="tablist" aria-label="ログインするアカウントの種類">
+                <button
+                  className={loginRole === 'customer' ? 'active' : ''}
+                  type="button"
+                  role="tab"
+                  aria-selected={loginRole === 'customer'}
+                  onClick={() => {
+                    setLoginRole('customer');
+                    setStatus('');
+                  }}
+                >
+                  お客様
+                </button>
+                <button
+                  className={loginRole === 'driver' ? 'active' : ''}
+                  type="button"
+                  role="tab"
+                  aria-selected={loginRole === 'driver'}
+                  onClick={() => {
+                    setLoginRole('driver');
+                    setStatus('');
+                  }}
+                >
+                  ドライバー
+                </button>
+              </div>
+
               <label>
                 <span>メールアドレス</span>
                 <input
@@ -316,8 +322,14 @@ export default function LoginPage() {
 
               <button className="submit-button" type="submit">ログインする</button>
               <div className="login-register-links">
-                <p className="note-link">アカウントをお持ちでないですか？ <Link to="/register">顧客登録</Link></p>
-                <Link className="driver-register-link" to="/driver-register">運転者登録</Link>
+                {loginRole === 'driver' ? (
+                  <p className="note-link">ドライバーアカウントをお持ちでないですか？ <Link to="/driver-register">運転者登録</Link></p>
+                ) : (
+                  <>
+                    <p className="note-link">アカウントをお持ちでないですか？ <Link to="/register">顧客登録</Link></p>
+                    <p className="note-link driver-register-entry">ドライバーとして働きますか？ <Link className="driver-register-link" to="/driver-register">運転者登録</Link></p>
+                  </>
+                )}
               </div>
             </form>
           </section>

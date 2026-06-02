@@ -13,6 +13,7 @@ const userHome = {
   actions: (
     <>
       <Link to="/home">ホーム</Link>
+      <Link to="/messages/driver">メッセージ</Link>
       <Link to="/user-info">アカウント</Link>
       <img className="topbar-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80" alt="" />
     </>
@@ -37,6 +38,7 @@ const driverHome = {
   actions: (
     <>
       <Link to="/driver-home">ホーム</Link>
+      <Link to="/messages/customer">メッセージ</Link>
       <Link to="/driver-info/basic">ドライバー情報</Link>
       <img className="topbar-avatar" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80" alt="" />
     </>

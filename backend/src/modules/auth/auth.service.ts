@@ -9,7 +9,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Customer, GenderType } from '../../entities/customer.entity';
+import { Driver, DriverJapaneseLevelEnum, DriverStatusType } from '../../entities/driver.entity';
+import { DriverLicense, LicenseTypeEnum } from '../../entities/driver-license.entity';
 import { LoginHistory, LoginUserType } from '../../entities/login-history.entity';
+import { Vehicle, VehicleTypeEnum } from '../../entities/vehicle.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -17,12 +20,17 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Injectable()
 export class AuthService {
-  // Bộ nhớ đệm tạm thời cho mã xác minh reset mật khẩu (in-memory cache)
   private forgotPasswordCodes = new Map<string, { code: string; expiresAt: Date }>();
 
   constructor(
     @InjectRepository(Customer)
     private readonly customers: Repository<Customer>,
+    @InjectRepository(Driver)
+    private readonly drivers: Repository<Driver>,
+    @InjectRepository(Vehicle)
+    private readonly vehicles: Repository<Vehicle>,
+    @InjectRepository(DriverLicense)
+    private readonly licenses: Repository<DriverLicense>,
     @InjectRepository(LoginHistory)
     private readonly logins: Repository<LoginHistory>,
     private readonly jwt: JwtService,
@@ -30,12 +38,100 @@ export class AuthService {
 
   async register(dto: RegisterDto) {
     try {
+      const role = dto.role === 'driver' ? 'driver' : 'customer';
+      const normalizedEmail = dto.email.trim().toLowerCase();
+      const emailExists =
+        (await this.customers.exist({ where: { email: normalizedEmail } })) ||
+        (await this.drivers.exist({ where: { email: normalizedEmail } }));
+      if (emailExists) {
+        throw new BadRequestException('このメールアドレスはすでに登録されています。');
+      }
+
+      const phoneExists =
+        (await this.customers.exist({ where: { phone: dto.phone } })) ||
+        (await this.drivers.exist({ where: { phone: dto.phone } }));
+      if (phoneExists) {
+        throw new BadRequestException('この電話番号はすでに登録されています。');
+      }
+
       const passwordHash = await bcrypt.hash(dto.password, 10);
       const birthDate = dto.birth_date?.slice(0, 10) ?? '1990-01-01';
-      const entity = this.customers.create({
+
+      if (role === 'driver') {
+        if (!dto.license_plate || !dto.vehicle_type || !dto.license_number) {
+          throw new BadRequestException('ドライバー登録には免許証番号、車両タイプ、ナンバープレートが必要です。');
+        }
+        const vehicleType = dto.vehicle_type as VehicleTypeEnum;
+        if (!Object.values(VehicleTypeEnum).includes(vehicleType)) {
+          throw new BadRequestException('車両タイプが正しくありません。');
+        }
+        if (await this.vehicles.exist({ where: { licensePlate: dto.license_plate } })) {
+          throw new BadRequestException('このナンバープレートはすでに登録されています。');
+        }
+
+        const driverEntity = this.drivers.create({
+          firstName: dto.first_name,
+          lastName: dto.last_name,
+          email: normalizedEmail,
+          passwordHash,
+          phone: dto.phone,
+          gender: dto.gender ?? GenderType.Other,
+          birthDate,
+          nationality: dto.nationality || 'Vietnam',
+          idNumber: dto.id_number || null,
+          isEmailVerified: false,
+          isPhoneVerified: false,
+          status: DriverStatusType.approved,
+          driverJapaneseLevel: dto.japanese_level ?? DriverJapaneseLevelEnum.N3,
+          avatarUrl: dto.portrait_url || null,
+        });
+        const savedDriver = await this.drivers.save(driverEntity);
+
+        await this.vehicles.save(
+          this.vehicles.create({
+            driverId: savedDriver.driverId,
+            vehicleType,
+            licensePlate: dto.license_plate,
+            brand: dto.vehicle_brand || 'Toyota',
+            color: dto.vehicle_color || '',
+            manufactureYear: new Date().getFullYear(),
+            vehiclePhotoUrl: dto.vehicle_photo_url || null,
+            registrationPaperUrl: dto.registration_paper_url || null,
+          }),
+        );
+
+        const today = new Date().toISOString().slice(0, 10);
+        await this.licenses.save(
+          this.licenses.create({
+            driverId: savedDriver.driverId,
+            licenseType: dto.license_type ?? LicenseTypeEnum.B,
+            issueDate: today,
+            issuePlace: dto.license_number,
+            expiryDate: dto.license_expiry_date?.slice(0, 10) || today,
+            frontImageUrl: dto.license_front_url || null,
+            backImageUrl: dto.license_back_url || null,
+          }),
+        );
+
+        const token = this.jwt.sign({ id: savedDriver.driverId, role: 'driver' }, { expiresIn: '7d' });
+        const { passwordHash: _p, ...user } = savedDriver as Driver & { passwordHash?: string };
+        return {
+          message: 'ドライバー登録が完了しました。',
+          token,
+          role: 'driver',
+          user: {
+            ...user,
+            driverId: savedDriver.driverId,
+            email: savedDriver.email,
+            name: savedDriver.firstName,
+          },
+        };
+      }
+
+      const customerEntity = this.customers.create({
         firstName: dto.first_name,
         lastName: dto.last_name,
-        email: dto.email,
+        email: normalizedEmail,
         passwordHash,
         phone: dto.phone,
         gender: dto.gender ?? GenderType.Other,
@@ -43,53 +139,100 @@ export class AuthService {
         isEmailVerified: false,
         isPhoneVerified: false,
       });
-      const saved = await this.customers.save(entity);
-      const { passwordHash: _p, ...user } = saved as Customer & {
-        passwordHash?: string;
+      const savedCustomer = await this.customers.save(customerEntity);
+      const token = this.jwt.sign({ id: savedCustomer.customerId, role: 'customer' }, { expiresIn: '7d' });
+      const { passwordHash: _p, ...user } = savedCustomer as Customer & { passwordHash?: string };
+      return {
+        message: '登録が完了しました。',
+        token,
+        role: 'customer',
+        user: {
+          ...user,
+          customerId: savedCustomer.customerId,
+          email: savedCustomer.email,
+          name: savedCustomer.firstName,
+        },
       };
-      return { message: 'Đăng ký thành công', user };
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Lỗi không xác định';
+      if (e instanceof BadRequestException) {
+        throw e;
+      }
+      const msg = e instanceof Error ? e.message : '不明なエラーが発生しました。';
       throw new BadRequestException(msg);
     }
   }
 
   async login(dto: LoginDto, clientIp?: string | null) {
-    const user = await this.customers
+    const normalizedEmail = dto.email.trim().toLowerCase();
+    const preferredRole = dto.role ?? (normalizedEmail.includes('driver') || normalizedEmail.includes('taxi')
+      ? 'driver'
+      : 'customer');
+
+    const customer = await this.customers
       .createQueryBuilder('c')
       .addSelect('c.passwordHash')
-      .where('c.email = :email', { email: dto.email })
+      .where('LOWER(c.email) = :email', { email: normalizedEmail })
+      .getOne();
+    const driver = await this.drivers
+      .createQueryBuilder('d')
+      .addSelect('d.passwordHash')
+      .where('LOWER(d.email) = :email', { email: normalizedEmail })
       .getOne();
 
-    if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
-      throw new UnauthorizedException('Email hoặc mật khẩu sai');
+    const candidates = preferredRole === 'driver'
+      ? [
+          { userType: LoginUserType.driver, user: driver },
+          { userType: LoginUserType.customer, user: customer },
+        ]
+      : [
+          { userType: LoginUserType.customer, user: customer },
+          { userType: LoginUserType.driver, user: driver },
+        ];
+    const allowedCandidates = dto.role
+      ? candidates.filter((candidate) => candidate.userType === dto.role)
+      : candidates;
+
+    for (const candidate of allowedCandidates) {
+      const user = candidate.user;
+      if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+        continue;
+      }
+
+      const isDriver = candidate.userType === LoginUserType.driver;
+      const userId = isDriver
+        ? (user as Driver).driverId
+        : (user as Customer).customerId;
+      const role = isDriver ? 'driver' : 'customer';
+
+      try {
+        await this.logins.save(
+          this.logins.create({
+            userType: candidate.userType,
+            userId,
+            ipAddress: clientIp || null,
+            loginTime: new Date(),
+          }),
+        );
+      } catch {
+        /* login history is non-critical */
+      }
+
+      const token = this.jwt.sign({ id: userId, role }, { expiresIn: '7d' });
+      return {
+        token,
+        role,
+        user: {
+          email: user.email,
+          name: [user.lastName, user.firstName].filter(Boolean).join(' '),
+          firstName: user.firstName,
+          lastName: user.lastName,
+          customerId: isDriver ? undefined : userId,
+          driverId: isDriver ? userId : undefined,
+        },
+      };
     }
 
-    try {
-      await this.logins.save(
-        this.logins.create({
-          userType: LoginUserType.customer,
-          userId: user.customerId,
-          ipAddress: clientIp || null,
-          loginTime: new Date(),
-        }),
-      );
-    } catch {
-      /* bỏ qua nếu bảng login_history chưa có hoặc lỗi ghi log */
-    }
-
-    const token = this.jwt.sign(
-      { id: user.customerId, role: 'customer' },
-      { expiresIn: '7d' },
-    );
-    return {
-      token,
-      user: {
-        email: user.email,
-        name: user.firstName,
-        customerId: user.customerId,
-      },
-    };
+    throw new UnauthorizedException('メールアドレスまたはパスワードが正しくありません。');
   }
 
   async getProfile(customerId: number) {
@@ -102,9 +245,6 @@ export class AuthService {
     return user;
   }
 
-  /**
-   * Yêu cầu đặt lại mật khẩu (Gửi email chứa mã xác nhận)
-   */
   async forgotPassword(dto: ForgotPasswordDto) {
     const emailLower = dto.email.trim().toLowerCase();
     const customer = await this.customers.findOne({
@@ -112,71 +252,59 @@ export class AuthService {
     });
 
     if (!customer) {
-      throw new NotFoundException('Không tìm thấy tài khoản với email này.');
+      throw new NotFoundException('このメールアドレスのアカウントが見つかりません。');
     }
 
-    // 1. Tạo ngẫu nhiên mã xác minh 6 số
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // 2. Lưu vào in-memory cache có thời hạn 15 phút
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     this.forgotPasswordCodes.set(emailLower, { code, expiresAt });
 
-    // 3. Giả lập gửi email (In trực tiếp ra Terminal vô cùng trực quan để tiện copy test)
     console.log('\n==================================================');
-    console.log('📬 [MOCK MAIL SENDER] EMAIL RESET PASSWORD SENT');
+    console.log('[MOCK MAIL SENDER] EMAIL RESET PASSWORD SENT');
     console.log(`To: ${customer.lastName} ${customer.firstName} <${emailLower}>`);
-    console.log(`Subject: JP Taxi - Xác nhận đặt lại mật khẩu`);
-    console.log(`Body: Mã xác nhận đặt lại mật khẩu của bạn là: ${code}`);
-    console.log(`Hạn sử dụng: 15 phút (Đến ${expiresAt.toLocaleTimeString()})`);
+    console.log('Subject: JP Taxi - パスワード再設定確認');
+    console.log(`Body: パスワード再設定コード: ${code}`);
+    console.log(`Expires: 15 minutes (${expiresAt.toLocaleTimeString()})`);
     console.log('==================================================\n');
 
     return {
-      message: 'Mã xác nhận đặt lại mật khẩu đã được gửi thành công.',
+      message: 'パスワード再設定コードを送信しました。',
       email: emailLower,
-      mockSentCode: code, // Trả thêm trường này để client có thể test trực tiếp nếu muốn
+      mockSentCode: code,
     };
   }
 
-  /**
-   * Xác minh mã xác nhận và tiến hành cập nhật mật khẩu mới
-   */
   async resetPassword(dto: ResetPasswordDto) {
     const emailLower = dto.email.trim().toLowerCase();
 
-    // 1. Tìm thông tin khách hàng
     const customer = await this.customers.findOne({
       where: { email: emailLower },
     });
 
     if (!customer) {
-      throw new NotFoundException('Không tìm thấy tài khoản.');
+      throw new NotFoundException('アカウントが見つかりません。');
     }
 
-    // 2. Xác thực mã trong cache
     const entry = this.forgotPasswordCodes.get(emailLower);
     if (!entry) {
-      throw new BadRequestException('Mã xác nhận không tồn tại hoặc đã hết hạn.');
+      throw new BadRequestException('確認コードが存在しないか、有効期限が切れています。');
     }
 
     if (entry.expiresAt < new Date()) {
       this.forgotPasswordCodes.delete(emailLower);
-      throw new BadRequestException('Mã xác nhận đã hết hạn.');
+      throw new BadRequestException('確認コードの有効期限が切れています。');
     }
 
     if (entry.code !== dto.code.trim()) {
-      throw new BadRequestException('Mã xác nhận không chính xác.');
+      throw new BadRequestException('確認コードが正しくありません。');
     }
 
-    // 3. Hash mật khẩu mới và lưu vào DB
     customer.passwordHash = await bcrypt.hash(dto.newPassword, 10);
     await this.customers.save(customer);
-
-    // 4. Giải phóng mã trong cache
     this.forgotPasswordCodes.delete(emailLower);
 
     return {
-      message: 'Đặt lại mật khẩu thành công.',
+      message: 'パスワードを再設定しました。',
     };
   }
 }
