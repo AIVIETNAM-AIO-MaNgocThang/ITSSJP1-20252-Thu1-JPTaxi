@@ -1,6 +1,7 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const LANGUAGE_KEY = 'jpTaxiLanguage';
+const LANGUAGE_EVENT = 'jpTaxiLanguageChanged';
 
 const dictionaries = {
   ja: {
@@ -303,11 +304,28 @@ function getInitialLanguage() {
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(getInitialLanguage);
 
+  useEffect(() => {
+    function syncLanguage(event) {
+      const nextLanguage =
+        event?.detail?.language || window.localStorage.getItem(LANGUAGE_KEY);
+      setLanguageState(nextLanguage === 'vi' ? 'vi' : 'ja');
+    }
+
+    window.addEventListener(LANGUAGE_EVENT, syncLanguage);
+    window.addEventListener('storage', syncLanguage);
+
+    return () => {
+      window.removeEventListener(LANGUAGE_EVENT, syncLanguage);
+      window.removeEventListener('storage', syncLanguage);
+    };
+  }, []);
+
   const value = useMemo(() => {
     function setLanguage(nextLanguage) {
       const safeLanguage = nextLanguage === 'vi' ? 'vi' : 'ja';
       window.localStorage.setItem(LANGUAGE_KEY, safeLanguage);
       setLanguageState(safeLanguage);
+      window.dispatchEvent(new CustomEvent(LANGUAGE_EVENT, { detail: { language: safeLanguage } }));
     }
 
     function t(key) {

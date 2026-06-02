@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   getStoredProfileLanguage,
+  LANGUAGE_EVENT,
   languageOptions,
   profileText,
   setStoredProfileLanguage,
@@ -51,6 +52,20 @@ function readPath(source, path) {
 
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(getStoredProfileLanguage);
+
+  useEffect(() => {
+    function syncLanguage(event) {
+      setLanguageState(event?.detail?.language || getStoredProfileLanguage());
+    }
+
+    window.addEventListener(LANGUAGE_EVENT, syncLanguage);
+    window.addEventListener('storage', syncLanguage);
+
+    return () => {
+      window.removeEventListener(LANGUAGE_EVENT, syncLanguage);
+      window.removeEventListener('storage', syncLanguage);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.lang = language === 'vi' ? 'vi' : 'ja';
