@@ -168,7 +168,7 @@ function cachedChatForTrip(role, tripId) {
     .find((conversation) => String(conversation.trip?.tripId || '') === String(tripId || ''));
   if (!item) return null;
   return {
-    available: Boolean(item.available),
+    available: item.trip?.status === 'ongoing',
     trip: item.trip || null,
     partner: item.partner || null,
     participants: item.participants || null,
@@ -217,24 +217,16 @@ export default function MessagesPage() {
   async function loadChat({ silent = false } = {}) {
     try {
       const requestedTripId = validTripId(selectedTripIdRef.current);
-      const [history, activeData] = await Promise.all([
-        getChatConversations().catch(() => []),
-        getActiveChat().catch(() => null),
-      ]);
+      const historyPromise = getChatConversations().catch(() => []);
+      const dataPromise = requestedTripId
+        ? getChatByTrip(requestedTripId).catch((error) => {
+            const cachedChat = cachedChatForTrip(role, requestedTripId);
+            if (!cachedChat) throw error;
+            return cachedChat;
+          })
+        : getActiveChat().catch(() => null);
+      const [history, data] = await Promise.all([historyPromise, dataPromise]);
       if (validTripId(selectedTripIdRef.current) !== requestedTripId) return;
-      let data;
-      const activeTripId = validTripId(activeData?.trip?.tripId);
-      if (requestedTripId && requestedTripId !== activeTripId) {
-        try {
-          data = await getChatByTrip(requestedTripId);
-        } catch (error) {
-          const cachedChat = cachedChatForTrip(role, requestedTripId);
-          if (!cachedChat) throw error;
-          data = cachedChat;
-        }
-      } else {
-        data = activeData;
-      }
       let partner = data?.partner || null;
       let participants = data?.participants || null;
 
@@ -381,18 +373,17 @@ export default function MessagesPage() {
 
   function openConversation(item) {
     const itemTripId = validTripId(item.trip?.tripId);
-    const isCurrentActiveTrip = item.available && item.trip?.status === 'ongoing';
     selectedTripIdRef.current = itemTripId;
     setSelectedTripId(itemTripId);
     setChat({
-      available: Boolean(isCurrentActiveTrip),
+      available: false,
       trip: item.trip || null,
       partner: item.partner || null,
       participants: item.participants || null,
       messages: Array.isArray(item.messages) && item.messages.length
         ? item.messages
         : (item.lastMessage ? [item.lastMessage] : []),
-      message: isCurrentActiveTrip ? '' : 'Lich su chat da ket thuc.',
+      message: 'Dang tai lich su chat...',
     });
     setDraft('');
     setStatus('');
