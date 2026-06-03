@@ -7,6 +7,7 @@ import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { getChatPath } from '../utils/chatSession.js';
 import { DEFAULT_MAP_LOCATION, watchBrowserLocation } from '../utils/geolocation.js';
+import { setLastInvoiceTripId } from '../utils/invoiceSession.js';
 import { fetchDrivingRoute, formatDistance, formatDuration, hasDrivingRoutePath } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
 
@@ -150,6 +151,10 @@ export default function DriverRideStatusPage() {
       try {
         const activeRide = await getActiveDriverRide();
         if (ignore || activeRide?.type !== 'trip') return;
+        if (activeRide.data?.tripId) {
+          sessionStorage.setItem('jpTaxiTripId', String(activeRide.data.tripId));
+          setLastInvoiceTripId(activeRide.data.tripId);
+        }
 
         setSelectedRoute((current) => {
           const nextRoute = {

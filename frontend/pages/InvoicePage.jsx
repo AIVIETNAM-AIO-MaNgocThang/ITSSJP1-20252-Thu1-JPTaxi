@@ -73,7 +73,10 @@ export default function InvoicePage() {
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || location.pathname.startsWith('/driver');
   const closePath = isDriver ? '/driver-home' : '/driver-review';
   const closeLabel = isDriver ? '閉じる' : 'ドライバー評価へ';
-  const tripId = getLastInvoiceTripId() || Number(sessionStorage.getItem('jpTaxiTripId')) || null;
+  const activeTripId = Number(sessionStorage.getItem('jpTaxiTripId')) || null;
+  const tripId = isDriver
+    ? activeTripId || getLastInvoiceTripId()
+    : getLastInvoiceTripId() || activeTripId;
   const fallbackInvoice = useMemo(() => buildFallbackInvoice(tripId), [tripId]);
   const [invoice, setInvoice] = useState(null);
   const [status, setStatus] = useState('');
