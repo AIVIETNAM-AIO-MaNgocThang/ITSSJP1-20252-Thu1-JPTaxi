@@ -94,11 +94,12 @@
 .booking-layout {
   display: grid;
   grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
-  gap: 18px;
+  gap: 0;
   height: calc(100dvh - var(--booking-topbar-height) - var(--booking-footer-height));
   min-height: 0;
-  padding: 14px;
+  padding: 0;
   overflow: hidden;
+  background: #f9fafb;
 }
 
 .confirm-panel {
@@ -107,8 +108,9 @@
   gap: 8px;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 2px;
-  padding-right: 4px;
+  padding: 14px 10px 14px 14px;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  border-right: 1px solid #e5e7eb;
   scrollbar-gutter: stable;
 }
 
@@ -397,8 +399,8 @@
   background:
     linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.16)),
     url("https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1400&q=80") center / cover;
-  border: 1px solid #e5eaf0;
-  border-radius: 4px;
+  border: 0;
+  border-radius: 0;
 }
 
 .route-svg {
@@ -549,7 +551,7 @@
 @media (max-width: 560px) {
 
   .booking-layout {
-    padding: 18px;
+    padding: 0;
   }
 
   .trip-summary,
