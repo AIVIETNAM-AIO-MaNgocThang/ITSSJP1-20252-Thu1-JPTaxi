@@ -140,6 +140,20 @@ function saveChatSnapshot(role, chatData) {
   }
 }
 
+function cachedChatForTrip(role, tripId) {
+  const item = readCachedConversations(role)
+    .find((conversation) => String(conversation.trip?.tripId || '') === String(tripId || ''));
+  if (!item) return null;
+  return {
+    available: Boolean(item.available),
+    trip: item.trip || null,
+    partner: item.partner || null,
+    participants: item.participants || null,
+    messages: Array.isArray(item.messages) ? item.messages : (item.lastMessage ? [item.lastMessage] : []),
+    message: item.available ? '' : 'このチャットは終了した乗車の履歴です。',
+  };
+}
+
 export default function MessagesPage() {
   const { audience } = useParams();
   const [searchParams] = useSearchParams();
@@ -176,10 +190,16 @@ export default function MessagesPage() {
 
   async function loadChat({ silent = false } = {}) {
     try {
-      const [data, history] = await Promise.all([
-        validTripId(selectedTripId) ? getChatByTrip(selectedTripId) : getActiveChat(),
-        getChatConversations().catch(() => []),
-      ]);
+      const requestedTripId = validTripId(selectedTripId);
+      const history = await getChatConversations().catch(() => []);
+      let data;
+      try {
+        data = requestedTripId ? await getChatByTrip(requestedTripId) : await getActiveChat();
+      } catch (error) {
+        const cachedChat = requestedTripId ? cachedChatForTrip(role, requestedTripId) : null;
+        if (!cachedChat) throw error;
+        data = cachedChat;
+      }
       let partner = data?.partner || null;
       let participants = data?.participants || null;
 
@@ -314,6 +334,22 @@ export default function MessagesPage() {
     return resolveAssetUrl(item.partner?.avatarUrl) || (isDriver ? customerAvatar : driverAvatar);
   }
 
+  function openConversation(item) {
+    const itemTripId = validTripId(item.trip?.tripId);
+    setSelectedTripId(itemTripId);
+    if (Array.isArray(item.messages) && item.messages.length) {
+      setChat({
+        available: Boolean(item.available),
+        trip: item.trip || null,
+        partner: item.partner || null,
+        participants: item.participants || null,
+        messages: item.messages,
+        message: item.available ? '' : 'このチャットは終了した乗車の履歴です。',
+      });
+      setStatus('');
+    }
+  }
+
   return (
     <PageShell>
       <main className="messages-window">
@@ -335,7 +371,7 @@ export default function MessagesPage() {
                       className={`zip-chat-item ${isActive ? 'active' : ''}`}
                       type="button"
                       key={itemTripId || item.lastMessage?.id || itemPartnerName}
-                      onClick={() => setSelectedTripId(validTripId(itemTripId))}
+                      onClick={() => openConversation(item)}
                     >
                       {itemAvatar ? <img className="zip-avatar image" src={itemAvatar} alt={itemPartnerName} /> : <span className="zip-avatar">{itemInitial}</span>}
                       <span className="zip-chat-info">
