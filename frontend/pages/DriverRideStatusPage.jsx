@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { resolveAssetUrl } from '../api/accounts.js';
 import { getActiveDriverRide, updateDriverLocation } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
@@ -67,6 +67,7 @@ function readSelectedRoute() {
 }
 
 export default function DriverRideStatusPage() {
+  const navigate = useNavigate();
   const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
   const [driverLocation, setDriverLocation] = useState(null);
   const [topbarAvatar, setTopbarAvatar] = useState(() => (
@@ -150,7 +151,12 @@ export default function DriverRideStatusPage() {
     async function syncActiveRide() {
       try {
         const activeRide = await getActiveDriverRide();
-        if (ignore || activeRide?.type !== 'trip') return;
+        if (ignore) return;
+        if (activeRide?.type !== 'trip') {
+          sessionStorage.removeItem('jpTaxiTripId');
+          navigate('/driver-home', { replace: true });
+          return;
+        }
         if (activeRide.data?.tripId) {
           sessionStorage.setItem('jpTaxiTripId', String(activeRide.data.tripId));
           setLastInvoiceTripId(activeRide.data.tripId);
@@ -179,7 +185,7 @@ export default function DriverRideStatusPage() {
       ignore = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [navigate]);
 
   const routePoints = [
     {

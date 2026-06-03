@@ -142,6 +142,10 @@ export function getRideContinuationPath(role, activeRide) {
 }
 
 export function getActiveRideRedirect(role, activeRide, pathname) {
+  if (role === 'driver' && !activeRide && pathMatches(pathname, ['/driver-ride-status'])) {
+    return '/driver-home';
+  }
+
   if (activeRide?.type !== 'trip') return null;
 
   if (role === 'customer') {
