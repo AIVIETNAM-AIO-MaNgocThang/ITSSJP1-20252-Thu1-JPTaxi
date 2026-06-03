@@ -173,7 +173,7 @@ function cachedChatForTrip(role, tripId) {
     partner: item.partner || null,
     participants: item.participants || null,
     messages: Array.isArray(item.messages) ? item.messages : (item.lastMessage ? [item.lastMessage] : []),
-    message: item.available ? '' : 'このチャットは終了した乗車の履歴です。',
+    message: item.available ? '' : 'Lich su chat da ket thuc.',
   };
 }
 
@@ -377,20 +377,21 @@ export default function MessagesPage() {
 
   function openConversation(item) {
     const itemTripId = validTripId(item.trip?.tripId);
+    const isCurrentActiveTrip = item.available && String(chat.trip?.tripId || '') === itemTripId;
     setSelectedTripId(itemTripId);
-    if (Array.isArray(item.messages) && item.messages.length) {
-      setChat({
-        available: Boolean(item.available),
-        trip: item.trip || null,
-        partner: item.partner || null,
-        participants: item.participants || null,
-        messages: item.messages,
-        message: item.available ? '' : 'このチャットは終了した乗車の履歴です。',
-      });
-      setStatus('');
-    }
+    setChat({
+      available: Boolean(isCurrentActiveTrip),
+      trip: item.trip || null,
+      partner: item.partner || null,
+      participants: item.participants || null,
+      messages: Array.isArray(item.messages) && item.messages.length
+        ? item.messages
+        : (item.lastMessage ? [item.lastMessage] : []),
+      message: isCurrentActiveTrip ? '' : 'Lich su chat da ket thuc.',
+    });
+    setDraft('');
+    setStatus('');
   }
-
   function requestDeleteConversation(event, item) {
     event.stopPropagation();
     const itemTripId = validTripId(item.trip?.tripId);
@@ -412,7 +413,7 @@ export default function MessagesPage() {
     setHiddenChatIds(nextHiddenIds);
     if (String(chat.trip?.tripId || '') === itemTripId) {
       setSelectedTripId('');
-      setChat({ available: false, messages: [], trip: null, partner: null, participants: null, message: 'Không có đoạn chat.' });
+      setChat({ available: false, messages: [], trip: null, partner: null, participants: null, message: 'Khong co doan chat.' });
       setDraft('');
       setStatus('');
     }
@@ -451,7 +452,7 @@ export default function MessagesPage() {
                         <span>{itemPartnerName && <strong>{itemPartnerName}</strong>}<small>{item.lastMessage ? formatTime(item.lastMessage.createdAt) : '-'}</small></span>
                         <em>{item.lastMessage?.text || (item.available ? t('chat.noHistory') : unavailableText)}</em>
                       </span>
-                      <button className="zip-chat-delete" type="button" title="Xóa đoạn chat" aria-label="Xóa đoạn chat" onClick={(event) => requestDeleteConversation(event, item)}>×</button>
+                      <button className="zip-chat-delete" type="button" title="Xoa doan chat" aria-label="Xoa doan chat" onClick={(event) => requestDeleteConversation(event, item)}>x</button>
                     </div>
                   );
                 })
@@ -506,11 +507,11 @@ export default function MessagesPage() {
         {pendingDelete ? (
           <div className="zip-delete-backdrop" role="presentation" onClick={closeDeleteDialog}>
             <section className="zip-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-chat-title" onClick={(event) => event.stopPropagation()}>
-              <h2 id="delete-chat-title">Xóa đoạn chat?</h2>
-              <p>Đoạn chat này sẽ bị ẩn khỏi danh sách của bạn. Người còn lại vẫn xem được.</p>
+              <h2 id="delete-chat-title">Xoa doan chat?</h2>
+              <p>Doan chat nay se bi an khoi danh sach cua ban. Nguoi con lai van xem duoc.</p>
               <div>
-                <button type="button" onClick={closeDeleteDialog}>Hủy</button>
-                <button className="danger" type="button" onClick={confirmDeleteConversation}>Đồng ý</button>
+                <button type="button" onClick={closeDeleteDialog}>Huy</button>
+                <button className="danger" type="button" onClick={confirmDeleteConversation}>Dong y</button>
               </div>
             </section>
           </div>
