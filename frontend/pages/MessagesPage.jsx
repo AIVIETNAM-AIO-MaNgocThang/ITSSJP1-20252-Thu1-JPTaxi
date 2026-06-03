@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { getCustomerProfile, getDriverProfile, resolveAssetUrl } from '../api/accounts.js';
-import { getActiveChat, sendChatMessage } from '../api/chat.js';
+import { getActiveChat, getChatByTrip, getChatConversations, sendChatMessage } from '../api/chat.js';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { useLanguage } from '../i18n/LanguageProvider.jsx';
@@ -86,10 +86,13 @@ function rememberAccount(role, profile) {
 
 export default function MessagesPage() {
   const { audience } = useParams();
+  const [searchParams] = useSearchParams();
   const { t } = useLanguage();
   const role = getCurrentRole(audience);
   const isDriver = role === 'driver';
   const [chat, setChat] = useState({ available: false, messages: [], trip: null, partner: null, participants: null });
+  const [selectedTripId, setSelectedTripId] = useState(() => searchParams.get('tripId') || '');
+  const [conversations, setConversations] = useState([]);
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
@@ -117,11 +120,14 @@ export default function MessagesPage() {
 
   async function loadChat({ silent = false } = {}) {
     try {
-      const data = await getActiveChat();
+      const [data, history] = await Promise.all([
+        selectedTripId ? getChatByTrip(selectedTripId) : getActiveChat(),
+        getChatConversations().catch(() => []),
+      ]);
       let partner = data?.partner || null;
       let participants = data?.participants || null;
 
-      if (data?.available && data?.trip) {
+      if (data?.trip) {
         try {
           const [customerProfile, driverProfile] = await Promise.all([
             needsProfileDetails(participants?.customer) ? getCustomerProfile(data.trip.customerId) : Promise.resolve(null),
@@ -137,6 +143,8 @@ export default function MessagesPage() {
           /* Keep chat usable even if profile enrichment fails. */
         }
       }
+
+      setConversations(Array.isArray(history) ? history : []);
 
       setChat({
         available: Boolean(data?.available),
@@ -158,7 +166,7 @@ export default function MessagesPage() {
     loadChat();
     const timer = window.setInterval(() => loadChat({ silent: true }), 1000);
     return () => window.clearInterval(timer);
-  }, [role]);
+  }, [role, selectedTripId]);
 
   useEffect(() => {
     let ignore = false;
@@ -217,6 +225,22 @@ export default function MessagesPage() {
     customer: role === 'customer' ? currentAccountName : partnerName,
     driver: role === 'driver' ? currentAccountName : partnerName,
   };
+  const conversationItems = conversations.length
+    ? conversations
+    : (hasConversation ? [{
+        available: chat.available,
+        partner: chat.partner,
+        trip: chat.trip,
+        lastMessage,
+      }] : []);
+
+  function getConversationPartner(item) {
+    return accountName(item.partner) || item.lastMessage?.senderName || '';
+  }
+
+  function getConversationAvatar(item) {
+    return resolveAssetUrl(item.partner?.avatarUrl) || (isDriver ? customerAvatar : driverAvatar);
+  }
 
   return (
     <PageShell>
@@ -227,14 +251,28 @@ export default function MessagesPage() {
           <aside className="zip-chat-sidebar">
             <h1>{t('chat.title')}</h1>
             <div className="zip-chat-list">
-              {hasConversation ? (
-                <button className={`zip-chat-item ${chat.available ? 'active' : ''}`} type="button">
-                  {partnerAvatar ? <img className="zip-avatar image" src={partnerAvatar} alt={partnerName} /> : <span className="zip-avatar">{partnerInitial}</span>}
-                  <span className="zip-chat-info">
-                    <span>{partnerName && <strong>{partnerName}</strong>}<small>{lastMessage ? formatTime(lastMessage.createdAt) : '-'}</small></span>
-                    <em>{lastMessage?.text || (chat.available ? t('chat.noHistory') : unavailableText)}</em>
-                  </span>
-                </button>
+              {conversationItems.length ? (
+                conversationItems.map((item) => {
+                  const itemTripId = item.trip?.tripId ? String(item.trip.tripId) : '';
+                  const itemPartnerName = getConversationPartner(item);
+                  const itemAvatar = getConversationAvatar(item);
+                  const itemInitial = itemPartnerName.trim().charAt(0).toUpperCase() || (isDriver ? 'K' : 'T');
+                  const isActive = itemTripId && String(chat.trip?.tripId) === itemTripId;
+                  return (
+                    <button
+                      className={`zip-chat-item ${isActive ? 'active' : ''}`}
+                      type="button"
+                      key={itemTripId || item.lastMessage?.id || itemPartnerName}
+                      onClick={() => setSelectedTripId(itemTripId)}
+                    >
+                      {itemAvatar ? <img className="zip-avatar image" src={itemAvatar} alt={itemPartnerName} /> : <span className="zip-avatar">{itemInitial}</span>}
+                      <span className="zip-chat-info">
+                        <span>{itemPartnerName && <strong>{itemPartnerName}</strong>}<small>{item.lastMessage ? formatTime(item.lastMessage.createdAt) : '-'}</small></span>
+                        <em>{item.lastMessage?.text || (item.available ? t('chat.noHistory') : unavailableText)}</em>
+                      </span>
+                    </button>
+                  );
+                })
               ) : (
                 <p className="zip-chat-empty sidebar-empty">{unavailableText}</p>
               )}

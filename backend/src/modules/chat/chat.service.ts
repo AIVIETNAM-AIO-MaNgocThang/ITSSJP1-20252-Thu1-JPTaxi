@@ -109,6 +109,44 @@ export class ChatService {
     };
   }
 
+  private assertTripParticipant(trip: Trip, userId: number, role: ChatRole) {
+    const isParticipant = role === 'driver'
+      ? trip.driverId === userId
+      : trip.rideRequest?.customerId === userId;
+    if (!isParticipant) {
+      throw new ForbiddenException('Bạn không có quyền xem cuộc trò chuyện này.');
+    }
+  }
+
+  private async buildChatResponse(trip: Trip, role: ChatRole) {
+    const messages = await this.messages.find({
+      where: { tripId: trip.tripId },
+      order: { createdAt: 'ASC', messageId: 'ASC' },
+      take: 200,
+    });
+
+    const participants = await this.getParticipants(trip);
+
+    return {
+      available: trip.status === TripStatusType.ongoing,
+      partner: role === 'customer' ? participants.driver : participants.customer,
+      participants,
+      trip: {
+        tripId: trip.tripId,
+        requestId: trip.rideRequest?.requestId,
+        customerId: trip.rideRequest?.customerId,
+        driverId: trip.driverId,
+        pickupAddress: trip.rideRequest?.pickupAddress,
+        dropoffAddress: trip.rideRequest?.dropoffAddress,
+        status: trip.status,
+      },
+      messages: messages.map((message) => this.serialize(message)),
+      message: trip.status === TripStatusType.ongoing
+        ? undefined
+        : 'このチャットは終了した乗車の履歴です。',
+    };
+  }
+
   async getActiveChat(userId: number, role: ChatRole) {
     const activeTrip = await this.findActiveTrip(userId, role);
     const trip = activeTrip ?? await this.findLatestTripWithChat(userId, role);
@@ -145,6 +183,61 @@ export class ChatService {
         ? undefined
         : 'ã“ã®ãƒãƒ£ãƒƒãƒˆã¯çµ‚äº†ã—ãŸä¹—è»Šã®å±¥æ­´ã§ã™ã€‚',
     };
+  }
+
+  async getChatByTrip(userId: number, role: ChatRole, tripId: number) {
+    const trip = await this.trips
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
+      .where('trip.trip_id = :tripId', { tripId })
+      .getOne();
+
+    if (!trip) {
+      throw new BadRequestException('Không tìm thấy cuộc trò chuyện.');
+    }
+
+    this.assertTripParticipant(trip, userId, role);
+    return this.buildChatResponse(trip, role);
+  }
+
+  async listConversations(userId: number, role: ChatRole) {
+    const query = this.trips
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
+      .innerJoin(ChatMessage, 'message', 'message.trip_id = trip.trip_id')
+      .distinct(true)
+      .orderBy('trip.endTime', 'DESC', 'NULLS FIRST')
+      .addOrderBy('trip.startTime', 'DESC');
+
+    if (role === 'driver') {
+      query.where('trip.driverId = :userId', { userId });
+    } else {
+      query.where('rideRequest.customerId = :userId', { userId });
+    }
+
+    const trips = await query.take(20).getMany();
+    return Promise.all(trips.map(async (trip) => {
+      const lastMessage = await this.messages.findOne({
+        where: { tripId: trip.tripId },
+        order: { createdAt: 'DESC', messageId: 'DESC' },
+      });
+      const participants = await this.getParticipants(trip);
+      return {
+        available: trip.status === TripStatusType.ongoing,
+        partner: role === 'customer' ? participants.driver : participants.customer,
+        participants,
+        trip: {
+          tripId: trip.tripId,
+          requestId: trip.rideRequest?.requestId,
+          customerId: trip.rideRequest?.customerId,
+          driverId: trip.driverId,
+          pickupAddress: trip.rideRequest?.pickupAddress,
+          dropoffAddress: trip.rideRequest?.dropoffAddress,
+          status: trip.status,
+        },
+        lastMessage: lastMessage ? this.serialize(lastMessage) : null,
+      };
+    }));
   }
 
   async sendMessage(userId: number, role: ChatRole, text: string) {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
 import type { JwtValidatedUser } from '../auth/jwt.strategy';
@@ -16,6 +16,23 @@ export class ChatController {
     return this.chat.getActiveChat(
       req.user.id,
       req.user.role === 'driver' ? 'driver' : 'customer',
+    );
+  }
+
+  @Get('conversations')
+  listConversations(@Req() req: AuthedRequest) {
+    return this.chat.listConversations(
+      req.user.id,
+      req.user.role === 'driver' ? 'driver' : 'customer',
+    );
+  }
+
+  @Get('trips/:tripId')
+  getChatByTrip(@Req() req: AuthedRequest, @Param('tripId', ParseIntPipe) tripId: number) {
+    return this.chat.getChatByTrip(
+      req.user.id,
+      req.user.role === 'driver' ? 'driver' : 'customer',
+      tripId,
     );
   }
 
