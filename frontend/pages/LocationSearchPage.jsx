@@ -6,6 +6,7 @@ import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { calculateFareBreakdown, formatYen } from '../utils/fare.js';
 import { DEFAULT_MAP_LOCATION, getCurrentBrowserLocation, watchBrowserLocation } from '../utils/geolocation.js';
+import { hasDrivingRoutePath } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
 
 const defaultUserLocation = DEFAULT_MAP_LOCATION;
@@ -139,9 +140,9 @@ function readSelectedRoute() {
     return {
       destination,
       pickup,
-      routePath: Array.isArray(parsedRoute.routePath) && parsedRoute.routePath.length
+      routePath: hasDrivingRoutePath(parsedRoute.routePath)
         ? parsedRoute.routePath
-        : fallbackRoute.path,
+        : [],
       routeMetrics: hasRouteMetrics(parsedRoute.routeMetrics)
         ? parsedRoute.routeMetrics
         : fallbackRoute.metrics,
@@ -156,7 +157,7 @@ function saveSelectedRoute({ destination, pickup, path, metrics }) {
   window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify({
     destination,
     pickup,
-    routePath: path?.length ? path : [pickup.position, destination.position],
+    routePath: hasDrivingRoutePath(path) ? path : [],
     routeMetrics: metrics,
   }));
 }
@@ -274,12 +275,12 @@ export default function LocationSearchPage() {
 
     const fallbackRoute = buildFallbackRouteState(nextPickup, nextDestination);
     setRouteKey(buildRouteKey(nextPickup, nextDestination));
-    setRoutePath(fallbackRoute.path);
+    setRoutePath([]);
     setRouteMetrics(fallbackRoute.metrics);
     saveSelectedRoute({
       destination: nextDestination,
       pickup: nextPickup,
-      path: fallbackRoute.path,
+      path: [],
       metrics: fallbackRoute.metrics,
     });
   }
@@ -400,13 +401,13 @@ export default function LocationSearchPage() {
     });
     const fallbackRoute = buildFallbackRouteState(selectedPickup, selectedDestination);
 
-    setRoutePath(fallbackRoute.path);
+    setRoutePath([]);
     setRouteMetrics(fallbackRoute.metrics);
     setRouteKey(requestRouteKey);
     saveSelectedRoute({
       destination: selectedDestination,
       pickup: selectedPickup,
-      path: fallbackRoute.path,
+      path: [],
       metrics: fallbackRoute.metrics,
     });
     setIsRouting(true);
@@ -426,7 +427,7 @@ export default function LocationSearchPage() {
         const nextPath = coordinates.map(([lng, lat]) => [lat, lng]);
         const distance = Number(route?.distance);
         const duration = Number(route?.duration);
-        const hasValidRoute = nextPath.length
+        const hasValidRoute = hasDrivingRoutePath(nextPath)
           && Number.isFinite(distance)
           && distance > 0
           && Number.isFinite(duration)
@@ -438,7 +439,7 @@ export default function LocationSearchPage() {
               fare: estimateFare(distance),
             }
           : fallbackRoute.metrics;
-        const finalPath = hasValidRoute ? nextPath : fallbackRoute.path;
+        const finalPath = hasValidRoute ? nextPath : [];
 
         setRoutePath(finalPath);
         setRouteMetrics(nextMetrics);
@@ -459,13 +460,13 @@ export default function LocationSearchPage() {
           }).then(() => requestRoute(attempt + 1));
         }
 
-        setRoutePath(fallbackRoute.path);
+        setRoutePath([]);
         setRouteMetrics(fallbackRoute.metrics);
         setRouteKey(requestRouteKey);
         saveSelectedRoute({
           destination: selectedDestination,
           pickup: selectedPickup,
-          path: fallbackRoute.path,
+          path: [],
           metrics: fallbackRoute.metrics,
         });
       })
@@ -483,7 +484,7 @@ export default function LocationSearchPage() {
   ), [selectedDestination, selectedPickup]);
   const currentRouteKey = buildRouteKey(selectedPickup, selectedDestination);
   const hasCurrentRouteResult = Boolean(currentRouteKey && routeKey === currentRouteKey);
-  const displayedRoutePath = hasCurrentRouteResult && routePath.length ? routePath : (fallbackRouteState?.path ?? []);
+  const displayedRoutePath = hasCurrentRouteResult && hasDrivingRoutePath(routePath) ? routePath : [];
   const displayedRouteMetrics = hasCurrentRouteResult && routeMetrics ? routeMetrics : fallbackRouteState?.metrics ?? null;
   const mapCenter = selectedDestination
     ? selectedPickup.position
@@ -691,7 +692,7 @@ export default function LocationSearchPage() {
               showDetails={false}
               showDriver={false}
               showMarkers={Boolean(selectedDestination)}
-              showRoute={Boolean(selectedDestination)}
+              showRoute={hasDrivingRoutePath(displayedRoutePath)}
             />
             <div className="zip-map-card">
               <div><span>乗車地</span><b>{selectedPickup.name}</b></div>

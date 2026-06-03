@@ -6,7 +6,7 @@ import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { calculateFareBreakdown, formatYen } from '../utils/fare.js';
 import { DEFAULT_MAP_LOCATION, watchBrowserLocation } from '../utils/geolocation.js';
-import { fetchDrivingRoute, formatDistance as formatRouteDistance, formatDuration } from '../utils/routePlanner.js';
+import { fetchDrivingRoute, formatDistance as formatRouteDistance, formatDuration, hasDrivingRoutePath } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
 
 function formatPickupDistance(value) {
@@ -36,10 +36,7 @@ function buildSelectedRoute(request, routePreview) {
       distance: routePreview?.distance ?? formatPickupDistance(request.distanceKm),
       fare: formatYen(calculateFareBreakdown(request.distanceKm).totalJpy),
     },
-    routePath: routePreview?.routePath ?? [
-      [request.pickupLat, request.pickupLng],
-      [request.dropoffLat, request.dropoffLng],
-    ],
+    routePath: hasDrivingRoutePath(routePreview?.routePath) ? routePreview.routePath : [],
     passenger: {
       customerId: request.customerId,
       name: request.actualPassengerName || request.customer?.name || `KH-${request.customerId}`,
@@ -156,11 +153,9 @@ export default function DriverDispatchPage() {
     ? [pendingRide.pickupLat, pendingRide.pickupLng]
     : [driverLocation?.lat ?? defaultDriverLocation.lat, driverLocation?.lng ?? defaultDriverLocation.lng];
   const routePath = pendingRide
-    ? routePreview?.routePath ?? [
-        [pendingRide.pickupLat, pendingRide.pickupLng],
-        [pendingRide.dropoffLat, pendingRide.dropoffLng],
-      ]
+    ? routePreview?.routePath ?? []
     : [];
+  const hasRoutePreview = hasDrivingRoutePath(routePath);
 
   async function handleAccept() {
     if (!pendingRide || isAccepting) return;
@@ -263,7 +258,7 @@ export default function DriverDispatchPage() {
               showDetails={false}
               showDriver={false}
               showMarkers={Boolean(pendingRide)}
-              showRoute={Boolean(pendingRide)}
+              showRoute={hasRoutePreview}
             />
             {pendingRide ? (
               <>

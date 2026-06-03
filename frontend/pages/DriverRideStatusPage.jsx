@@ -7,7 +7,7 @@ import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { getChatPath } from '../utils/chatSession.js';
 import { DEFAULT_MAP_LOCATION, watchBrowserLocation } from '../utils/geolocation.js';
-import { fetchDrivingRoute, formatDistance, formatDuration } from '../utils/routePlanner.js';
+import { fetchDrivingRoute, formatDistance, formatDuration, hasDrivingRoutePath } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
 
 const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
@@ -54,7 +54,7 @@ function readSelectedRoute() {
     return {
       ...fallbackRoute,
       ...parsedRoute,
-      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
+      routePath: hasDrivingRoutePath(parsedRoute.routePath) ? parsedRoute.routePath : [],
       routeMetrics: {
         ...fallbackRoute.routeMetrics,
         ...parsedRoute.routeMetrics,
@@ -223,6 +223,7 @@ export default function DriverRideStatusPage() {
             scrollWheelZoom
             showCurrentLocation={false}
             showDetails={false}
+            showRoute={hasDrivingRoutePath(selectedRoute.routePath)}
           />
 
           <section className="driver-tracking-card">

@@ -49,7 +49,7 @@ function buildStoredRoute(activeRide) {
       distance: Number.isFinite(distanceKm) ? `${distanceKm.toFixed(1)} km` : '-- km',
       fare: trip.finalFareJpy ? `¥${trip.finalFareJpy.toLocaleString()}` : '',
     },
-    routePath: [pickupPosition, destinationPosition],
+    routePath: [],
     driver: {
       ...(trip.driver || {}),
       location: driverLocation,

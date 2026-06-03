@@ -7,7 +7,7 @@ import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { getChatPath } from '../utils/chatSession.js';
-import { fetchDrivingRoute, formatDistance, formatDuration } from '../utils/routePlanner.js';
+import { fetchDrivingRoute, formatDistance, formatDuration, hasDrivingRoutePath } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
 
 const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
@@ -55,7 +55,7 @@ function readSelectedRoute() {
     return {
       ...fallbackRoute,
       ...parsedRoute,
-      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
+      routePath: hasDrivingRoutePath(parsedRoute.routePath) ? parsedRoute.routePath : [],
       routeMetrics: {
         ...fallbackRoute.routeMetrics,
         ...parsedRoute.routeMetrics,
@@ -234,6 +234,7 @@ export default function RideStatusPage() {
             scrollWheelZoom
             showCurrentLocation={false}
             showDetails={false}
+            showRoute={hasDrivingRoutePath(selectedRoute.routePath)}
           />
 
           <section className="tracking-card">

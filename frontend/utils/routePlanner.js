@@ -50,6 +50,10 @@ export function formatDistance(meters) {
   return `${Math.round(meters)} m`;
 }
 
+export function hasDrivingRoutePath(routePath) {
+  return Array.isArray(routePath) && routePath.length > 2;
+}
+
 function estimateFare(meters) {
   const km = meters / 1000;
   return `¥${Math.max(680, Math.round((420 + km * 85) / 10) * 10)}`;
@@ -181,7 +185,7 @@ export async function fetchDrivingRoute(fromPosition, toPosition, options = {}) 
   const distance = Number(route?.distance);
   const duration = Number(route?.duration);
 
-  if (!routePath.length || !Number.isFinite(distance) || !Number.isFinite(duration)) {
+  if (!hasDrivingRoutePath(routePath) || !Number.isFinite(distance) || !Number.isFinite(duration)) {
     throw new Error('route failed');
   }
 
@@ -202,7 +206,7 @@ export async function buildSelectedRoute(destination, pickup = defaultUserLocati
         position: [pickup.latitude, pickup.longitude],
         accuracy: pickup.accuracy,
       },
-      routePath: [[pickup.latitude, pickup.longitude], destination.position],
+      routePath: [],
       routeMetrics: {
         distance: formatDistance(directDistance),
         distanceMeters: directDistance,
@@ -245,7 +249,7 @@ export async function buildSelectedRoute(destination, pickup = defaultUserLocati
       position: [pickup.latitude, pickup.longitude],
       accuracy: pickup.accuracy,
     },
-    routePath: routePath.length ? routePath : [[pickup.latitude, pickup.longitude], destination.position],
+    routePath: hasDrivingRoutePath(routePath) ? routePath : [],
     routeMetrics: {
       distance: formatDistance(distance),
       distanceMeters: routeDistanceStatus.distanceMeters,

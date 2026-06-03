@@ -6,6 +6,7 @@ import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
 import { useLanguage } from '../context/LanguageContext.jsx';
+import { hasDrivingRoutePath } from '../utils/routePlanner.js';
 import '../styles/search-car.css';
 
 const defaultUserLocation = {
@@ -102,8 +103,8 @@ function readSelectedRoute() {
     return {
       ...fallbackSelectedRoute,
       ...parsedRoute,
-      hasRoute: true,
-      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackSelectedRoute.routePath,
+      hasRoute: hasDrivingRoutePath(parsedRoute.routePath),
+      routePath: hasDrivingRoutePath(parsedRoute.routePath) ? parsedRoute.routePath : [],
       routeMetrics: {
         ...fallbackSelectedRoute.routeMetrics,
         ...parsedRoute.routeMetrics,
@@ -253,7 +254,7 @@ export default function SearchCarPage() {
             showCurrentLocation={!selectedRoute.hasRoute}
             showDetails={false}
             showDriver={false}
-            showMarkers={selectedRoute.hasRoute}
+            showMarkers={Boolean(selectedRoute.destination)}
             showRoute={selectedRoute.hasRoute}
           />
           <section className="status-card" aria-labelledby="search-title">

@@ -7,6 +7,7 @@ import Topbar from '../components/Topbar.jsx';
 import '../styles/booking.css';
 import { useLanguage } from '../context/LanguageContext.jsx';
 import { getChatPath, saveActiveChatSession } from '../utils/chatSession.js';
+import { fetchDrivingRoute, formatDistance, formatDuration, hasDrivingRoutePath } from '../utils/routePlanner.js';
 
 const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
 const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
@@ -54,7 +55,7 @@ function readSelectedRoute() {
     return {
       ...fallbackRoute,
       ...parsedRoute,
-      routePath: Array.isArray(parsedRoute.routePath) ? parsedRoute.routePath : fallbackRoute.routePath,
+      routePath: hasDrivingRoutePath(parsedRoute.routePath) ? parsedRoute.routePath : [],
       routeMetrics: {
         ...fallbackRoute.routeMetrics,
         ...parsedRoute.routeMetrics,
@@ -78,7 +79,7 @@ export default function BillConfirmPage() {
   const [bookingMode, setBookingMode] = useState('self');
   const [proxyOpen, setProxyOpen] = useState(false);
   const [toast, setToast] = useState('');
-  const [selectedRoute] = useState(readSelectedRoute);
+  const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
   const displayDistance = selectedRoute.routeMetrics.distance;
   const routeSummary = `${displayDistance} - ${selectedRoute.routeMetrics.duration}`;
 
@@ -100,6 +101,39 @@ export default function BillConfirmPage() {
       type: 'destination',
     },
   ];
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchDrivingRoute(
+      selectedRoute.pickup.position,
+      selectedRoute.destination.position,
+      { signal: controller.signal },
+    )
+      .then((route) => {
+        setSelectedRoute((current) => {
+          const nextRoute = {
+            ...current,
+            routePath: route.routePath,
+            routeMetrics: {
+              ...current.routeMetrics,
+              distance: formatDistance(route.distance),
+              duration: formatDuration(route.duration, route.distance),
+              distanceMeters: route.distance,
+            },
+          };
+          window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(nextRoute));
+          return nextRoute;
+        });
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          /* Keep the stored route when the routing service is unavailable. */
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedRoute.destination.position, selectedRoute.pickup.position]);
 
   useEffect(() => {
     function syncTopbarAvatar() {
@@ -278,6 +312,7 @@ export default function BillConfirmPage() {
               routeSummary={routeSummary}
               scrollWheelZoom
               showCurrentLocation={false}
+              showRoute={hasDrivingRoutePath(selectedRoute.routePath)}
             />
           </section>
         </section>
