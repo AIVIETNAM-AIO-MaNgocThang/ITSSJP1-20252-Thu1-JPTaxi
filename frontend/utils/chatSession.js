@@ -1,20 +1,25 @@
 const CHAT_SESSION_KEY = 'jpTaxiActiveRide';
 
 export const fallbackChatSession = {
-  tripId: 'demo-trip-1',
-  requestId: 'demo-request-1',
-  customerId: 1,
-  driverId: 1,
+  tripId: '',
+  requestId: '',
+  customerId: null,
+  driverId: null,
 };
+
+function numericString(value) {
+  const raw = String(value ?? '');
+  return /^\d+$/.test(raw) ? raw : '';
+}
 
 export function normalizeChatSession(session = {}) {
   return {
     ...fallbackChatSession,
     ...session,
-    tripId: String(session.tripId ?? session.trip_id ?? fallbackChatSession.tripId),
-    requestId: String(session.requestId ?? session.request_id ?? fallbackChatSession.requestId),
-    customerId: Number(session.customerId ?? session.customer_id ?? fallbackChatSession.customerId),
-    driverId: Number(session.driverId ?? session.driver_id ?? fallbackChatSession.driverId),
+    tripId: numericString(session.tripId ?? session.trip_id ?? fallbackChatSession.tripId),
+    requestId: numericString(session.requestId ?? session.request_id ?? fallbackChatSession.requestId),
+    customerId: Number(session.customerId ?? session.customer_id) || null,
+    driverId: Number(session.driverId ?? session.driver_id) || null,
   };
 }
 
@@ -36,9 +41,9 @@ export function saveActiveChatSession(session) {
 
 export function getChatPath(audience, session = getActiveChatSession()) {
   const nextSession = normalizeChatSession(session);
-  const params = new URLSearchParams({
-    tripId: nextSession.tripId,
-    requestId: nextSession.requestId,
-  });
-  return `/messages/${audience}?${params.toString()}`;
+  const params = new URLSearchParams();
+  if (nextSession.tripId) params.set('tripId', nextSession.tripId);
+  if (nextSession.requestId) params.set('requestId', nextSession.requestId);
+  const query = params.toString();
+  return query ? `/messages/${audience}?${query}` : `/messages/${audience}`;
 }

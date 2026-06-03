@@ -17,6 +17,11 @@ function getCurrentRole(audience) {
   return sessionStorage.getItem('jpTaxiActiveRole') || localStorage.getItem('jpTaxiRole') || 'customer';
 }
 
+function validTripId(value) {
+  const raw = String(value || '');
+  return /^\d+$/.test(raw) ? raw : '';
+}
+
 function formatTime(value) {
   if (!value) return '';
   return new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -142,7 +147,7 @@ export default function MessagesPage() {
   const role = getCurrentRole(audience);
   const isDriver = role === 'driver';
   const [chat, setChat] = useState({ available: false, messages: [], trip: null, partner: null, participants: null });
-  const [selectedTripId, setSelectedTripId] = useState(() => searchParams.get('tripId') || '');
+  const [selectedTripId, setSelectedTripId] = useState(() => validTripId(searchParams.get('tripId')));
   const [conversations, setConversations] = useState([]);
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('');
@@ -172,7 +177,7 @@ export default function MessagesPage() {
   async function loadChat({ silent = false } = {}) {
     try {
       const [data, history] = await Promise.all([
-        selectedTripId ? getChatByTrip(selectedTripId) : getActiveChat(),
+        validTripId(selectedTripId) ? getChatByTrip(selectedTripId) : getActiveChat(),
         getChatConversations().catch(() => []),
       ]);
       let partner = data?.partner || null;
@@ -330,7 +335,7 @@ export default function MessagesPage() {
                       className={`zip-chat-item ${isActive ? 'active' : ''}`}
                       type="button"
                       key={itemTripId || item.lastMessage?.id || itemPartnerName}
-                      onClick={() => setSelectedTripId(itemTripId)}
+                      onClick={() => setSelectedTripId(validTripId(itemTripId))}
                     >
                       {itemAvatar ? <img className="zip-avatar image" src={itemAvatar} alt={itemPartnerName} /> : <span className="zip-avatar">{itemInitial}</span>}
                       <span className="zip-chat-info">
