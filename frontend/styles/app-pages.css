@@ -3650,6 +3650,7 @@ button.zip-fast-button {
 }
 
 .tracking-driver-row img,
+.tracking-driver-row > span,
 .tracking-passenger-row img,
 .tracking-passenger-row > span {
   width: 64px;
@@ -3662,6 +3663,16 @@ button.zip-fast-button {
   display: block;
   flex: 0 0 auto;
   object-fit: cover;
+}
+
+.tracking-driver-row > span {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 900;
+  background: #0f172a;
 }
 
 .tracking-passenger-row > span {

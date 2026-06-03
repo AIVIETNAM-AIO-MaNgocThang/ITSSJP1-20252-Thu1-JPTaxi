@@ -11,7 +11,6 @@ import { fetchDrivingRoute, formatDistance, formatDuration, hasDrivingRoutePath 
 import '../styles/app-pages.css';
 
 const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
-const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
 
 const fallbackRoute = {
   destination: {
@@ -77,6 +76,7 @@ export default function RideStatusPage() {
   const { t } = useLanguage();
   const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
   const [driverPosition, setDriverPosition] = useState(() => parseDriverPosition(readSelectedRoute().driver) || null);
+  const [driverInfoLoading, setDriverInfoLoading] = useState(true);
   const [topbarAvatar, setTopbarAvatar] = useState(() => (
     resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar
   ));
@@ -151,6 +151,10 @@ export default function RideStatusPage() {
       try {
         const activeRide = await getActiveRide();
         if (ignore) return;
+        if (!activeRide?.data) {
+          setDriverInfoLoading(false);
+          return;
+        }
         const activeDriver = activeRide?.data?.driver;
         const activeVehicle = activeRide?.data?.vehicle;
         if (activeRide?.paymentRequested && activeRide?.data?.tripId) {
@@ -187,7 +191,10 @@ export default function RideStatusPage() {
           }
         }
         const nextDriverPosition = parseDriverPosition(activeRide?.data?.driver);
-        if (!nextDriverPosition && !enrichedDriver && !enrichedVehicle) return;
+        if (!nextDriverPosition && !enrichedDriver && !enrichedVehicle) {
+          setDriverInfoLoading(false);
+          return;
+        }
 
         if (nextDriverPosition) {
           setDriverPosition(nextDriverPosition);
@@ -207,8 +214,10 @@ export default function RideStatusPage() {
           window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(nextRoute));
           return nextRoute;
         });
+        setDriverInfoLoading(false);
       } catch {
         /* Keep the last known driver position when the active ride API is unavailable. */
+        setDriverInfoLoading(false);
       }
     }
 
@@ -240,10 +249,12 @@ export default function RideStatusPage() {
   ];
   const driver = selectedRoute.driver || {};
   const vehicle = selectedRoute.vehicle || {};
-  const driverName = driver.name || t('driverName');
-  const driverAvatar = resolveAssetUrl(driver.avatarUrl) || driverFallbackAvatar;
-  const driverCar = [vehicle.brand, vehicle.color].filter(Boolean).join(' ') || t('driverCar');
-  const licensePlate = vehicle.licensePlate || '30A-123.45';
+  const hasDriverInfo = Boolean(driver.name || driver.driverId || driver.avatarUrl);
+  const driverName = driver.name || (driver.driverId ? `Driver #${driver.driverId}` : (driverInfoLoading ? 'Updating driver...' : 'Driver not assigned'));
+  const driverInitial = driverName.trim().charAt(0).toUpperCase() || '?';
+  const driverAvatar = resolveAssetUrl(driver.avatarUrl);
+  const driverCar = [vehicle.brand, vehicle.color].filter(Boolean).join(' ') || (hasDriverInfo ? 'Vehicle info updating' : 'No vehicle info');
+  const licensePlate = vehicle.licensePlate || '';
 
   return (
     <PageShell>
@@ -286,11 +297,11 @@ export default function RideStatusPage() {
             </div>
 
             <div className="tracking-driver-row">
-              <img src={driverAvatar} alt={driverName} />
+              {driverAvatar ? <img src={driverAvatar} alt={driverName} /> : <span>{driverInitial}</span>}
               <div>
                 <strong>{driverName}</strong>
                 <small>{driverCar}</small>
-                <em>{licensePlate}</em>
+                {licensePlate ? <em>{licensePlate}</em> : null}
               </div>
             </div>
 
