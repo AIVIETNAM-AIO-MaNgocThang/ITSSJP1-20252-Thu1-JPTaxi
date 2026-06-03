@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { resolveAssetUrl } from '../api/accounts.js';
+import { getCustomerProfile, resolveAssetUrl } from '../api/accounts.js';
 import { getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
@@ -115,15 +115,30 @@ export default function RideStatusPage() {
   }, [selectedRoute.destination.position, selectedRoute.pickup.position]);
 
   useEffect(() => {
+    let ignore = false;
+
     function syncTopbarAvatar() {
       setTopbarAvatar(resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar);
     }
 
     syncTopbarAvatar();
+    getCustomerProfile()
+      .then((profile) => {
+        if (ignore) return;
+        const avatar = resolveAssetUrl(profile?.avatarUrl);
+        if (avatar) {
+          localStorage.setItem('jpTaxiCustomerAvatarUrl', avatar);
+          setTopbarAvatar(avatar);
+        }
+      })
+      .catch(() => {
+        if (!ignore) syncTopbarAvatar();
+      });
     window.addEventListener('storage', syncTopbarAvatar);
     window.addEventListener('focus', syncTopbarAvatar);
 
     return () => {
+      ignore = true;
       window.removeEventListener('storage', syncTopbarAvatar);
       window.removeEventListener('focus', syncTopbarAvatar);
     };

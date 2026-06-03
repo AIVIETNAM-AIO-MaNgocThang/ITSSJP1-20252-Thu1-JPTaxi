@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getDriverProfile, resolveAssetUrl } from '../api/accounts.js';
 import { acceptDriverRide, getPendingDriverRide, updateDriverLocation } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
@@ -19,6 +20,7 @@ const defaultDriverLocation = {
   lat: DEFAULT_MAP_LOCATION.latitude,
   lng: DEFAULT_MAP_LOCATION.longitude,
 };
+const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
 
 function buildSelectedRoute(request, routePreview) {
   return {
@@ -51,9 +53,42 @@ export default function DriverDispatchPage() {
   const [pendingRide, setPendingRide] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
   const [routePreview, setRoutePreview] = useState(null);
+  const [topbarAvatar, setTopbarAvatar] = useState(() => (
+    resolveAssetUrl(localStorage.getItem('jpTaxiDriverAvatarUrl')) || driverFallbackAvatar
+  ));
   const [message, setMessage] = useState('半径2km以内の配車リクエストを検索しています...');
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+
+    function syncStoredAvatar() {
+      setTopbarAvatar(resolveAssetUrl(localStorage.getItem('jpTaxiDriverAvatarUrl')) || driverFallbackAvatar);
+    }
+
+    syncStoredAvatar();
+    getDriverProfile()
+      .then((profile) => {
+        if (ignore) return;
+        const avatar = resolveAssetUrl(profile?.avatarUrl);
+        if (avatar) {
+          localStorage.setItem('jpTaxiDriverAvatarUrl', avatar);
+          setTopbarAvatar(avatar);
+        }
+      })
+      .catch(() => {
+        if (!ignore) syncStoredAvatar();
+      });
+    window.addEventListener('storage', syncStoredAvatar);
+    window.addEventListener('focus', syncStoredAvatar);
+
+    return () => {
+      ignore = true;
+      window.removeEventListener('storage', syncStoredAvatar);
+      window.removeEventListener('focus', syncStoredAvatar);
+    };
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -189,7 +224,7 @@ export default function DriverDispatchPage() {
             <>
               <Link to="/driver-home">ホーム</Link>
               <Link to="/messages/customer">通知</Link>
-              <img className="topbar-avatar driver-avatar-top" src="https://i.pravatar.cc/150?u=driver_tanaka" alt="" />
+              <img className="topbar-avatar driver-avatar-top" src={topbarAvatar} alt="" />
             </>
           )}
         />
@@ -200,7 +235,7 @@ export default function DriverDispatchPage() {
             <p>半径2km以内で実際に予約中のお客様だけを表示します。</p>
 
             <div className="dispatch-driver-box">
-              <img src="https://i.pravatar.cc/150?u=driver_tanaka" alt="" />
+              <img src={topbarAvatar} alt="" />
               <div>
                 <strong>ドライバーはオンラインです</strong>
                 <span>受付範囲: 2 km</span>
