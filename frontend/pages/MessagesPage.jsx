@@ -214,6 +214,37 @@ export default function MessagesPage() {
     };
   }, [currentAccount, isDriver, t]);
 
+  async function normalizeChatData(data) {
+    let partner = data?.partner || null;
+    let participants = data?.participants || null;
+
+    if (data?.trip) {
+      try {
+        const [customerProfile, driverProfile] = await Promise.all([
+          needsProfileDetails(participants?.customer) ? getCustomerProfile(data.trip.customerId) : Promise.resolve(null),
+          needsProfileDetails(participants?.driver) ? getDriverProfile(data.trip.driverId) : Promise.resolve(null),
+        ]);
+
+        participants = {
+          customer: mergeParticipant(participants?.customer, customerProfile, 'customer', data.trip.customerId),
+          driver: mergeParticipant(participants?.driver, driverProfile, 'driver', data.trip.driverId),
+        };
+        partner = role === 'driver' ? participants.customer : participants.driver;
+      } catch {
+        /* Keep chat usable even if profile enrichment fails. */
+      }
+    }
+
+    return {
+      available: Boolean(data?.available),
+      trip: data?.trip || null,
+      partner,
+      participants,
+      messages: Array.isArray(data?.messages) ? data.messages : [],
+      message: data?.message || '',
+    };
+  }
+
   async function loadChat({ silent = false } = {}) {
     try {
       const requestedTripId = validTripId(selectedTripIdRef.current);
@@ -227,35 +258,8 @@ export default function MessagesPage() {
         : getActiveChat().catch(() => null);
       const [history, data] = await Promise.all([historyPromise, dataPromise]);
       if (validTripId(selectedTripIdRef.current) !== requestedTripId) return;
-      let partner = data?.partner || null;
-      let participants = data?.participants || null;
-
-      if (data?.trip) {
-        try {
-          const [customerProfile, driverProfile] = await Promise.all([
-            needsProfileDetails(participants?.customer) ? getCustomerProfile(data.trip.customerId) : Promise.resolve(null),
-            needsProfileDetails(participants?.driver) ? getDriverProfile(data.trip.driverId) : Promise.resolve(null),
-          ]);
-
-          participants = {
-            customer: mergeParticipant(participants?.customer, customerProfile, 'customer', data.trip.customerId),
-            driver: mergeParticipant(participants?.driver, driverProfile, 'driver', data.trip.driverId),
-          };
-          partner = role === 'driver' ? participants.customer : participants.driver;
-        } catch {
-          /* Keep chat usable even if profile enrichment fails. */
-        }
-      }
-
+      const nextChat = await normalizeChatData(data);
       if (validTripId(selectedTripIdRef.current) !== requestedTripId) return;
-      const nextChat = {
-        available: Boolean(data?.available),
-        trip: data?.trip || null,
-        partner,
-        participants,
-        messages: Array.isArray(data?.messages) ? data.messages : [],
-        message: data?.message || '',
-      };
       saveChatSnapshot(role, nextChat);
       setConversations(mergeConversations(
         readCachedConversations(role),
@@ -371,7 +375,7 @@ export default function MessagesPage() {
     return resolveAssetUrl(item.partner?.avatarUrl) || (isDriver ? customerAvatar : driverAvatar);
   }
 
-  function openConversation(item) {
+  async function openConversation(item) {
     const itemTripId = validTripId(item.trip?.tripId);
     selectedTripIdRef.current = itemTripId;
     setSelectedTripId(itemTripId);
@@ -387,6 +391,29 @@ export default function MessagesPage() {
     });
     setDraft('');
     setStatus('');
+    if (!itemTripId) return;
+
+    try {
+      const data = await getChatByTrip(itemTripId);
+      if (validTripId(selectedTripIdRef.current) !== itemTripId) return;
+      const nextChat = await normalizeChatData(data);
+      if (validTripId(selectedTripIdRef.current) !== itemTripId) return;
+      saveChatSnapshot(role, nextChat);
+      setChat(nextChat);
+      setStatus('');
+      setConversations((current) => mergeConversations(current, [{
+        available: nextChat.available,
+        partner: nextChat.partner,
+        participants: nextChat.participants,
+        trip: nextChat.trip,
+        lastMessage: nextChat.messages[nextChat.messages.length - 1] || null,
+        messages: nextChat.messages,
+      }]));
+    } catch (error) {
+      if (validTripId(selectedTripIdRef.current) === itemTripId) {
+        setStatus(error.message || t('chat.loadFailed'));
+      }
+    }
   }
   function requestDeleteConversation(event, item) {
     event.stopPropagation();
