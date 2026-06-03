@@ -9,6 +9,7 @@ import '../styles/app-pages.css';
 
 const customerAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
 const driverAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
+const CHAT_HISTORY_KEY = 'jpTaxiChatHistory';
 
 function getCurrentRole(audience) {
   if (audience === 'customer') return 'driver';
@@ -84,6 +85,56 @@ function rememberAccount(role, profile) {
   localStorage.setItem(`${prefix}AvatarUrl`, resolveAssetUrl(profile.avatarUrl) || '');
 }
 
+function readCachedConversations(role) {
+  try {
+    const all = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '{}');
+    return Array.isArray(all[role]) ? all[role] : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergeConversations(...groups) {
+  const byTrip = new Map();
+  groups.flat().filter(Boolean).forEach((item) => {
+    const tripId = item.trip?.tripId ? String(item.trip.tripId) : '';
+    if (!tripId) return;
+    const existing = byTrip.get(tripId);
+    byTrip.set(tripId, {
+      ...existing,
+      ...item,
+      lastMessage: item.lastMessage || existing?.lastMessage || null,
+    });
+  });
+  return [...byTrip.values()].sort((a, b) => {
+    const left = new Date(a.lastMessage?.createdAt || 0).getTime();
+    const right = new Date(b.lastMessage?.createdAt || 0).getTime();
+    return right - left;
+  });
+}
+
+function saveChatSnapshot(role, chatData) {
+  if (!chatData?.trip?.tripId) return;
+  const nextItem = {
+    available: Boolean(chatData.available),
+    partner: chatData.partner || null,
+    participants: chatData.participants || null,
+    trip: chatData.trip,
+    lastMessage: Array.isArray(chatData.messages) && chatData.messages.length
+      ? chatData.messages[chatData.messages.length - 1]
+      : null,
+    messages: Array.isArray(chatData.messages) ? chatData.messages : [],
+  };
+
+  try {
+    const all = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '{}');
+    all[role] = mergeConversations([nextItem], Array.isArray(all[role]) ? all[role] : []).slice(0, 30);
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(all));
+  } catch {
+    /* Cache is best-effort; DB remains the source of truth. */
+  }
+}
+
 export default function MessagesPage() {
   const { audience } = useParams();
   const [searchParams] = useSearchParams();
@@ -144,16 +195,21 @@ export default function MessagesPage() {
         }
       }
 
-      setConversations(Array.isArray(history) ? history : []);
-
-      setChat({
+      const nextChat = {
         available: Boolean(data?.available),
         trip: data?.trip || null,
         partner,
         participants,
         messages: Array.isArray(data?.messages) ? data.messages : [],
         message: data?.message || '',
-      });
+      };
+      saveChatSnapshot(role, nextChat);
+      setConversations(mergeConversations(
+        Array.isArray(history) ? history : [],
+        readCachedConversations(role),
+      ));
+
+      setChat(nextChat);
       if (!silent) setStatus('');
     } catch (error) {
       if (!silent) setStatus(error.message || t('chat.loadFailed'));
@@ -199,10 +255,21 @@ export default function MessagesPage() {
     setDraft('');
     try {
       const message = await sendChatMessage(text);
-      setChat((current) => ({
-        ...current,
-        messages: [...current.messages, message],
-      }));
+      setChat((current) => {
+        const nextChat = {
+          ...current,
+          messages: [...current.messages, message],
+        };
+        saveChatSnapshot(role, nextChat);
+        setConversations(mergeConversations([{
+          available: nextChat.available,
+          partner: nextChat.partner,
+          participants: nextChat.participants,
+          trip: nextChat.trip,
+          lastMessage: message,
+        }], conversations, readCachedConversations(role)));
+        return nextChat;
+      });
       setStatus('');
     } catch (error) {
       setDraft(text);
