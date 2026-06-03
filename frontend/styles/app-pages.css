@@ -2835,14 +2835,17 @@ button.zip-fast-button {
 }
 
 .zip-chat-delete {
-  display: grid;
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
-  place-items: center;
-  width: 28px;
-  height: 28px;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   color: #94a3b8;
-  font-size: 22px;
-  line-height: 1;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 24px;
   background: transparent;
   border: 0;
   border-radius: 50%;
@@ -2852,6 +2855,57 @@ button.zip-fast-button {
 .zip-chat-delete:hover {
   color: #ef4444;
   background: #fee2e2;
+}
+
+.zip-delete-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.zip-delete-dialog {
+  width: min(420px, 100%);
+  padding: 24px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+}
+
+.zip-delete-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.zip-delete-dialog p {
+  margin: 0 0 22px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.zip-delete-dialog div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.zip-delete-dialog button {
+  min-width: 88px;
+  padding: 10px 16px;
+  color: #0f172a;
+  font-weight: 800;
+  background: #f1f5f9;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.zip-delete-dialog button.danger {
+  color: #fff;
+  background: #ef4444;
 }
 
 .zip-main-chat {

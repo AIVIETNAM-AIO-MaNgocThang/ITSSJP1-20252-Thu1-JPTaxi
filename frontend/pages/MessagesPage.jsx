@@ -190,6 +190,7 @@ export default function MessagesPage() {
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [currentAccount, setCurrentAccount] = useState(() => storedAccount(role));
   const viewportRef = useRef(null);
 
@@ -266,7 +267,10 @@ export default function MessagesPage() {
         readCachedConversations(role),
       ));
 
-      setChat(nextChat);
+      const nextTripId = String(nextChat.trip?.tripId || '');
+      if (!nextTripId || !readHiddenChatIds(role).has(nextTripId)) {
+        setChat(nextChat);
+      }
       if (!silent) setStatus('');
     } catch (error) {
       if (!silent) setStatus(error.message || t('chat.loadFailed'));
@@ -387,9 +391,20 @@ export default function MessagesPage() {
     }
   }
 
-  function deleteConversation(event, item) {
+  function requestDeleteConversation(event, item) {
     event.stopPropagation();
     const itemTripId = validTripId(item.trip?.tripId);
+    if (!itemTripId) return;
+    setPendingDelete(item);
+  }
+
+  function closeDeleteDialog() {
+    setPendingDelete(null);
+  }
+
+  function confirmDeleteConversation() {
+    if (!pendingDelete) return;
+    const itemTripId = validTripId(pendingDelete.trip?.tripId);
     if (!itemTripId) return;
     const nextHiddenIds = new Set(hiddenChatIds);
     nextHiddenIds.add(itemTripId);
@@ -397,7 +412,11 @@ export default function MessagesPage() {
     setHiddenChatIds(nextHiddenIds);
     if (String(chat.trip?.tripId || '') === itemTripId) {
       setSelectedTripId('');
+      setChat({ available: false, messages: [], trip: null, partner: null, participants: null, message: 'Không có đoạn chat.' });
+      setDraft('');
+      setStatus('');
     }
+    setPendingDelete(null);
   }
 
   return (
@@ -432,7 +451,7 @@ export default function MessagesPage() {
                         <span>{itemPartnerName && <strong>{itemPartnerName}</strong>}<small>{item.lastMessage ? formatTime(item.lastMessage.createdAt) : '-'}</small></span>
                         <em>{item.lastMessage?.text || (item.available ? t('chat.noHistory') : unavailableText)}</em>
                       </span>
-                      <button className="zip-chat-delete" type="button" title="Xóa đoạn chat" aria-label="Xóa đoạn chat" onClick={(event) => deleteConversation(event, item)}>×</button>
+                      <button className="zip-chat-delete" type="button" title="Xóa đoạn chat" aria-label="Xóa đoạn chat" onClick={(event) => requestDeleteConversation(event, item)}>×</button>
                     </div>
                   );
                 })
@@ -484,6 +503,18 @@ export default function MessagesPage() {
             </footer>
           </section>
         </section>
+        {pendingDelete ? (
+          <div className="zip-delete-backdrop" role="presentation" onClick={closeDeleteDialog}>
+            <section className="zip-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-chat-title" onClick={(event) => event.stopPropagation()}>
+              <h2 id="delete-chat-title">Xóa đoạn chat?</h2>
+              <p>Đoạn chat này sẽ bị ẩn khỏi danh sách của bạn. Người còn lại vẫn xem được.</p>
+              <div>
+                <button type="button" onClick={closeDeleteDialog}>Hủy</button>
+                <button className="danger" type="button" onClick={confirmDeleteConversation}>Đồng ý</button>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </main>
     </PageShell>
   );
