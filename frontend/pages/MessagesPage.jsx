@@ -112,6 +112,9 @@ function mergeConversations(...groups) {
     });
   });
   return [...byTrip.values()].sort((a, b) => {
+    if (Boolean(a.available) !== Boolean(b.available)) {
+      return a.available ? -1 : 1;
+    }
     const left = new Date(a.lastMessage?.createdAt || 0).getTime();
     const right = new Date(b.lastMessage?.createdAt || 0).getTime();
     return right - left;
@@ -325,14 +328,18 @@ export default function MessagesPage() {
     customer: role === 'customer' ? currentAccountName : partnerName,
     driver: role === 'driver' ? currentAccountName : partnerName,
   };
-  const conversationItems = conversations.length
-    ? conversations
-    : (hasConversation ? [{
-        available: chat.available,
-        partner: chat.partner,
-        trip: chat.trip,
-        lastMessage,
-      }] : []);
+  const activeConversationItem = hasConversation ? {
+    available: chat.available,
+    partner: chat.partner,
+    participants: chat.participants,
+    trip: chat.trip,
+    lastMessage,
+    messages: chat.messages,
+  } : null;
+  const conversationItems = mergeConversations(
+    conversations,
+    activeConversationItem ? [activeConversationItem] : [],
+  );
 
   function getConversationPartner(item) {
     return accountName(item.partner) || item.lastMessage?.senderName || '';
