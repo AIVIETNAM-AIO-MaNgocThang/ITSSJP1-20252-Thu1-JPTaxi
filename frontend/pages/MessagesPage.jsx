@@ -10,6 +10,7 @@ import '../styles/app-pages.css';
 const customerAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
 const driverAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
 const CHAT_HISTORY_KEY = 'jpTaxiChatHistory';
+const CHAT_HIDDEN_KEY = 'jpTaxiHiddenChats';
 
 function getCurrentRole(audience) {
   if (audience === 'customer') return 'driver';
@@ -99,6 +100,25 @@ function readCachedConversations(role) {
   }
 }
 
+function readHiddenChatIds(role) {
+  try {
+    const all = JSON.parse(localStorage.getItem(CHAT_HIDDEN_KEY) || '{}');
+    return new Set(Array.isArray(all[role]) ? all[role].map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveHiddenChatIds(role, ids) {
+  try {
+    const all = JSON.parse(localStorage.getItem(CHAT_HIDDEN_KEY) || '{}');
+    all[role] = [...ids].map(String);
+    localStorage.setItem(CHAT_HIDDEN_KEY, JSON.stringify(all));
+  } catch {
+    /* Ignore local hide failures. */
+  }
+}
+
 function mergeConversations(...groups) {
   const byTrip = new Map();
   groups.flat().filter(Boolean).forEach((item) => {
@@ -166,6 +186,7 @@ export default function MessagesPage() {
   const [chat, setChat] = useState({ available: false, messages: [], trip: null, partner: null, participants: null });
   const [selectedTripId, setSelectedTripId] = useState(() => validTripId(searchParams.get('tripId')));
   const [conversations, setConversations] = useState([]);
+  const [hiddenChatIds, setHiddenChatIds] = useState(() => readHiddenChatIds(role));
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
@@ -255,6 +276,7 @@ export default function MessagesPage() {
   useEffect(() => {
     sessionStorage.setItem('jpTaxiActiveRole', role);
     setCurrentAccount(storedAccount(role));
+    setHiddenChatIds(readHiddenChatIds(role));
     loadChat();
     const timer = window.setInterval(() => loadChat({ silent: true }), 1000);
     return () => window.clearInterval(timer);
@@ -339,7 +361,7 @@ export default function MessagesPage() {
   const conversationItems = mergeConversations(
     conversations,
     activeConversationItem ? [activeConversationItem] : [],
-  );
+  ).filter((item) => !hiddenChatIds.has(String(item.trip?.tripId || '')));
 
   function getConversationPartner(item) {
     return accountName(item.partner) || item.lastMessage?.senderName || '';
@@ -365,6 +387,19 @@ export default function MessagesPage() {
     }
   }
 
+  function deleteConversation(event, item) {
+    event.stopPropagation();
+    const itemTripId = validTripId(item.trip?.tripId);
+    if (!itemTripId) return;
+    const nextHiddenIds = new Set(hiddenChatIds);
+    nextHiddenIds.add(itemTripId);
+    saveHiddenChatIds(role, nextHiddenIds);
+    setHiddenChatIds(nextHiddenIds);
+    if (String(chat.trip?.tripId || '') === itemTripId) {
+      setSelectedTripId('');
+    }
+  }
+
   return (
     <PageShell>
       <main className="messages-window">
@@ -382,18 +417,23 @@ export default function MessagesPage() {
                   const itemInitial = itemPartnerName.trim().charAt(0).toUpperCase() || (isDriver ? 'K' : 'T');
                   const isActive = itemTripId && String(chat.trip?.tripId) === itemTripId;
                   return (
-                    <button
+                    <div
                       className={`zip-chat-item ${isActive ? 'active' : ''}`}
-                      type="button"
                       key={itemTripId || item.lastMessage?.id || itemPartnerName}
                       onClick={() => openConversation(item)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') openConversation(item);
+                      }}
                     >
                       {itemAvatar ? <img className="zip-avatar image" src={itemAvatar} alt={itemPartnerName} /> : <span className="zip-avatar">{itemInitial}</span>}
                       <span className="zip-chat-info">
                         <span>{itemPartnerName && <strong>{itemPartnerName}</strong>}<small>{item.lastMessage ? formatTime(item.lastMessage.createdAt) : '-'}</small></span>
                         <em>{item.lastMessage?.text || (item.available ? t('chat.noHistory') : unavailableText)}</em>
                       </span>
-                    </button>
+                      <button className="zip-chat-delete" type="button" title="Xóa đoạn chat" aria-label="Xóa đoạn chat" onClick={(event) => deleteConversation(event, item)}>×</button>
+                    </div>
                   );
                 })
               ) : (

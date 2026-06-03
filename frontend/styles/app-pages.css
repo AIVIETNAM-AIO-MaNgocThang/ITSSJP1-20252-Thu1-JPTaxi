@@ -2750,6 +2750,7 @@ button.zip-fast-button {
 
 .zip-chat-item {
   display: flex;
+  align-items: center;
   gap: 14px;
   width: 100%;
   padding: 16px 18px;
@@ -2757,6 +2758,7 @@ button.zip-fast-button {
   background: #fff;
   border: 0;
   border-bottom: 1px solid #f9fafb;
+  cursor: pointer;
 }
 
 .zip-chat-item.active {
@@ -2830,6 +2832,26 @@ button.zip-fast-button {
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.zip-chat-delete {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #94a3b8;
+  font-size: 22px;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.zip-chat-delete:hover {
+  color: #ef4444;
+  background: #fee2e2;
 }
 
 .zip-main-chat {
