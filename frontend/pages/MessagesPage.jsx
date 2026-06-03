@@ -191,14 +191,22 @@ export default function MessagesPage() {
   async function loadChat({ silent = false } = {}) {
     try {
       const requestedTripId = validTripId(selectedTripId);
-      const history = await getChatConversations().catch(() => []);
+      const [history, activeData] = await Promise.all([
+        getChatConversations().catch(() => []),
+        getActiveChat().catch(() => null),
+      ]);
       let data;
-      try {
-        data = requestedTripId ? await getChatByTrip(requestedTripId) : await getActiveChat();
-      } catch (error) {
-        const cachedChat = requestedTripId ? cachedChatForTrip(role, requestedTripId) : null;
-        if (!cachedChat) throw error;
-        data = cachedChat;
+      const activeTripId = validTripId(activeData?.trip?.tripId);
+      if (requestedTripId && requestedTripId !== activeTripId) {
+        try {
+          data = await getChatByTrip(requestedTripId);
+        } catch (error) {
+          const cachedChat = cachedChatForTrip(role, requestedTripId);
+          if (!cachedChat) throw error;
+          data = cachedChat;
+        }
+      } else {
+        data = activeData;
       }
       let partner = data?.partner || null;
       let participants = data?.participants || null;
