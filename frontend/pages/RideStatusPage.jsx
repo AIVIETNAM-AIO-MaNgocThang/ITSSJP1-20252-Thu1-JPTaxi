@@ -162,24 +162,32 @@ export default function RideStatusPage() {
           navigate('/payment');
           return;
         }
-        let enrichedDriver = activeDriver;
-        if (activeDriver?.driverId) {
+        const activeDriverId = activeDriver?.driverId ?? activeRide?.data?.driverId;
+        let enrichedDriver = activeDriverId
+          ? { ...(activeDriver || {}), driverId: activeDriverId }
+          : activeDriver;
+        let enrichedVehicle = activeVehicle;
+        if (activeDriverId) {
           try {
-            const profile = await getDriverProfile(activeDriver.driverId);
+            const profile = await getDriverProfile(activeDriverId);
             if (!ignore) {
               enrichedDriver = {
-                ...activeDriver,
-                avatarUrl: profile?.avatarUrl || activeDriver.avatarUrl,
-                name: [profile?.lastName, profile?.firstName].filter(Boolean).join(' ') || activeDriver.name,
-                phone: profile?.phone || activeDriver.phone,
+                ...(activeDriver || {}),
+                driverId: activeDriverId,
+                avatarUrl: profile?.avatarUrl || activeDriver?.avatarUrl,
+                name: [profile?.lastName, profile?.firstName].filter(Boolean).join(' ') || activeDriver?.name,
+                phone: profile?.phone || activeDriver?.phone,
               };
+              enrichedVehicle = activeVehicle || profile?.vehicle || null;
             }
           } catch {
-            enrichedDriver = activeDriver;
+            enrichedDriver = activeDriverId
+              ? { ...(activeDriver || {}), driverId: activeDriverId }
+              : activeDriver;
           }
         }
         const nextDriverPosition = parseDriverPosition(activeRide?.data?.driver);
-        if (!nextDriverPosition && !activeDriver && !activeVehicle) return;
+        if (!nextDriverPosition && !enrichedDriver && !enrichedVehicle) return;
 
         if (nextDriverPosition) {
           setDriverPosition(nextDriverPosition);
@@ -193,7 +201,7 @@ export default function RideStatusPage() {
             },
             vehicle: {
               ...(current.vehicle || {}),
-              ...(activeVehicle || {}),
+              ...(enrichedVehicle || {}),
             },
           };
           window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(nextRoute));
