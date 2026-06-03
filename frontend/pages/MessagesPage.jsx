@@ -193,6 +193,7 @@ export default function MessagesPage() {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [currentAccount, setCurrentAccount] = useState(() => storedAccount(role));
   const viewportRef = useRef(null);
+  const selectedTripIdRef = useRef(selectedTripId);
 
   const header = useMemo(() => {
     const homePath = isDriver ? '/driver-home' : '/home';
@@ -215,11 +216,12 @@ export default function MessagesPage() {
 
   async function loadChat({ silent = false } = {}) {
     try {
-      const requestedTripId = validTripId(selectedTripId);
+      const requestedTripId = validTripId(selectedTripIdRef.current);
       const [history, activeData] = await Promise.all([
         getChatConversations().catch(() => []),
         getActiveChat().catch(() => null),
       ]);
+      if (validTripId(selectedTripIdRef.current) !== requestedTripId) return;
       let data;
       const activeTripId = validTripId(activeData?.trip?.tripId);
       if (requestedTripId && requestedTripId !== activeTripId) {
@@ -253,6 +255,7 @@ export default function MessagesPage() {
         }
       }
 
+      if (validTripId(selectedTripIdRef.current) !== requestedTripId) return;
       const nextChat = {
         available: Boolean(data?.available),
         trip: data?.trip || null,
@@ -263,8 +266,8 @@ export default function MessagesPage() {
       };
       saveChatSnapshot(role, nextChat);
       setConversations(mergeConversations(
-        Array.isArray(history) ? history : [],
         readCachedConversations(role),
+        Array.isArray(history) ? history : [],
       ));
 
       const nextTripId = String(nextChat.trip?.tripId || '');
@@ -278,6 +281,7 @@ export default function MessagesPage() {
   }
 
   useEffect(() => {
+    selectedTripIdRef.current = selectedTripId;
     sessionStorage.setItem('jpTaxiActiveRole', role);
     setCurrentAccount(storedAccount(role));
     setHiddenChatIds(readHiddenChatIds(role));
@@ -377,7 +381,8 @@ export default function MessagesPage() {
 
   function openConversation(item) {
     const itemTripId = validTripId(item.trip?.tripId);
-    const isCurrentActiveTrip = item.available && String(chat.trip?.tripId || '') === itemTripId;
+    const isCurrentActiveTrip = item.available && item.trip?.status === 'ongoing';
+    selectedTripIdRef.current = itemTripId;
     setSelectedTripId(itemTripId);
     setChat({
       available: Boolean(isCurrentActiveTrip),
@@ -412,6 +417,7 @@ export default function MessagesPage() {
     saveHiddenChatIds(role, nextHiddenIds);
     setHiddenChatIds(nextHiddenIds);
     if (String(chat.trip?.tripId || '') === itemTripId) {
+      selectedTripIdRef.current = '';
       setSelectedTripId('');
       setChat({ available: false, messages: [], trip: null, partner: null, participants: null, message: 'Khong co doan chat.' });
       setDraft('');
