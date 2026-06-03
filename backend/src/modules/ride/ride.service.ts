@@ -706,8 +706,28 @@ export class RideService {
       throw new ForbiddenException('Bạn không có quyền thanh toán cho chuyến đi này.');
     }
 
+    if (trip.status === TripStatusType.completed) {
+      const existingTransaction = await this.paymentTransactionRepo.findOne({
+        where: {
+          tripId: trip.tripId,
+          status: PaymentStatusType.success,
+        },
+      });
+
+      if (existingTransaction) {
+        this.paymentRequests.delete(trip.tripId);
+        return {
+          message: 'Thanh toán thành công.',
+          tripId: trip.tripId,
+          status: 'completed',
+          transactionId: existingTransaction.gatewayTransactionId,
+          paidAt: existingTransaction.paidAt,
+        };
+      }
+    }
+
     if (trip.status !== TripStatusType.ongoing) {
-      throw new BadRequestException('Chuyến đi này đã được thanh toán hoặc đã hủy.');
+      throw new BadRequestException('Chuyến đi này đã hủy hoặc không thể thanh toán.');
     }
 
     // 2. Xác thực mật khẩu khách hàng ("Check mật khẩu")
