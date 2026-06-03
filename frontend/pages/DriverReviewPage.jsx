@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { resolveAssetUrl } from '../api/accounts.js';
 import { getReviewContext, submitTripRating } from '../api/ratings.js';
 import PageShell from '../components/PageShell.jsx';
 import { getLastInvoiceTripId } from '../utils/invoiceSession.js';
@@ -35,7 +36,7 @@ function saveReview(review) {
 export default function DriverReviewPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const tripId = searchParams.get('tripId') || sessionStorage.getItem('jpTaxiTripId') || getLastInvoiceTripId() || 'demo';
+  const tripId = searchParams.get('tripId') || sessionStorage.getItem('jpTaxiTripId') || getLastInvoiceTripId() || '';
   const [score, setScore] = useState(0);
   const [hoverScore, setHoverScore] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -45,16 +46,12 @@ export default function DriverReviewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const displayScore = hoverScore ?? score;
   const label = useMemo(() => scoreLabel(score), [score]);
-  const driverName = reviewContext?.driver?.name || '田中 ドライバー';
-  const vehicle = reviewContext?.driver?.vehicle;
-  const vehicleLabel = vehicle
-    ? `${vehicle.brand || ''} ${vehicle.color || ''} • ${vehicle.licensePlate || ''}`.trim()
-    : 'Toyota Vios • 30A-123.45';
-  const driverInitial = driverName.trim().charAt(0) || '田';
-
   useEffect(() => {
     const numericTripId = Number(tripId);
-    if (!Number.isFinite(numericTripId) || numericTripId <= 0) return undefined;
+    if (!Number.isFinite(numericTripId) || numericTripId <= 0) {
+      setStatus('Trip information is missing. Please return home and try again.');
+      return undefined;
+    }
 
     let ignored = false;
     getReviewContext(numericTripId)
@@ -74,6 +71,14 @@ export default function DriverReviewPage() {
       ignored = true;
     };
   }, [tripId]);
+
+  const reviewDriverName = reviewContext?.driver?.name || (status ? 'Driver information unavailable' : 'Loading driver...');
+  const reviewVehicle = reviewContext?.driver?.vehicle;
+  const reviewVehicleLabel = reviewVehicle
+    ? [reviewVehicle.brand, reviewVehicle.color, reviewVehicle.licensePlate].filter(Boolean).join(' - ')
+    : (status ? 'Vehicle information unavailable' : 'Loading vehicle...');
+  const reviewDriverInitial = reviewDriverName.trim().charAt(0).toUpperCase() || '?';
+  const reviewDriverAvatar = resolveAssetUrl(reviewContext?.driver?.avatarUrl);
 
   function toggleTag(tag) {
     setSelectedTags((current) => current.includes(tag)
@@ -127,9 +132,13 @@ export default function DriverReviewPage() {
           </header>
 
           <form id="driver-review-form" className="review-content" onSubmit={submitReview}>
-            <div className="driver-avatar-ring"><div className="review-driver-avatar">{driverInitial}</div></div>
-            <h1>{driverName}</h1>
-            <p>{vehicleLabel}</p>
+            <div className="driver-avatar-ring">
+              {reviewDriverAvatar
+                ? <img className="review-driver-avatar image" src={reviewDriverAvatar} alt={reviewDriverName} />
+                : <div className="review-driver-avatar">{reviewDriverInitial}</div>}
+            </div>
+            <h1>{reviewDriverName}</h1>
+            <p>{reviewVehicleLabel}</p>
 
             <section className="review-rating">
               <strong>今回の乗車はいかがでしたか?</strong>

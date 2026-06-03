@@ -84,8 +84,12 @@ export default function PaymentPage() {
       }
     }
 
+    const reviewPath = Number.isFinite(tripId) && tripId > 0
+      ? `/driver-review?tripId=${tripId}`
+      : '/driver-review';
+
     clearActiveRideState();
-    navigate(backPath === '/driver-ride-status' ? '/driver-ride-status' : '/driver-review');
+    navigate(backPath === '/driver-ride-status' ? '/driver-ride-status' : reviewPath);
   }
 
   return (

@@ -4134,6 +4134,11 @@ button.zip-fast-button {
   border-radius: 50%;
 }
 
+.review-driver-avatar.image {
+  display: block;
+  object-fit: cover;
+}
+
 .review-content h1 {
   margin: 0 0 4px;
   font-size: 22px;
