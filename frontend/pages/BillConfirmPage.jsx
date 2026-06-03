@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { resolveAssetUrl } from '../api/accounts.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
@@ -76,11 +76,9 @@ export default function BillConfirmPage() {
   const fallbackAvatar = isDriver ? driverFallbackAvatar : customerFallbackAvatar;
   const [topbarAvatar, setTopbarAvatar] = useState(() => resolveAssetUrl(localStorage.getItem(avatarStorageKey)) || fallbackAvatar);
   const [bookingMode, setBookingMode] = useState('self');
-  const [accountOpen, setAccountOpen] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [selectedRoute] = useState(readSelectedRoute);
-  const accountRef = useRef(null);
   const displayDistance = selectedRoute.routeMetrics.distance;
   const routeSummary = `${displayDistance} - ${selectedRoute.routeMetrics.duration}`;
 
@@ -118,17 +116,6 @@ export default function BillConfirmPage() {
     };
   }, [avatarStorageKey, fallbackAvatar]);
 
-  useEffect(() => {
-    function closeAccount(event) {
-      if (accountRef.current && !accountRef.current.contains(event.target)) {
-        setAccountOpen(false);
-      }
-    }
-
-    document.addEventListener('click', closeAccount);
-    return () => document.removeEventListener('click', closeAccount);
-  }, []);
-
   function selectMode(mode) {
     setBookingMode(mode);
     if (mode === 'proxy') {
@@ -151,26 +138,14 @@ export default function BillConfirmPage() {
   return (
     <PageShell>
       <main className="booking-screen">
-        <Topbar brandTo={homePath}>
-          <div className="account-menu" ref={accountRef}>
-            <button
-              className="profile-button"
-              type="button"
-              aria-label="プロフィール"
-              aria-expanded={accountOpen}
-              onClick={(event) => {
-                event.stopPropagation();
-                setAccountOpen((current) => !current);
-              }}
-            >
-              <img src={topbarAvatar} alt="" />
-            </button>
-            <div className={`account-dropdown ${accountOpen ? 'open' : ''}`} aria-hidden={!accountOpen}>
-              <button type="button" onClick={() => navigate(accountPath)}>会員情報変更</button>
-              <button type="button">ログアウト</button>
-            </div>
-          </div>
-        </Topbar>
+        <Topbar brandTo={homePath} actions={(
+          <>
+            <Link to={homePath}>{t('navHome')}</Link>
+            <Link to={messagePath}>{t('navMessages')}</Link>
+            <Link to={accountPath}>{t('navAccount')}</Link>
+            <img className="topbar-avatar" src={topbarAvatar} alt="" />
+          </>
+        )} />
 
         <section className="booking-layout">
           <section className="confirm-panel" aria-labelledby="page-title">
