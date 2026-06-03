@@ -49,6 +49,26 @@ export class ChatService {
     return query.getOne();
   }
 
+  private async findLatestTripWithChat(userId: number, role: ChatRole) {
+    const query = this.trips
+      .createQueryBuilder('trip')
+      .innerJoinAndSelect('trip.rideRequest', 'rideRequest')
+      .innerJoin(ChatMessage, 'message', 'message.trip_id = trip.trip_id')
+      .where('trip.status IN (:...statuses)', {
+        statuses: [TripStatusType.completed, TripStatusType.cancelled_by_admin],
+      })
+      .orderBy('trip.endTime', 'DESC')
+      .addOrderBy('trip.startTime', 'DESC');
+
+    if (role === 'driver') {
+      query.andWhere('trip.driverId = :userId', { userId });
+    } else {
+      query.andWhere('rideRequest.customerId = :userId', { userId });
+    }
+
+    return query.getOne();
+  }
+
   private async getPartner(trip: Trip, role: ChatRole) {
     const participants = await this.getParticipants(trip);
     return role === 'customer' ? participants.driver : participants.customer;
@@ -90,7 +110,8 @@ export class ChatService {
   }
 
   async getActiveChat(userId: number, role: ChatRole) {
-    const trip = await this.findActiveTrip(userId, role);
+    const activeTrip = await this.findActiveTrip(userId, role);
+    const trip = activeTrip ?? await this.findLatestTripWithChat(userId, role);
     if (!trip) {
       return {
         available: false,
@@ -107,7 +128,7 @@ export class ChatService {
     });
 
     return {
-      available: true,
+      available: trip.status === TripStatusType.ongoing,
       partner: await this.getPartner(trip, role),
       participants: await this.getParticipants(trip),
       trip: {
@@ -120,6 +141,9 @@ export class ChatService {
         status: trip.status,
       },
       messages: messages.map((message) => this.serialize(message)),
+      message: trip.status === TripStatusType.ongoing
+        ? undefined
+        : 'ã“ã®ãƒãƒ£ãƒƒãƒˆã¯çµ‚äº†ã—ãŸä¹—è»Šã®å±¥æ­´ã§ã™ã€‚',
     };
   }
 

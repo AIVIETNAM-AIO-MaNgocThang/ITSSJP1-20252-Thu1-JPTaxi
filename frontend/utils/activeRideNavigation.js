@@ -1,5 +1,19 @@
 const ACTIVE_REQUEST_STATUSES = new Set(['pending', 'searching']);
 
+export function clearCompletedRideSession() {
+  sessionStorage.removeItem('jpTaxiRideRequestId');
+  sessionStorage.removeItem('jpTaxiActiveRequestId');
+  localStorage.removeItem('jpTaxiRideAccepted');
+  localStorage.removeItem('jpTaxiPaymentRequested');
+  localStorage.removeItem('jpTaxiFallbackRide');
+}
+
+export function clearCompletedRideBookingState() {
+  clearCompletedRideSession();
+  sessionStorage.removeItem('jpTaxiSelectedRoute');
+  sessionStorage.removeItem('jpTaxiPendingDestination');
+}
+
 function pathMatches(pathname, prefixes) {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
@@ -72,7 +86,10 @@ export function hasOutstandingPayment(activeRide) {
 }
 
 export function syncActiveRideSession(activeRide) {
-  if (!activeRide?.data) return;
+  if (!activeRide?.data) {
+    clearCompletedRideSession();
+    return;
+  }
 
   if (activeRide.type === 'request') {
     if (activeRide.data.requestId) {

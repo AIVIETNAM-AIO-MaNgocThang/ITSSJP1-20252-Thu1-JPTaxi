@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { resolveAssetUrl } from '../api/accounts.js';
+import { createRideRequest } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
@@ -77,6 +78,7 @@ export default function BillConfirmPage() {
   const fallbackAvatar = isDriver ? driverFallbackAvatar : customerFallbackAvatar;
   const [topbarAvatar, setTopbarAvatar] = useState(() => resolveAssetUrl(localStorage.getItem(avatarStorageKey)) || fallbackAvatar);
   const [bookingMode, setBookingMode] = useState('self');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
@@ -157,16 +159,43 @@ export default function BillConfirmPage() {
     }
   }
 
-  function confirmBooking() {
-    saveActiveChatSession({
-      tripId: selectedRoute.tripId ?? selectedRoute.trip_id ?? `local-trip-${Date.now()}`,
-      requestId: selectedRoute.requestId ?? selectedRoute.request_id ?? `local-request-${Date.now()}`,
-      customerId: selectedRoute.customerId ?? selectedRoute.customer_id ?? localStorage.getItem('jpTaxiUserId') ?? 1,
-      driverId: selectedRoute.driverId ?? selectedRoute.driver_id ?? 1,
-    });
+  async function confirmBooking() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     setProxyOpen(false);
-    setToast('予約内容を確認しました');
-    window.setTimeout(() => navigate(isDriver ? '/ride-status' : '/search-car'), 700);
+
+    try {
+      const fareJpy = Number(String(selectedRoute.routeMetrics.fare || '').replace(/[^\d]/g, '')) || undefined;
+      const request = await createRideRequest({
+        pickupAddress: selectedRoute.pickup.name,
+        pickupLat: Number(selectedRoute.pickup.position[0]),
+        pickupLng: Number(selectedRoute.pickup.position[1]),
+        dropoffAddress: selectedRoute.destination.name,
+        dropoffLat: Number(selectedRoute.destination.position[0]),
+        dropoffLng: Number(selectedRoute.destination.position[1]),
+        vehicleType: '4',
+        estimatedFareJpy: fareJpy,
+      });
+      const nextRoute = {
+        ...selectedRoute,
+        requestId: request.requestId,
+        customerId: request.customerId,
+      };
+
+      window.sessionStorage.setItem('jpTaxiRideRequestId', String(request.requestId));
+      window.sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(nextRoute));
+      saveActiveChatSession({
+        tripId: nextRoute.tripId ?? nextRoute.trip_id ?? `request-${request.requestId}`,
+        requestId: request.requestId,
+        customerId: request.customerId ?? nextRoute.customerId ?? localStorage.getItem('jpTaxiUserId') ?? 1,
+        driverId: nextRoute.driverId ?? nextRoute.driver_id ?? 1,
+      });
+      setToast('Booking request sent.');
+      window.setTimeout(() => navigate(isDriver ? '/ride-status' : '/search-car'), 700);
+    } catch (error) {
+      setToast(error.message || 'Could not send booking request.');
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -297,8 +326,8 @@ export default function BillConfirmPage() {
                   連絡
                 </Link>
               )}
-              <button className="primary-button" type="button" onClick={confirmBooking}>
-                {t('confirmBooking')}
+              <button className="primary-button" type="button" onClick={confirmBooking} disabled={isSubmitting}>
+                {isSubmitting ? 'Sending...' : t('confirmBooking')}
               </button>
             </div>
           </section>

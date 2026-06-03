@@ -2,6 +2,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { getActiveRide, getFallbackRide, processRidePayment } from '../api/rides.js';
 import PageShell from '../components/PageShell.jsx';
+import { clearCompletedRideBookingState } from '../utils/activeRideNavigation.js';
 import { calculateTripFareBreakdown, formatYen } from '../utils/fare.js';
 import { setLastInvoiceTripId } from '../utils/invoiceSession.js';
 import '../styles/app-pages.css';
@@ -57,10 +58,7 @@ export default function PaymentPage() {
   }, []);
 
   function clearActiveRideState() {
-    sessionStorage.removeItem('jpTaxiRideRequestId');
-    sessionStorage.removeItem('jpTaxiTripId');
-    localStorage.removeItem('jpTaxiRideAccepted');
-    localStorage.removeItem('jpTaxiPaymentRequested');
+    clearCompletedRideBookingState();
   }
 
   async function confirmPayment() {
