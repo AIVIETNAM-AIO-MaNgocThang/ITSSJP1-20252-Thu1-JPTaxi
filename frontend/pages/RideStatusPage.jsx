@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getCustomerProfile, resolveAssetUrl } from '../api/accounts.js';
+import { getCustomerProfile, getDriverProfile, resolveAssetUrl } from '../api/accounts.js';
 import { getActiveRide } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
@@ -162,6 +162,22 @@ export default function RideStatusPage() {
           navigate('/payment');
           return;
         }
+        let enrichedDriver = activeDriver;
+        if (activeDriver?.driverId) {
+          try {
+            const profile = await getDriverProfile(activeDriver.driverId);
+            if (!ignore) {
+              enrichedDriver = {
+                ...activeDriver,
+                avatarUrl: profile?.avatarUrl || activeDriver.avatarUrl,
+                name: [profile?.lastName, profile?.firstName].filter(Boolean).join(' ') || activeDriver.name,
+                phone: profile?.phone || activeDriver.phone,
+              };
+            }
+          } catch {
+            enrichedDriver = activeDriver;
+          }
+        }
         const nextDriverPosition = parseDriverPosition(activeRide?.data?.driver);
         if (!nextDriverPosition && !activeDriver && !activeVehicle) return;
 
@@ -173,7 +189,7 @@ export default function RideStatusPage() {
             ...current,
             driver: {
               ...(current.driver || {}),
-              ...(activeDriver || {}),
+              ...(enrichedDriver || {}),
             },
             vehicle: {
               ...(current.vehicle || {}),

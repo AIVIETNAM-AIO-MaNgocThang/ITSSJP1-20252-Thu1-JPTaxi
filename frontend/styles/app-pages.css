@@ -3540,6 +3540,15 @@ button.zip-fast-button {
   border-radius: 12px;
 }
 
+.dispatch-passenger-row > img {
+  display: block;
+  flex: 0 0 auto;
+  width: 45px;
+  height: 45px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
 .dispatch-passenger-row strong,
 .dispatch-passenger-row small {
   display: block;

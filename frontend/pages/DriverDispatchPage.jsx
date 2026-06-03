@@ -21,6 +21,7 @@ const defaultDriverLocation = {
   lng: DEFAULT_MAP_LOCATION.longitude,
 };
 const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
+const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
 
 function buildSelectedRoute(request, routePreview) {
   return {
@@ -161,6 +162,7 @@ export default function DriverDispatchPage() {
     return pendingRide.actualPassengerName || pendingRide.customer?.name || `KH-${pendingRide.customerId}`;
   }, [pendingRide]);
   const passengerPhone = pendingRide?.actualPassengerPhone || pendingRide?.customer?.phone || '';
+  const passengerAvatar = resolveAssetUrl(pendingRide?.customer?.avatarUrl || pendingRide?.customer?.avatar_url) || customerFallbackAvatar;
   const routePoints = pendingRide ? [
     ...(driverLocation ? [{
       key: 'driver',
@@ -301,7 +303,7 @@ export default function DriverDispatchPage() {
                 <span className="dispatch-map-label drop">{pendingRide.dropoffAddress}</span>
                 <section className="dispatch-floating-details">
                   <div className="dispatch-passenger-row">
-                    <span>KH</span>
+                    {passengerAvatar ? <img src={passengerAvatar} alt={passengerName} /> : <span>KH</span>}
                     <div>
                       <strong>お客様: {passengerName}</strong>
                       <small>{passengerPhone || '連絡先を確認中'}</small>
