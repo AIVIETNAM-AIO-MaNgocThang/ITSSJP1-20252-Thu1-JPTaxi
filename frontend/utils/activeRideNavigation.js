@@ -109,6 +109,12 @@ export function syncActiveRideSession(activeRide) {
   if (trip.tripId) {
     sessionStorage.setItem('jpTaxiTripId', String(trip.tripId));
   }
+  if (activeRide.paymentRequested && trip.tripId) {
+    localStorage.setItem('jpTaxiPaymentRequested', JSON.stringify({
+      tripId: trip.tripId,
+      requestedAt: Date.now(),
+    }));
+  }
 
   if (!sessionStorage.getItem('jpTaxiSelectedRoute')) {
     const storedRoute = buildStoredRoute(activeRide);

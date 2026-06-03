@@ -222,7 +222,7 @@ export default function RideStatusPage() {
     }
 
     syncDriverPosition();
-    const timer = window.setInterval(syncDriverPosition, 5000);
+    const timer = window.setInterval(syncDriverPosition, 1000);
 
     return () => {
       ignore = true;

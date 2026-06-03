@@ -4,7 +4,7 @@ import { getActiveDriverRide, getActiveRide } from '../api/rides.js';
 import { getActiveRideRedirect, syncActiveRideSession } from '../utils/activeRideNavigation.js';
 
 function getStoredRole() {
-  return localStorage.getItem('jpTaxiRole');
+  return sessionStorage.getItem('jpTaxiActiveRole') || localStorage.getItem('jpTaxiRole');
 }
 
 function getStoredToken(role) {
@@ -54,7 +54,7 @@ export default function ActiveRideNavigationGuard({ children }) {
     }
 
     checkActiveRide();
-    const timer = window.setInterval(checkActiveRide, 5000);
+    const timer = window.setInterval(checkActiveRide, 1000);
 
     return () => {
       ignored = true;
