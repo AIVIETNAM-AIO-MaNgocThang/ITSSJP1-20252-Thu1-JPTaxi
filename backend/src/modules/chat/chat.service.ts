@@ -217,10 +217,12 @@ export class ChatService {
 
     const trips = await query.take(20).getMany();
     return Promise.all(trips.map(async (trip) => {
-      const lastMessage = await this.messages.findOne({
+      const tripMessages = await this.messages.find({
         where: { tripId: trip.tripId },
-        order: { createdAt: 'DESC', messageId: 'DESC' },
+        order: { createdAt: 'ASC', messageId: 'ASC' },
+        take: 200,
       });
+      const lastMessage = tripMessages[tripMessages.length - 1] || null;
       const participants = await this.getParticipants(trip);
       return {
         available: trip.status === TripStatusType.ongoing,
@@ -236,6 +238,7 @@ export class ChatService {
           status: trip.status,
         },
         lastMessage: lastMessage ? this.serialize(lastMessage) : null,
+        messages: tripMessages.map((message) => this.serialize(message)),
       };
     }));
   }
