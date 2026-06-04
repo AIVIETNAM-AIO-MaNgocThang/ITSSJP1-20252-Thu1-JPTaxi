@@ -67,8 +67,32 @@ export default function PaymentPage() {
     setStatus('');
     setMethodOpen(false);
 
-    const tripId = Number(trip?.tripId || sessionStorage.getItem('jpTaxiTripId'));
-    if (Number.isFinite(tripId) && tripId > 0) setLastInvoiceTripId(tripId);
+    let paymentTrip = trip;
+    let tripId = Number(paymentTrip?.tripId || sessionStorage.getItem('jpTaxiTripId'));
+
+    if ((!Number.isFinite(tripId) || tripId <= 0) && backPath !== '/driver-ride-status') {
+      try {
+        const activeRide = await getActiveRide();
+        if (activeRide?.type === 'trip') {
+          paymentTrip = activeRide.data;
+          setTrip(activeRide.data);
+          tripId = Number(activeRide.data?.tripId);
+          if (Number.isFinite(tripId) && tripId > 0) {
+            sessionStorage.setItem('jpTaxiTripId', String(tripId));
+          }
+        }
+      } catch {
+        /* Fall back to the stored trip id below. */
+      }
+    }
+
+    if (!Number.isFinite(tripId) || tripId <= 0) {
+      setStatus('Chua tim thay chuyen di de xac nhan thanh toan.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    setLastInvoiceTripId(tripId);
 
     if (Number.isFinite(tripId) && tripId > 0 && backPath !== '/driver-ride-status') {
       try {
@@ -78,7 +102,9 @@ export default function PaymentPage() {
           password: 'password123',
         });
       } catch (error) {
-        console.warn('Skipping payment confirmation error:', error);
+        setStatus(error.message || 'Khong the xac nhan thanh toan.');
+        setIsSubmitting(false);
+        return;
       }
     }
 
