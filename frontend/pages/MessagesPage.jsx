@@ -100,6 +100,17 @@ function readCachedConversations(role) {
   }
 }
 
+function readCachedConversationsForAllRoles() {
+  try {
+    const all = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '{}');
+    return ['customer', 'driver'].flatMap((cacheRole) => (
+      Array.isArray(all[cacheRole]) ? all[cacheRole] : []
+    ));
+  } catch {
+    return [];
+  }
+}
+
 function readHiddenChatIds(role) {
   try {
     const all = JSON.parse(localStorage.getItem(CHAT_HIDDEN_KEY) || '{}');
@@ -190,6 +201,54 @@ function chatFromConversationItem(item) {
     messages,
     message: item.trip?.status === 'ongoing' ? '' : 'Lich su chat da ket thuc.',
   };
+}
+
+function mergeMessagesById(...groups) {
+  const byKey = new Map();
+  groups.flat().filter(Boolean).forEach((message, index) => {
+    const key = message.id
+      ? `id:${message.id}`
+      : [
+          'raw',
+          message.tripId || '',
+          message.senderRole || '',
+          message.createdAt || '',
+          message.text || '',
+          index,
+        ].join(':');
+    byKey.set(key, message);
+  });
+  return [...byKey.values()].sort((a, b) => {
+    const left = new Date(a.createdAt || 0).getTime();
+    const right = new Date(b.createdAt || 0).getTime();
+    if (left !== right) return left - right;
+    return Number(a.id || 0) - Number(b.id || 0);
+  });
+}
+
+function mergeChatSnapshots(...snapshots) {
+  const validSnapshots = snapshots.filter(Boolean);
+  if (!validSnapshots.length) return null;
+  const base = validSnapshots.reduce((current, next) => ({
+    ...current,
+    ...next,
+    partner: next.partner || current.partner || null,
+    participants: next.participants || current.participants || null,
+    trip: next.trip || current.trip || null,
+    message: next.message || current.message || '',
+  }), {});
+  return {
+    ...base,
+    available: base.trip?.status === 'ongoing' && Boolean(base.available),
+    messages: mergeMessagesById(...validSnapshots.map((snapshot) => snapshot.messages || [])),
+  };
+}
+
+function cachedChatCandidatesForTrip(tripId) {
+  return readCachedConversationsForAllRoles()
+    .filter((conversation) => String(conversation.trip?.tripId || '') === String(tripId || ''))
+    .map(chatFromConversationItem)
+    .filter(Boolean);
 }
 
 export default function MessagesPage() {
@@ -392,16 +451,18 @@ export default function MessagesPage() {
 
   async function openConversation(item) {
     const itemTripId = validTripId(item.trip?.tripId);
+    const cachedFallback = mergeChatSnapshots(
+      chatFromConversationItem(item),
+      ...cachedChatCandidatesForTrip(itemTripId),
+    );
     selectedTripIdRef.current = itemTripId;
     setSelectedTripId(itemTripId);
     setChat({
       available: false,
-      trip: item.trip || null,
-      partner: item.partner || null,
-      participants: item.participants || null,
-      messages: Array.isArray(item.messages) && item.messages.length
-        ? item.messages
-        : (item.lastMessage ? [item.lastMessage] : []),
+      trip: cachedFallback?.trip || item.trip || null,
+      partner: cachedFallback?.partner || item.partner || null,
+      participants: cachedFallback?.participants || item.participants || null,
+      messages: cachedFallback?.messages || [],
       message: 'Dang tai lich su chat...',
     });
     setDraft('');
@@ -431,14 +492,18 @@ export default function MessagesPage() {
           const matchingItem = Array.isArray(history)
             ? history.find((conversation) => String(conversation.trip?.tripId || '') === itemTripId)
             : null;
-          const fallbackChat = chatFromConversationItem(matchingItem) || chatFromConversationItem(item);
+          const fallbackChat = mergeChatSnapshots(
+            chatFromConversationItem(item),
+            ...cachedChatCandidatesForTrip(itemTripId),
+            chatFromConversationItem(matchingItem),
+          );
           if (fallbackChat) {
             const nextChat = await normalizeChatData(fallbackChat);
             if (validTripId(selectedTripIdRef.current) !== itemTripId) return;
             saveChatSnapshot(role, nextChat);
             setChat(nextChat);
             setConversations(mergeConversations(readCachedConversations(role), Array.isArray(history) ? history : []));
-            setStatus(Array.isArray(nextChat.messages) && nextChat.messages.length > 1 ? '' : (error.message || t('chat.loadFailed')));
+            setStatus(Array.isArray(nextChat.messages) && nextChat.messages.length ? '' : (error.message || t('chat.loadFailed')));
             return;
           }
         } catch {
