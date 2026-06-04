@@ -242,7 +242,7 @@ export default function DriverDispatchPage() {
               <img src={topbarAvatar} alt="" />
               <div>
                 <strong>{t('driverOnline')}</strong>
-                <span>{t('serviceRange')}: 2 km</span>
+                <span>{driverLocation ? `${t('serviceRange')}: 2 km` : t('enableLocation')}</span>
               </div>
             </div>
 

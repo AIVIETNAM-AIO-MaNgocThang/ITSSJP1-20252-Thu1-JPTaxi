@@ -4,6 +4,7 @@ import { resolveAssetUrl } from '../api/accounts.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
 import { calculateFareBreakdown, formatYen } from '../utils/fare.js';
 import { DEFAULT_MAP_LOCATION, getCurrentBrowserLocation, watchBrowserLocation } from '../utils/geolocation.js';
 import { hasDrivingRoutePath } from '../utils/routePlanner.js';
@@ -175,13 +176,16 @@ function buildRouteKey(pickup, destination) {
 
 export default function LocationSearchPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [topbarAvatar, setTopbarAvatar] = useState(() => (
     resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar
   ));
   const [initialRoute] = useState(readSelectedRoute);
   const [selectedPickup, setSelectedPickup] = useState(() => normalizePlace(initialRoute?.pickup));
   const [selectedDestination, setSelectedDestination] = useState(initialRoute?.destination ?? null);
-  const [selfLocation, setSelfLocation] = useState(defaultPickupPlace.position);
+  const [selfLocation, setSelfLocation] = useState(() => (
+    initialRoute?.pickup?.position ?? null
+  ));
   const [pickupQuery, setPickupQuery] = useState(() => normalizePlace(initialRoute?.pickup).name);
   const [destinationQuery, setDestinationQuery] = useState(initialRoute?.destination?.name ?? '');
   const [activeSearchTarget, setActiveSearchTarget] = useState('destination');
@@ -193,6 +197,7 @@ export default function LocationSearchPage() {
   const [isRouting, setIsRouting] = useState(false);
   const [isRouteRefreshing, setIsRouteRefreshing] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [locationRequired, setLocationRequired] = useState(!initialRoute?.pickup?.position);
   const [searchError, setSearchError] = useState('');
   const routeRefreshTimer = useRef(null);
   const routeRequestId = useRef(0);
@@ -247,7 +252,9 @@ export default function LocationSearchPage() {
       fallback: defaultUserLocation,
       options: { maximumAge: 0 },
     });
-    if (location.isFallback) return defaultPickupPlace;
+    if (location.isFallback) {
+      throw new Error('location permission required');
+    }
 
     const gpsPosition = [location.latitude, location.longitude];
     const place = await resolveCurrentPickupName(gpsPosition);
@@ -290,20 +297,28 @@ export default function LocationSearchPage() {
   useEffect(() => {
     let cancelled = false;
 
-    resolveCurrentPickup().then((pickup) => {
-      if (cancelled) return;
-      setSelfLocation(pickup.position);
-      if (!initialRoute?.pickup) {
-        setSelectedPickup(pickup);
-        setPickupQuery(pickup.name);
-      }
-    });
+    resolveCurrentPickup()
+      .then((pickup) => {
+        if (cancelled) return;
+        setSelfLocation(pickup.position);
+        setLocationRequired(false);
+        if (!initialRoute?.pickup) {
+          setSelectedPickup(pickup);
+          setPickupQuery(pickup.name);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSelfLocation(null);
+        setLocationRequired(true);
+      });
 
     const stopWatching = watchBrowserLocation(
       (location) => {
         if (cancelled) return;
         const position = [location.latitude, location.longitude];
         setSelfLocation(position);
+        setLocationRequired(false);
         setSelectedPickup((current) => (
           current.id === defaultPickupPlace.id
             ? { ...current, position, address: 'GPSで取得した現在位置' }
@@ -376,6 +391,15 @@ export default function LocationSearchPage() {
 
   useEffect(() => {
     if (!selectedDestination) {
+      routeRequestId.current += 1;
+      setRoutePath([]);
+      setRouteMetrics(null);
+      setRouteKey('');
+      window.sessionStorage.removeItem('jpTaxiSelectedRoute');
+      return undefined;
+    }
+
+    if (selectedPickup.id === defaultPickupPlace.id && !selfLocation) {
       routeRequestId.current += 1;
       setRoutePath([]);
       setRouteMetrics(null);
@@ -477,7 +501,7 @@ export default function LocationSearchPage() {
     requestRoute();
 
     return () => controller.abort();
-  }, [selectedDestination, selectedPickup]);
+  }, [selectedDestination, selectedPickup, selfLocation]);
 
   const fallbackRouteState = useMemo(() => (
     selectedDestination ? buildFallbackRouteState(selectedPickup, selectedDestination) : null
@@ -545,7 +569,12 @@ export default function LocationSearchPage() {
       setPickupQuery(pickup.name);
       setSuggestions([]);
       setSearchError('');
+      setLocationRequired(false);
       updateRoutePreview(pickup, selectedDestination);
+    } catch {
+      setSelfLocation(null);
+      setLocationRequired(true);
+      setSearchError(t('enableLocation'));
     } finally {
       setIsLocating(false);
     }
@@ -575,6 +604,11 @@ export default function LocationSearchPage() {
   function continueToBillConfirm(event) {
     event.preventDefault();
     if (!selectedDestination || !displayedRouteMetrics) return;
+    if (selectedPickup.id === defaultPickupPlace.id && !selfLocation) {
+      setLocationRequired(true);
+      setSearchError(t('enableLocation'));
+      return;
+    }
     saveSelectedRoute({
       destination: selectedDestination,
       pickup: selectedPickup,
@@ -634,6 +668,7 @@ export default function LocationSearchPage() {
                 {isLocating ? '取得中...' : '現在位置'}
               </button>
             </label>
+            {locationRequired ? <p className="muted-copy">{t('enableLocation')}</p> : null}
 
             <section className="zip-route-card">
               <div className="zip-route-points">

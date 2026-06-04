@@ -5,6 +5,7 @@ import { getActiveDriverRide, updateDriverLocation } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
 import { hasRecentAcceptedRide } from '../utils/activeRideNavigation.js';
 import { getChatPath } from '../utils/chatSession.js';
 import { DEFAULT_MAP_LOCATION, watchBrowserLocation } from '../utils/geolocation.js';
@@ -14,18 +15,19 @@ import '../styles/app-pages.css';
 
 const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
 
-const fallbackRoute = {
+function createFallbackRoute(t) {
+  return {
   destination: {
-    name: 'ロッテホテル ハノイ',
+    name: t('lotteHotelHanoi'),
     address: '54 Lieu Giai, Ba Dinh, Ha Noi',
     position: [21.03205, 105.81283],
   },
   pickup: {
-    name: 'ホアンキエム湖',
+    name: t('hoanKiemLake'),
     position: [21.02878, 105.85204],
   },
   routeMetrics: {
-    duration: '12分',
+    duration: `12${t('minuteUnit')}`,
     distance: '4.8 km',
   },
   routePath: [
@@ -38,9 +40,11 @@ const fallbackRoute = {
     [21.03162, 105.82084],
     [21.03205, 105.81283],
   ],
-};
+  };
+}
 
-function readSelectedRoute() {
+function readSelectedRoute(t) {
+  const fallbackRoute = createFallbackRoute(t);
   try {
     const rawRoute = window.sessionStorage.getItem('jpTaxiSelectedRoute');
     if (!rawRoute) return fallbackRoute;
@@ -69,7 +73,8 @@ function readSelectedRoute() {
 
 export default function DriverRideStatusPage() {
   const navigate = useNavigate();
-  const [selectedRoute, setSelectedRoute] = useState(readSelectedRoute);
+  const { language, t } = useLanguage();
+  const [selectedRoute, setSelectedRoute] = useState(() => readSelectedRoute(t));
   const [driverLocation, setDriverLocation] = useState(null);
   const [topbarAvatar, setTopbarAvatar] = useState(() => (
     resolveAssetUrl(localStorage.getItem('jpTaxiDriverAvatarUrl')) || driverFallbackAvatar
@@ -78,6 +83,9 @@ export default function DriverRideStatusPage() {
   const passengerName = passenger.name || 'JPTX-9821';
   const passengerPhone = passenger.phone || '090-1234-5678';
   const passengerAvatar = resolveAssetUrl(passenger.avatarUrl);
+  const waitingStatus = language === 'vi'
+    ? `${t('waitingAt')} ${selectedRoute.pickup.name}`
+    : `${selectedRoute.pickup.name}${t('waitingAt')}`;
 
   useEffect(() => {
     function syncTopbarAvatar() {
@@ -193,8 +201,8 @@ export default function DriverRideStatusPage() {
     {
       key: 'pickup',
       label: selectedRoute.pickup.name,
-      meta: '乗車地',
-      time: '現在',
+      meta: t('pickupMeta'),
+      time: t('now'),
       position: selectedRoute.pickup.position,
       type: 'pickup',
     },
@@ -202,7 +210,7 @@ export default function DriverRideStatusPage() {
       key: 'destination',
       label: selectedRoute.destination.name,
       meta: selectedRoute.destination.address,
-      time: `約${selectedRoute.routeMetrics.duration}`,
+      time: `${t('remainingTime')} ${selectedRoute.routeMetrics.duration}`,
       position: selectedRoute.destination.position,
       type: 'destination',
     },
@@ -215,9 +223,9 @@ export default function DriverRideStatusPage() {
           brandTo="/driver-home"
           actions={(
             <>
-              <Link to="/driver-home">ホーム</Link>
-              <Link to={getChatPath('customer')}>メッセージ</Link>
-              <Link to="/driver-info/basic">アカウント</Link>
+              <Link to="/driver-home">{t('navHome')}</Link>
+              <Link to={getChatPath('customer')}>{t('navMessages')}</Link>
+              <Link to="/driver-info/basic">{t('navAccount')}</Link>
               <img className="topbar-avatar driver-avatar-top" src={topbarAvatar} alt="" />
             </>
           )}
@@ -229,7 +237,7 @@ export default function DriverRideStatusPage() {
             className="tracking-route-map"
             compact
             currentLocation={selectedRoute.pickup.position}
-            driverPosition={driverLocation || selectedRoute.pickup.position}
+            driverPosition={driverLocation}
             route={routePoints}
             routePath={selectedRoute.routePath}
             routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
@@ -242,8 +250,8 @@ export default function DriverRideStatusPage() {
           <section className="driver-tracking-card">
             <div className="tracking-eta-header">
               <div>
-                <span>到着予定時間</span>
-                <strong>あと {selectedRoute.routeMetrics.duration}</strong>
+                <span>{t('estimatedArrivalTime')}</span>
+                <strong>{t('remainingTime')} {selectedRoute.routeMetrics.duration}</strong>
               </div>
               <em>{selectedRoute.routeMetrics.distance}</em>
             </div>
@@ -252,14 +260,15 @@ export default function DriverRideStatusPage() {
               {passengerAvatar ? <img src={passengerAvatar} alt={passengerName} /> : <span>👤</span>}
               <div>
                 <strong>{passengerName}</strong>
-                <small>{selectedRoute.pickup.name}で待機中</small>
+                <small>{waitingStatus}</small>
                 <em>{passengerPhone}</em>
+                {!driverLocation ? <small>{t('enableLocation')}</small> : null}
               </div>
             </div>
 
             <div className="tracking-actions">
-              <Link className="tracking-call" to={getChatPath('customer')}>💬 連絡する</Link>
-              <Link className="tracking-message" to="/driver-invoice">📄 請求書へ</Link>
+              <Link className="tracking-call" to={getChatPath('customer')}>💬 {t('contact')}</Link>
+              <Link className="tracking-message" to="/driver-invoice">📄 {t('goToInvoice')}</Link>
             </div>
           </section>
         </section>

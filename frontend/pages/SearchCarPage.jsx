@@ -9,10 +9,6 @@ import { useLanguage } from '../context/LanguageContext.jsx';
 import { hasDrivingRoutePath } from '../utils/routePlanner.js';
 import '../styles/search-car.css';
 
-const defaultUserLocation = {
-  latitude: 21.02878,
-  longitude: 105.85204,
-};
 const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
 
 const fallbackSelectedRoute = {
@@ -121,12 +117,17 @@ export default function SearchCarPage() {
     resolveAssetUrl(localStorage.getItem('jpTaxiCustomerAvatarUrl')) || customerFallbackAvatar
   ));
   const [selectedRoute] = useState(readSelectedRoute);
-  const [userLocation, setUserLocation] = useState({
-    latitude: selectedRoute.pickup.position[0],
-    longitude: selectedRoute.pickup.position[1],
-  });
-  const [drivers, setDrivers] = useState(fallbackDrivers);
+  const [userLocation, setUserLocation] = useState(() => (
+    selectedRoute.hasRoute
+      ? {
+          latitude: selectedRoute.pickup.position[0],
+          longitude: selectedRoute.pickup.position[1],
+        }
+      : null
+  ));
+  const [drivers, setDrivers] = useState([]);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(true);
+  const [locationRequired, setLocationRequired] = useState(!selectedRoute.hasRoute);
 
   useEffect(() => {
     function syncTopbarAvatar() {
@@ -144,7 +145,16 @@ export default function SearchCarPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedRoute.hasRoute || !navigator.geolocation) {
+    if (selectedRoute.hasRoute) {
+      setLocationRequired(false);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setUserLocation(null);
+      setDrivers([]);
+      setIsLoadingDrivers(false);
+      setLocationRequired(true);
       return;
     }
 
@@ -154,9 +164,13 @@ export default function SearchCarPage() {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         });
+        setLocationRequired(false);
       },
       () => {
-        setUserLocation(defaultUserLocation);
+        setUserLocation(null);
+        setDrivers([]);
+        setIsLoadingDrivers(false);
+        setLocationRequired(true);
       },
       { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
     );
@@ -164,6 +178,14 @@ export default function SearchCarPage() {
 
   useEffect(() => {
     let ignore = false;
+    if (!userLocation) {
+      setDrivers([]);
+      setIsLoadingDrivers(false);
+      return () => {
+        ignore = true;
+      };
+    }
+
     const params = new URLSearchParams({
       lat: String(userLocation.latitude),
       lng: String(userLocation.longitude),
@@ -194,11 +216,15 @@ export default function SearchCarPage() {
     return () => {
       ignore = true;
     };
-  }, [userLocation.latitude, userLocation.longitude]);
+  }, [userLocation]);
 
   const mapCenter = useMemo(
-    () => [userLocation.latitude, userLocation.longitude],
-    [userLocation.latitude, userLocation.longitude],
+    () => (
+      userLocation
+        ? [userLocation.latitude, userLocation.longitude]
+        : selectedRoute.destination.position
+    ),
+    [selectedRoute.destination.position, userLocation],
   );
   const routePoints = useMemo(() => [
     {
@@ -228,9 +254,9 @@ export default function SearchCarPage() {
             <Link to="/home">{t('navHome')}</Link>
             <Link to="/messages/driver">{t('navMessages')}</Link>
             <Link to="/user-info/profile">{t('navAccount')}</Link>
-          <div className="location-chip" aria-label={t('currentLocation')}>
+          <div className="location-chip" aria-label={t('currentLocation')} style={{ display: userLocation ? undefined : 'none' }}>
             <span className="location-dot"></span>
-            <span>ハノイ・ホアンキエム周辺</span>
+            <span>{t('currentLocation')}</span>
           </div>
             <img className="topbar-avatar" src={topbarAvatar} alt="" />
           </>
@@ -242,19 +268,19 @@ export default function SearchCarPage() {
             fitToRoute={selectedRoute.hasRoute}
             interactive
             alternateRoutePath={[]}
-            currentLocation={mapCenter}
+            currentLocation={userLocation ? mapCenter : null}
             mapCenter={mapCenter}
             mapZoom={15}
             nearbyDrivers={drivers}
-            route={routePoints}
+            route={userLocation || selectedRoute.hasRoute ? routePoints : []}
             routePath={selectedRoute.hasRoute ? selectedRoute.routePath : []}
             routeSummary={`${selectedRoute.routeMetrics.distance} - ${selectedRoute.routeMetrics.duration}`}
             scrollWheelZoom
             showControls
-            showCurrentLocation={!selectedRoute.hasRoute}
+            showCurrentLocation={Boolean(userLocation && !selectedRoute.hasRoute)}
             showDetails={false}
             showDriver={false}
-            showMarkers={Boolean(selectedRoute.destination)}
+            showMarkers={Boolean(userLocation || selectedRoute.hasRoute)}
             showRoute={selectedRoute.hasRoute}
           />
           <section className="status-card" aria-labelledby="search-title">
@@ -263,7 +289,9 @@ export default function SearchCarPage() {
               <div className="text-group">
                 <h1 id="search-title">{t('searchingTaxi')}</h1>
                 <p>
-                  {isLoadingDrivers ? (
+                  {locationRequired ? (
+                    t('enableLocation')
+                  ) : isLoadingDrivers ? (
                     t('checkingNearbyCars')
                   ) : (
                     <>
