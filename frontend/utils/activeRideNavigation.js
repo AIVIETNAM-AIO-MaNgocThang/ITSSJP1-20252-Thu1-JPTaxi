@@ -1,4 +1,20 @@
 const ACTIVE_REQUEST_STATUSES = new Set(['pending', 'searching']);
+const ACCEPTED_RIDE_GRACE_MS = 2 * 60 * 1000;
+
+export function hasRecentAcceptedRide() {
+  try {
+    const acceptedRide = JSON.parse(localStorage.getItem('jpTaxiRideAccepted') || 'null');
+    const tripId = Number(acceptedRide?.tripId);
+    const acceptedAt = Number(acceptedRide?.acceptedAt);
+    return Boolean(
+      tripId
+      && acceptedAt
+      && Date.now() - acceptedAt < ACCEPTED_RIDE_GRACE_MS,
+    );
+  } catch {
+    return false;
+  }
+}
 
 export function clearCompletedRideSession() {
   sessionStorage.removeItem('jpTaxiRideRequestId');
@@ -87,6 +103,7 @@ export function hasOutstandingPayment(activeRide) {
 
 export function syncActiveRideSession(activeRide) {
   if (!activeRide?.data) {
+    if (hasRecentAcceptedRide()) return;
     clearCompletedRideSession();
     return;
   }
@@ -143,6 +160,7 @@ export function getRideContinuationPath(role, activeRide) {
 
 export function getActiveRideRedirect(role, activeRide, pathname) {
   if (role === 'driver' && !activeRide && pathMatches(pathname, ['/driver-ride-status'])) {
+    if (hasRecentAcceptedRide()) return null;
     return '/driver-home';
   }
 

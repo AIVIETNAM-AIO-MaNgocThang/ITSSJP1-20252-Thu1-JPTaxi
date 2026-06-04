@@ -199,14 +199,15 @@ export default function DriverDispatchPage() {
     setIsAccepting(true);
     try {
       const result = await acceptDriverRide(pendingRide.requestId);
+      const acceptedTripId = result?.tripId ?? result?.trip?.tripId;
       sessionStorage.setItem('jpTaxiRideRequestId', String(pendingRide.requestId));
-      if (result?.tripId) {
-        sessionStorage.setItem('jpTaxiTripId', String(result.tripId));
+      if (acceptedTripId) {
+        sessionStorage.setItem('jpTaxiTripId', String(acceptedTripId));
       }
       sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(buildSelectedRoute(pendingRide, routePreview)));
       localStorage.setItem('jpTaxiRideAccepted', JSON.stringify({
         requestId: pendingRide.requestId,
-        tripId: result?.tripId,
+        tripId: acceptedTripId,
         acceptedAt: Date.now(),
       }));
       navigate('/driver-ride-status');

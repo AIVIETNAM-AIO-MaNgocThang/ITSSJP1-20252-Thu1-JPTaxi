@@ -5,6 +5,7 @@ import { getActiveDriverRide, updateDriverLocation } from '../api/rides.js';
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { hasRecentAcceptedRide } from '../utils/activeRideNavigation.js';
 import { getChatPath } from '../utils/chatSession.js';
 import { DEFAULT_MAP_LOCATION, watchBrowserLocation } from '../utils/geolocation.js';
 import { setLastInvoiceTripId } from '../utils/invoiceSession.js';
@@ -153,6 +154,7 @@ export default function DriverRideStatusPage() {
         const activeRide = await getActiveDriverRide();
         if (ignore) return;
         if (activeRide?.type !== 'trip') {
+          if (hasRecentAcceptedRide()) return;
           sessionStorage.removeItem('jpTaxiTripId');
           navigate('/driver-home', { replace: true });
           return;
