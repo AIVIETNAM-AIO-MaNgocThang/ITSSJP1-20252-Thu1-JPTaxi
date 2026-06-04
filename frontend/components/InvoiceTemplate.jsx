@@ -25,14 +25,20 @@ export default function InvoiceTemplate({ invoice, id = 'invoice-print-area' }) 
 
   const { amounts, lineItems, trip, payment, seller } = invoice;
   const vat = amounts?.jpy;
+  const isPaid = payment?.status === 'success';
 
   return (
     <div className="zip-invoice-paper" id={id}>
       <header>
         <div className="invoice-brand">🚕 JP TAXI</div>
         <div>
-          <h1>{invoice.title}</h1>
+          <h1>{isPaid ? invoice.title : '請求書'}</h1>
           <p>NO. {invoice.invoiceNumber}</p>
+          {isPaid ? (
+            <p className="invoice-issued-badge">支払い済み · Đã thanh toán</p>
+          ) : (
+            <p className="invoice-issued-badge">未決済 · Chờ thanh toán</p>
+          )}
           {invoice.issued && (
             <p className="invoice-issued-badge">発行済 · Đã xuất HĐ VAT</p>
           )}

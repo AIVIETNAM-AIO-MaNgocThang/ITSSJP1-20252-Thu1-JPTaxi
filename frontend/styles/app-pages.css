@@ -4052,6 +4052,10 @@ button.zip-fast-button {
   border: 2px solid #e2e8f0;
 }
 
+.payment-complete-screen .invoice-link {
+  display: none !important;
+}
+
 .support-link {
   min-height: 40px !important;
   color: #94a3b8;
