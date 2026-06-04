@@ -1,57 +1,128 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { getActiveRide, getFallbackRide, processRidePayment } from '../api/rides.js';
+import { getActiveRide, processRidePayment } from '../api/rides.js';
 import PageShell from '../components/PageShell.jsx';
 import { clearCompletedRideBookingState } from '../utils/activeRideNavigation.js';
 import { calculateTripFareBreakdown, formatYen } from '../utils/fare.js';
 import { setLastInvoiceTripId } from '../utils/invoiceSession.js';
 import '../styles/app-pages.css';
 
+const PAYMENT_METHODS = ['クレジットカード (**** 4821)', '現金', 'PayPay', 'Apple Pay'];
+
 const paymentMethodMap = {
   'クレジットカード (**** 4821)': 'VISA',
-  現金: 'VISA',
+  '現金': 'VISA',
   PayPay: 'VNPAY',
   'Apple Pay': 'VISA',
 };
 
-function readSelectedDistance() {
+function readStoredRoute() {
   try {
-    const route = JSON.parse(sessionStorage.getItem('jpTaxiSelectedRoute') || 'null');
-    return route?.routeMetrics?.distance ?? 4.8;
+    return JSON.parse(sessionStorage.getItem('jpTaxiSelectedRoute') || 'null');
   } catch {
-    return 4.8;
+    return null;
   }
+}
+
+function readPaymentRequestTripId() {
+  try {
+    const paymentRequest = JSON.parse(localStorage.getItem('jpTaxiPaymentRequested') || 'null');
+    return Number(paymentRequest?.tripId) || null;
+  } catch {
+    return null;
+  }
+}
+
+function getStoredTripId(trip) {
+  return Number(trip?.tripId || sessionStorage.getItem('jpTaxiTripId') || readPaymentRequestTripId());
+}
+
+function getTripDistance(trip, route) {
+  return trip?.actualDistanceKm
+    ?? trip?.distanceKm
+    ?? route?.routeMetrics?.distance
+    ?? 0;
+}
+
+function buildRouteFromTrip(trip) {
+  const request = trip?.rideRequest;
+  if (!request) return null;
+
+  const distance = getTripDistance(trip, null);
+  return {
+    pickup: {
+      name: request.pickupAddress || 'Điểm đón',
+      position: [Number(request.pickupLat), Number(request.pickupLng)],
+    },
+    destination: {
+      name: request.dropoffAddress || 'Điểm đến',
+      address: request.dropoffAddress || '',
+      position: [Number(request.dropoffLat), Number(request.dropoffLng)],
+    },
+    routeMetrics: {
+      distance: Number(distance) ? `${Number(distance).toFixed(1)} km` : '-- km',
+      fare: trip?.finalFareJpy ? formatYen(trip.finalFareJpy) : '',
+    },
+  };
+}
+
+function persistTripContext(trip) {
+  if (!trip?.tripId) return;
+
+  sessionStorage.setItem('jpTaxiTripId', String(trip.tripId));
+  setLastInvoiceTripId(trip.tripId);
+
+  if (!readStoredRoute()) {
+    const route = buildRouteFromTrip(trip);
+    if (route) sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(route));
+  }
+}
+
+function formatRideTime(value, suffix) {
+  if (!value) return `-- ${suffix}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return `-- ${suffix}`;
+  return `${date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} ${suffix}`;
 }
 
 export default function PaymentPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [method, setMethod] = useState('クレジットカード (**** 4821)');
+  const [method, setMethod] = useState(PAYMENT_METHODS[0]);
   const [methodOpen, setMethodOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState('');
-  const [trip, setTrip] = useState(() => getFallbackRide()?.trip ?? null);
-  const methods = ['クレジットカード (**** 4821)', '現金', 'PayPay', 'Apple Pay'];
-  const fare = calculateTripFareBreakdown(trip, readSelectedDistance());
+  const [trip, setTrip] = useState(null);
+  const [route, setRoute] = useState(() => readStoredRoute());
+
   const backPath =
     searchParams.get('from') === 'driver' || localStorage.getItem('jpTaxiRole') === 'driver'
       ? '/driver-ride-status'
       : '/ride-status';
+  const currentRoute = route || buildRouteFromTrip(trip);
+  const fare = calculateTripFareBreakdown(trip, getTripDistance(trip, currentRoute));
+  const paymentTripId = getStoredTripId(trip);
+  const hasPaymentContext = Number.isFinite(paymentTripId) && paymentTripId > 0 && Boolean(currentRoute || trip);
+  const pickupName = currentRoute?.pickup?.name || trip?.rideRequest?.pickupAddress || 'Điểm đón';
+  const destinationName = currentRoute?.destination?.name || trip?.rideRequest?.dropoffAddress || 'Điểm đến';
 
   useEffect(() => {
     let ignored = false;
+
     getActiveRide()
       .then((activeRide) => {
         if (ignored || activeRide?.type !== 'trip') return;
+
         setTrip(activeRide.data);
-        if (activeRide.data?.tripId) {
-          sessionStorage.setItem('jpTaxiTripId', String(activeRide.data.tripId));
-          setLastInvoiceTripId(activeRide.data.tripId);
-        }
+        persistTripContext(activeRide.data);
+
+        const storedRoute = readStoredRoute();
+        setRoute(storedRoute || buildRouteFromTrip(activeRide.data));
       })
       .catch(() => {
-        if (!ignored) setTrip(getFallbackRide()?.trip ?? null);
+        if (!ignored) setRoute(readStoredRoute());
       });
+
     return () => {
       ignored = true;
     };
@@ -68,7 +139,7 @@ export default function PaymentPage() {
     setMethodOpen(false);
 
     let paymentTrip = trip;
-    let tripId = Number(paymentTrip?.tripId || sessionStorage.getItem('jpTaxiTripId'));
+    let tripId = getStoredTripId(paymentTrip);
 
     if ((!Number.isFinite(tripId) || tripId <= 0) && backPath !== '/driver-ride-status') {
       try {
@@ -76,25 +147,23 @@ export default function PaymentPage() {
         if (activeRide?.type === 'trip') {
           paymentTrip = activeRide.data;
           setTrip(activeRide.data);
+          persistTripContext(activeRide.data);
           tripId = Number(activeRide.data?.tripId);
-          if (Number.isFinite(tripId) && tripId > 0) {
-            sessionStorage.setItem('jpTaxiTripId', String(tripId));
-          }
         }
       } catch {
-        /* Fall back to the stored trip id below. */
+        /* The explicit validation below handles the missing trip. */
       }
     }
 
     if (!Number.isFinite(tripId) || tripId <= 0) {
-      setStatus('Chua tim thay chuyen di de xac nhan thanh toan.');
+      setStatus('Chưa tìm thấy chuyến đi để xác nhận thanh toán.');
       setIsSubmitting(false);
       return;
     }
 
     setLastInvoiceTripId(tripId);
 
-    if (Number.isFinite(tripId) && tripId > 0 && backPath !== '/driver-ride-status') {
+    if (backPath !== '/driver-ride-status') {
       try {
         await processRidePayment({
           tripId,
@@ -102,18 +171,14 @@ export default function PaymentPage() {
           password: 'password123',
         });
       } catch (error) {
-        setStatus(error.message || 'Khong the xac nhan thanh toan.');
+        setStatus(error.message || 'Không thể xác nhận thanh toán.');
         setIsSubmitting(false);
         return;
       }
     }
 
-    const reviewPath = Number.isFinite(tripId) && tripId > 0
-      ? `/driver-review?tripId=${tripId}`
-      : '/driver-review';
-
     clearActiveRideState();
-    navigate(backPath === '/driver-ride-status' ? '/driver-ride-status' : reviewPath);
+    navigate(backPath === '/driver-ride-status' ? '/driver-ride-status' : `/driver-review?tripId=${tripId}`);
   }
 
   return (
@@ -130,11 +195,11 @@ export default function PaymentPage() {
             <section className="receipt-route">
               <div>
                 <span className="route-dot green"></span>
-                <div><strong>ホアンキエム湖</strong><small>18:30 出発</small></div>
+                <div><strong>{pickupName}</strong><small>{formatRideTime(trip?.startTime, '出発')}</small></div>
               </div>
               <div>
                 <span className="route-dot dark"></span>
-                <div><strong>ロッテホテル ハノイ</strong><small>18:42 到着</small></div>
+                <div><strong>{destinationName}</strong><small>{formatRideTime(trip?.endTime, '到着')}</small></div>
               </div>
             </section>
 
@@ -152,12 +217,13 @@ export default function PaymentPage() {
 
             <div className="receipt-actions">
               <Link className="payment-back-link" to={backPath}>戻る</Link>
-              <button className="pay-confirm" type="button" onClick={confirmPayment} disabled={isSubmitting}>
+              <button className="pay-confirm" type="button" onClick={confirmPayment} disabled={isSubmitting || !hasPaymentContext}>
                 {isSubmitting ? '処理中...' : 'お支払いを確定する'}
               </button>
               <Link className="invoice-link" to="/invoice"><span>📄</span> 領収書を発行する</Link>
               <Link className="support-link" to="/messages/driver">お問い合わせはこちら</Link>
             </div>
+            {!hasPaymentContext ? <p className="payment-status-text">Chưa có chuyến đi cần thanh toán.</p> : null}
             {status ? <p className="payment-status-text">{status}</p> : null}
           </div>
         </section>
@@ -169,7 +235,7 @@ export default function PaymentPage() {
               <button type="button" aria-label="閉じる" onClick={() => setMethodOpen(false)}>×</button>
             </header>
             <div className="payment-method-list">
-              {methods.map((item) => (
+              {PAYMENT_METHODS.map((item) => (
                 <button className={method === item ? 'selected' : ''} type="button" key={item} onClick={() => setMethod(item)}>
                   <span>{item === '現金' ? '💵' : '💳'}</span>
                   <strong>{item}</strong>
