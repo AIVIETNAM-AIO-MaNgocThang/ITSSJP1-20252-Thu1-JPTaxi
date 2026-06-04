@@ -120,11 +120,11 @@ function formatDate(value, locale = 'ja-JP') {
   return new Date(value).toLocaleDateString(locale);
 }
 
-function formatTripStatus(status) {
+function formatTripStatus(status, driverText) {
   return {
-    completed: '完了',
-    ongoing: '乗車中',
-    cancelled: 'キャンセル済み',
+    completed: driverText.tripStatusCompleted,
+    ongoing: driverText.tripStatusOngoing,
+    cancelled: driverText.tripStatusCancelled,
   }[status] || status || '-';
 }
 
@@ -460,12 +460,12 @@ export default function DriverInfoPage() {
             <article><span>{driverText.ratingLabel}</span><strong>{averageRating}</strong></article>
             <article><span>{driverText.sales}</span><strong>{formatCurrency(totalSales)}</strong></article>
           </div>
-          <div className="driver-history-filters" aria-label="履歴フィルター">
+          <div className="driver-history-filters" aria-label={driverText.historyFilterLabel}>
             {[
-              ['all', 'すべて'],
-              ['completed', '完了'],
-              ['rated', '評価あり'],
-              ['unrated', '未評価'],
+              ['all', driverText.historyFilterAll],
+              ['completed', driverText.historyFilterCompleted],
+              ['rated', driverText.historyFilterRated],
+              ['unrated', driverText.historyFilterUnrated],
             ].map(([value, label]) => (
               <button className={historyFilter === value ? 'active' : ''} type="button" key={value} onClick={() => setHistoryFilter(value)}>{label}</button>
             ))}
@@ -609,7 +609,7 @@ export default function DriverInfoPage() {
     <PageShell>
       <main className="app-screen zip-profile-screen">
         <div className="profile-window">
-          <Topbar brandTo="/driver-home" brandExtra="for Driver" actions={<><Link to="/driver-home">{common.home}</Link><Link to="/messages/customer">{common.messages}</Link><Link to="/driver-info/basic" className="active-header-link">{common.account || 'アカウント'}</Link>{avatar ? <img className="topbar-avatar driver-avatar-top" src={avatar} alt="" /> : <span className="topbar-avatar driver-avatar-top" />}</>} />
+          <Topbar brandTo="/driver-home" brandExtra="for Driver" actions={<><Link to="/driver-home">{common.home}</Link><Link to="/messages/customer">{common.messages}</Link><Link to="/driver-info/basic" className="active-header-link">{common.account}</Link>{avatar ? <img className="topbar-avatar driver-avatar-top" src={avatar} alt="" /> : <span className="topbar-avatar driver-avatar-top" />}</>} />
           <section className="profile-page-shell zip-profile-shell">
             <aside className="profile-sidebar">
               <section className="profile-card zip-profile-card driver-profile-card">
@@ -766,7 +766,7 @@ export default function DriverInfoPage() {
               <div className="driver-rating-score">
                 <div>
                   <strong>{selectedHistory.rating ? Number(selectedHistory.rating.score).toFixed(1) : '-'}</strong>
-                  <small>{selectedHistory.rating?.scoreLabelJa || '評価はまだありません'}</small>
+                  <small>{selectedHistory.rating?.scoreLabelJa || driverText.noRatingYet}</small>
                 </div>
               </div>
               <div className="driver-rating-stars" aria-label={`${selectedHistory.rating?.score || 0} stars`}>
@@ -778,37 +778,37 @@ export default function DriverInfoPage() {
               <section className="driver-rating-trip-card">
                 <div className="driver-rating-trip-heading">
                   <span>Trip #{selectedHistory.trip.tripId}</span>
-                  <em>{formatTripStatus(selectedHistory.trip.status)}</em>
+                  <em>{formatTripStatus(selectedHistory.trip.status, driverText)}</em>
                 </div>
                 <div className="driver-rating-route">
                   <article>
                     <span className="point-dot pickup"></span>
-                    <div><small>出発地</small><strong>{selectedHistory.trip.pickupAddress || '-'}</strong></div>
+                    <div><small>{driverText.pickupPoint}</small><strong>{selectedHistory.trip.pickupAddress || '-'}</strong></div>
                   </article>
                   <article>
                     <span className="point-dot destination"></span>
-                    <div><small>目的地</small><strong>{selectedHistory.trip.dropoffAddress || '-'}</strong></div>
+                    <div><small>{driverText.destinationPoint}</small><strong>{selectedHistory.trip.dropoffAddress || '-'}</strong></div>
                   </article>
                 </div>
                 <div className="driver-rating-trip-facts">
-                  <article><span>乗車日</span><strong>{formatDate(selectedHistory.trip.startTime, text.locale)}</strong></article>
-                  <article><span>走行距離</span><strong>{Number(selectedHistory.trip.distanceKm || 0).toFixed(1)} km</strong></article>
-                  <article><span>料金</span><strong>{formatCurrency(selectedHistory.trip.finalFareJpy)}</strong></article>
+                  <article><span>{driverText.rideDate}</span><strong>{formatDate(selectedHistory.trip.startTime, text.locale)}</strong></article>
+                  <article><span>{driverText.distance}</span><strong>{Number(selectedHistory.trip.distanceKm || 0).toFixed(1)} km</strong></article>
+                  <article><span>{driverText.fare}</span><strong>{formatCurrency(selectedHistory.trip.finalFareJpy)}</strong></article>
                 </div>
               </section>
               <dl>
-                <div><dt>お客様</dt><dd>{selectedHistory.rating?.customerName || '-'}</dd></div>
-                <div><dt>評価日</dt><dd>{selectedHistory.rating ? formatDate(selectedHistory.rating.createdAt, text.locale) : '-'}</dd></div>
+                <div><dt>{driverText.customer}</dt><dd>{selectedHistory.rating?.customerName || '-'}</dd></div>
+                <div><dt>{driverText.ratingDate}</dt><dd>{selectedHistory.rating ? formatDate(selectedHistory.rating.createdAt, text.locale) : '-'}</dd></div>
               </dl>
               <section className="driver-rating-feedback">
-                <strong>良かった点</strong>
+                <strong>{driverText.positivePoints}</strong>
                 {selectedHistory.rating?.tags?.length
                   ? <div className="driver-rating-tags">{selectedHistory.rating.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
-                  : <small>選択された項目はありません。</small>}
+                  : <small>{driverText.noSelectedTags}</small>}
               </section>
               <section className="driver-rating-feedback">
-                <strong>お客様からのコメント</strong>
-                <p className="driver-rating-comment">{selectedHistory.rating?.comment || 'お客様からのコメントはまだありません。'}</p>
+                <strong>{driverText.customerComment}</strong>
+                <p className="driver-rating-comment">{selectedHistory.rating?.comment || driverText.noCustomerComment}</p>
               </section>
             </div>
           )}

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLanguage } from '../i18n/LanguageProvider.jsx';
 
 const SIZE = 260;
 
 export default function AvatarCropper({ src, fileName = 'avatar.jpg', onCrop }) {
+  const { profileText } = useLanguage();
+  const text = profileText.common;
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
   const dragRef = useRef(null);
@@ -80,7 +83,7 @@ export default function AvatarCropper({ src, fileName = 'avatar.jpg', onCrop }) 
 
   return (
     <section className="avatar-cropper">
-      <strong>画像の表示範囲を調整</strong>
+      <strong>{text.cropperTitle}</strong>
       <div className="avatar-cropper-stage">
         <canvas
           ref={canvasRef}
@@ -94,10 +97,10 @@ export default function AvatarCropper({ src, fileName = 'avatar.jpg', onCrop }) 
         <span className="avatar-cropper-guide" />
       </div>
       <label className="avatar-cropper-zoom">
-        <span>ズーム</span>
+        <span>{text.zoom}</span>
         <input type="range" min="1" max="3" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
       </label>
-      <button className="secondary-button avatar-cropper-apply" type="button" onClick={applyCrop}>切り抜きを確定</button>
+      <button className="secondary-button avatar-cropper-apply" type="button" onClick={applyCrop}>{text.confirmCrop}</button>
     </section>
   );
 }
