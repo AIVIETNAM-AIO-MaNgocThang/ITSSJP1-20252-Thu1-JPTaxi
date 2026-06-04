@@ -177,6 +177,21 @@ function cachedChatForTrip(role, tripId) {
   };
 }
 
+function chatFromConversationItem(item) {
+  if (!item?.trip?.tripId) return null;
+  const messages = Array.isArray(item.messages) && item.messages.length
+    ? item.messages
+    : (item.lastMessage ? [item.lastMessage] : []);
+  return {
+    available: item.trip?.status === 'ongoing',
+    trip: item.trip || null,
+    partner: item.partner || null,
+    participants: item.participants || null,
+    messages,
+    message: item.trip?.status === 'ongoing' ? '' : 'Lich su chat da ket thuc.',
+  };
+}
+
 export default function MessagesPage() {
   const { audience } = useParams();
   const [searchParams] = useSearchParams();
@@ -411,6 +426,24 @@ export default function MessagesPage() {
       }]));
     } catch (error) {
       if (validTripId(selectedTripIdRef.current) === itemTripId) {
+        try {
+          const history = await getChatConversations();
+          const matchingItem = Array.isArray(history)
+            ? history.find((conversation) => String(conversation.trip?.tripId || '') === itemTripId)
+            : null;
+          const fallbackChat = chatFromConversationItem(matchingItem) || chatFromConversationItem(item);
+          if (fallbackChat) {
+            const nextChat = await normalizeChatData(fallbackChat);
+            if (validTripId(selectedTripIdRef.current) !== itemTripId) return;
+            saveChatSnapshot(role, nextChat);
+            setChat(nextChat);
+            setConversations(mergeConversations(readCachedConversations(role), Array.isArray(history) ? history : []));
+            setStatus(Array.isArray(nextChat.messages) && nextChat.messages.length > 1 ? '' : (error.message || t('chat.loadFailed')));
+            return;
+          }
+        } catch {
+          /* Fall through to the original load error. */
+        }
         setStatus(error.message || t('chat.loadFailed'));
       }
     }
