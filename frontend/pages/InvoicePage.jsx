@@ -71,7 +71,7 @@ export default function InvoicePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || location.pathname.startsWith('/driver');
-  const closePath = isDriver ? '/driver-home' : '/driver-review';
+  const closePath = isDriver ? '/driver-ride-status' : '/driver-review';
   const closeLabel = isDriver ? '閉じる' : 'ドライバー評価へ';
   const activeTripId = Number(sessionStorage.getItem('jpTaxiTripId')) || null;
   const tripId = isDriver
@@ -81,6 +81,7 @@ export default function InvoicePage() {
   const [invoice, setInvoice] = useState(null);
   const [status, setStatus] = useState('');
   const [isRequestingPayment, setIsRequestingPayment] = useState(false);
+  const [paymentRequested, setPaymentRequested] = useState(false);
   const displayedInvoice = invoice || (!tripId ? fallbackInvoice : null);
 
   useEffect(() => {
@@ -111,11 +112,21 @@ export default function InvoicePage() {
         requestedAt: result?.requestedAt || Date.now(),
       }));
       setStatus('支払い依頼を送信しました。お客様は支払い画面へ移動します。');
-      navigate('/driver-ride-status');
+      setPaymentRequested(true);
     } catch (error) {
       setStatus(error.message || '支払い依頼を送信できませんでした。');
       setIsRequestingPayment(false);
     }
+  }
+
+  function handleCloseDriverTrip() {
+    if (!isDriver) return;
+    sessionStorage.removeItem('jpTaxiTripId');
+    sessionStorage.removeItem('jpTaxiRideRequestId');
+    sessionStorage.removeItem('jpTaxiSelectedRoute');
+    localStorage.removeItem('jpTaxiPaymentRequested');
+    localStorage.removeItem('jpTaxiRideAccepted');
+    navigate('/driver-home', { replace: true });
   }
 
   return (
@@ -131,13 +142,18 @@ export default function InvoicePage() {
           {isDriver && (
             <button
               className="invoice-close"
-              disabled={!tripId || isRequestingPayment}
+              disabled={!tripId || isRequestingPayment || paymentRequested}
               onClick={handleRequestPayment}
               type="button"
             >
               {isRequestingPayment ? '送信中...' : '支払いを依頼する'}
             </button>
           )}
+          {isDriver && paymentRequested ? (
+            <button className="invoice-close" type="button" onClick={handleCloseDriverTrip}>
+              受領確認して閉じる
+            </button>
+          ) : null}
           <Link className="invoice-close" to={closePath}>{closeLabel}</Link>
         </section>
       </main>
