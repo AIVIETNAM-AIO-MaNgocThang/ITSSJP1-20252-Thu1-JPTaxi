@@ -71,8 +71,6 @@ export default function InvoicePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const isDriver = localStorage.getItem('jpTaxiRole') === 'driver' || location.pathname.startsWith('/driver');
-  const closePath = isDriver ? '/driver-ride-status' : '/driver-review';
-  const closeLabel = isDriver ? '閉じる' : 'ドライバー評価へ';
   const activeTripId = Number(sessionStorage.getItem('jpTaxiTripId')) || null;
   const tripId = isDriver
     ? activeTripId || getLastInvoiceTripId()
@@ -154,7 +152,7 @@ export default function InvoicePage() {
               受領確認して閉じる
             </button>
           ) : null}
-          <Link className="invoice-close" to={closePath}>{closeLabel}</Link>
+          {!isDriver ? <Link className="invoice-close" to="/driver-review">ドライバー評価へ</Link> : null}
         </section>
       </main>
     </PageShell>
