@@ -1,5 +1,6 @@
 const ACTIVE_REQUEST_STATUSES = new Set(['pending', 'searching']);
 const ACCEPTED_RIDE_GRACE_MS = 2 * 60 * 1000;
+const PAYMENT_CONFIRMED_GRACE_MS = 2 * 60 * 1000;
 
 export function hasRecentAcceptedRide() {
   try {
@@ -40,6 +41,26 @@ function readPaymentRequestTripId() {
     return Number(paymentRequest?.tripId) || null;
   } catch {
     return null;
+  }
+}
+
+function hasRecentlyConfirmedPayment(tripId) {
+  try {
+    const completedPayment = JSON.parse(localStorage.getItem('jpTaxiPaymentCompleted') || 'null');
+    const completedTripId = Number(completedPayment?.tripId);
+    const completedAt = Number(completedPayment?.completedAt);
+    const isRecent = Boolean(
+      tripId
+      && completedTripId === Number(tripId)
+      && completedAt
+      && Date.now() - completedAt < PAYMENT_CONFIRMED_GRACE_MS,
+    );
+    if (!isRecent && completedAt) {
+      localStorage.removeItem('jpTaxiPaymentCompleted');
+    }
+    return isRecent;
+  } catch {
+    return false;
   }
 }
 
@@ -95,9 +116,10 @@ function buildStoredRoute(activeRide) {
 
 export function hasOutstandingPayment(activeRide) {
   if (activeRide?.type !== 'trip') return false;
+  const activeTripId = Number(activeRide.data?.tripId);
+  if (hasRecentlyConfirmedPayment(activeTripId)) return false;
   if (activeRide.paymentRequested) return true;
 
-  const activeTripId = Number(activeRide.data?.tripId);
   return Boolean(activeTripId && readPaymentRequestTripId() === activeTripId);
 }
 
@@ -126,7 +148,7 @@ export function syncActiveRideSession(activeRide) {
   if (trip.tripId) {
     sessionStorage.setItem('jpTaxiTripId', String(trip.tripId));
   }
-  if (activeRide.paymentRequested && trip.tripId) {
+  if (activeRide.paymentRequested && trip.tripId && !hasRecentlyConfirmedPayment(trip.tripId)) {
     localStorage.setItem('jpTaxiPaymentRequested', JSON.stringify({
       tripId: trip.tripId,
       requestedAt: Date.now(),
@@ -167,6 +189,10 @@ export function getActiveRideRedirect(role, activeRide, pathname) {
   if (activeRide?.type !== 'trip') return null;
 
   if (role === 'customer') {
+    const activeTripId = Number(activeRide.data?.tripId);
+    if (pathMatches(pathname, ['/driver-review']) && hasRecentlyConfirmedPayment(activeTripId)) {
+      return null;
+    }
     if (hasOutstandingPayment(activeRide)) {
       return pathMatches(pathname, ['/payment']) ? null : '/payment';
     }
