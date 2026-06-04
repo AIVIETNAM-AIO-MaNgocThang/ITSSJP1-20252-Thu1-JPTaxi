@@ -5,25 +5,27 @@ import { acceptDriverRide, getPendingDriverRide, updateDriverLocation } from '..
 import InteractiveRouteMap from '../components/InteractiveRouteMap.jsx';
 import PageShell from '../components/PageShell.jsx';
 import Topbar from '../components/Topbar.jsx';
+import { useLanguage } from '../context/LanguageContext.jsx';
 import { calculateFareBreakdown, formatYen } from '../utils/fare.js';
 import { DEFAULT_MAP_LOCATION, watchBrowserLocation } from '../utils/geolocation.js';
 import { fetchDrivingRoute, formatDistance as formatRouteDistance, formatDuration, hasDrivingRoutePath } from '../utils/routePlanner.js';
 import '../styles/app-pages.css';
 
-function formatPickupDistance(value) {
-  const distance = Number(value);
-  if (!Number.isFinite(distance)) return '2km以内';
-  return `${distance.toFixed(1)} km`;
-}
-
 const defaultDriverLocation = {
   lat: DEFAULT_MAP_LOCATION.latitude,
   lng: DEFAULT_MAP_LOCATION.longitude,
 };
+
 const driverFallbackAvatar = 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80';
 const customerFallbackAvatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80';
 
-function buildSelectedRoute(request, routePreview) {
+function formatPickupDistance(value, t) {
+  const distance = Number(value);
+  if (!Number.isFinite(distance)) return t('withinTwoKm');
+  return `${distance.toFixed(1)} km`;
+}
+
+function buildSelectedRoute(request, routePreview, t) {
   return {
     destination: {
       name: request.dropoffAddress,
@@ -35,8 +37,8 @@ function buildSelectedRoute(request, routePreview) {
       position: [request.pickupLat, request.pickupLng],
     },
     routeMetrics: {
-      duration: routePreview?.duration ?? '計算中',
-      distance: routePreview?.distance ?? formatPickupDistance(request.distanceKm),
+      duration: routePreview?.duration ?? t('calculatingRoute'),
+      distance: routePreview?.distance ?? formatPickupDistance(request.distanceKm, t),
       fare: formatYen(calculateFareBreakdown(request.distanceKm).totalJpy),
     },
     routePath: hasDrivingRoutePath(routePreview?.routePath) ? routePreview.routePath : [],
@@ -51,13 +53,14 @@ function buildSelectedRoute(request, routePreview) {
 
 export default function DriverDispatchPage() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [pendingRide, setPendingRide] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
   const [routePreview, setRoutePreview] = useState(null);
   const [topbarAvatar, setTopbarAvatar] = useState(() => (
     resolveAssetUrl(localStorage.getItem('jpTaxiDriverAvatarUrl')) || driverFallbackAvatar
   ));
-  const [message, setMessage] = useState('半径2km以内の配車リクエストを検索しています...');
+  const [message, setMessage] = useState(() => t('dispatchSearchMessage'));
   const [isLoading, setIsLoading] = useState(true);
   const [isAccepting, setIsAccepting] = useState(false);
 
@@ -81,6 +84,7 @@ export default function DriverDispatchPage() {
       .catch(() => {
         if (!ignore) syncStoredAvatar();
       });
+
     window.addEventListener('storage', syncStoredAvatar);
     window.addEventListener('focus', syncStoredAvatar);
 
@@ -99,16 +103,14 @@ export default function DriverDispatchPage() {
         const result = await getPendingDriverRide();
         if (ignore) return;
         setPendingRide(result?.request ?? null);
-        setMessage(result?.request ? '' : (result?.message || '半径2km以内の配車リクエストを検索しています...'));
+        setMessage(result?.request ? '' : (result?.message || t('dispatchSearchMessage')));
       } catch (error) {
         if (!ignore) {
           setPendingRide(null);
-          setMessage(error.message || '条件に合う配車リクエストはまだありません。');
+          setMessage(error.message || t('noMatchingRideRequest'));
         }
       } finally {
-        if (!ignore) {
-          setIsLoading(false);
-        }
+        if (!ignore) setIsLoading(false);
       }
     }
 
@@ -131,7 +133,7 @@ export default function DriverDispatchPage() {
       stopWatching();
       window.clearInterval(timer);
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!pendingRide) {
@@ -161,27 +163,28 @@ export default function DriverDispatchPage() {
     if (!pendingRide) return '';
     return pendingRide.actualPassengerName || pendingRide.customer?.name || `KH-${pendingRide.customerId}`;
   }, [pendingRide]);
+
   const passengerPhone = pendingRide?.actualPassengerPhone || pendingRide?.customer?.phone || '';
   const passengerAvatar = resolveAssetUrl(pendingRide?.customer?.avatarUrl || pendingRide?.customer?.avatar_url) || customerFallbackAvatar;
   const routePoints = pendingRide ? [
     ...(driverLocation ? [{
       key: 'driver',
-      label: 'ドライバー位置',
-      meta: '現在',
+      label: t('driverLocationLabel'),
+      meta: t('now'),
       position: [driverLocation.lat, driverLocation.lng],
       type: 'driver',
     }] : []),
     {
       key: 'pickup',
       label: pendingRide.pickupAddress,
-      meta: '乗車地',
+      meta: t('pickupMeta'),
       position: [pendingRide.pickupLat, pendingRide.pickupLng],
       type: 'pickup',
     },
     {
       key: 'destination',
       label: pendingRide.dropoffAddress,
-      meta: '目的地',
+      meta: t('destinationMeta'),
       position: [pendingRide.dropoffLat, pendingRide.dropoffLng],
       type: 'destination',
     },
@@ -189,9 +192,7 @@ export default function DriverDispatchPage() {
   const mapCenter = pendingRide
     ? [pendingRide.pickupLat, pendingRide.pickupLng]
     : [driverLocation?.lat ?? defaultDriverLocation.lat, driverLocation?.lng ?? defaultDriverLocation.lng];
-  const routePath = pendingRide
-    ? routePreview?.routePath ?? []
-    : [];
+  const routePath = pendingRide ? routePreview?.routePath ?? [] : [];
   const hasRoutePreview = hasDrivingRoutePath(routePath);
 
   async function handleAccept() {
@@ -204,7 +205,7 @@ export default function DriverDispatchPage() {
       if (acceptedTripId) {
         sessionStorage.setItem('jpTaxiTripId', String(acceptedTripId));
       }
-      sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(buildSelectedRoute(pendingRide, routePreview)));
+      sessionStorage.setItem('jpTaxiSelectedRoute', JSON.stringify(buildSelectedRoute(pendingRide, routePreview, t)));
       localStorage.setItem('jpTaxiRideAccepted', JSON.stringify({
         requestId: pendingRide.requestId,
         tripId: acceptedTripId,
@@ -212,7 +213,7 @@ export default function DriverDispatchPage() {
       }));
       navigate('/driver-ride-status');
     } catch (error) {
-      setMessage(error.message || 'この配車リクエストを承認できませんでした。');
+      setMessage(error.message || t('acceptRideFailed'));
       setPendingRide(null);
       setIsAccepting(false);
     }
@@ -225,8 +226,8 @@ export default function DriverDispatchPage() {
           brandTo="/driver-home"
           actions={(
             <>
-              <Link to="/driver-home">ホーム</Link>
-              <Link to="/messages/customer">通知</Link>
+              <Link to="/driver-home">{t('navHome')}</Link>
+              <Link to="/messages/customer">{t('notificationsShort')}</Link>
               <img className="topbar-avatar driver-avatar-top" src={topbarAvatar} alt="" />
             </>
           )}
@@ -234,14 +235,14 @@ export default function DriverDispatchPage() {
 
         <section className="driver-dispatch-main">
           <div className="driver-dispatch-left">
-            <h1>配車リクエスト確認</h1>
-            <p>半径2km以内で実際に予約中のお客様だけを表示します。</p>
+            <h1>{t('dispatchConfirmTitle')}</h1>
+            <p>{t('dispatchConfirmCopy')}</p>
 
             <div className="dispatch-driver-box">
               <img src={topbarAvatar} alt="" />
               <div>
-                <strong>ドライバーはオンラインです</strong>
-                <span>受付範囲: 2 km</span>
+                <strong>{t('driverOnline')}</strong>
+                <span>{t('serviceRange')}: 2 km</span>
               </div>
             </div>
 
@@ -249,22 +250,22 @@ export default function DriverDispatchPage() {
               <>
                 <section className="dispatch-card">
                   <div className="dispatch-countdown">2km</div>
-                  <span>お迎え地点まで</span>
-                  <strong>{formatPickupDistance(pendingRide.distanceKm)}</strong>
+                  <span>{t('toPickupPoint')}</span>
+                  <strong>{formatPickupDistance(pendingRide.distanceKm, t)}</strong>
                   <div className="dispatch-actions">
-                    <Link className="dispatch-decline" to="/driver-home">スキップ</Link>
+                    <Link className="dispatch-decline" to="/driver-home">{t('skip')}</Link>
                     <button className="dispatch-accept" type="button" onClick={handleAccept} disabled={isAccepting}>
-                      {isAccepting ? '承認中...' : '承認する'}
+                      {isAccepting ? t('accepting') : t('accept')}
                     </button>
                   </div>
                 </section>
 
                 <section className="dispatch-customer-card">
-                  <p>お客様情報</p>
+                  <p>{t('customerInfo')}</p>
                   <div>
                     <span>
                       <strong>{passengerName}</strong>
-                      <em>{passengerPhone || '電話番号未登録'}</em>
+                      <em>{passengerPhone || t('phoneUnregistered')}</em>
                     </span>
                   </div>
                 </section>
@@ -272,7 +273,7 @@ export default function DriverDispatchPage() {
             ) : (
               <section className="dispatch-empty-card">
                 <div className="spinner" aria-hidden="true"></div>
-                <h2>{isLoading ? '読み込み中...' : '配車リクエストを検索中'}</h2>
+                <h2>{isLoading ? t('loading') : t('searchingRideRequests')}</h2>
                 <p>{message}</p>
               </section>
             )}
@@ -289,7 +290,7 @@ export default function DriverDispatchPage() {
               mapZoom={15}
               route={routePoints}
               routePath={routePath}
-              routeSummary={pendingRide ? `${routePreview?.distance ?? formatPickupDistance(pendingRide.distanceKm)} - ${routePreview?.duration ?? '計算中'}` : null}
+              routeSummary={pendingRide ? `${routePreview?.distance ?? formatPickupDistance(pendingRide.distanceKm, t)} - ${routePreview?.duration ?? t('calculatingRoute')}` : null}
               scrollWheelZoom
               showControls
               showCurrentLocation={Boolean(driverLocation)}
@@ -306,14 +307,14 @@ export default function DriverDispatchPage() {
                   <div className="dispatch-passenger-row">
                     {passengerAvatar ? <img src={passengerAvatar} alt={passengerName} /> : <span>KH</span>}
                     <div>
-                      <strong>お客様: {passengerName}</strong>
-                      <small>{passengerPhone || '連絡先を確認中'}</small>
+                      <strong>{t('customerLabel')}: {passengerName}</strong>
+                      <small>{passengerPhone || t('checkingContact')}</small>
                     </div>
                   </div>
                   <div className="dispatch-stats">
-                    <article><span>お迎え</span><strong>{formatPickupDistance(pendingRide.distanceKm)}</strong></article>
-                    <article><span>範囲</span><strong>2 km</strong></article>
-                    <article><span>状態</span><strong>新規</strong></article>
+                    <article><span>{t('pickupShort')}</span><strong>{formatPickupDistance(pendingRide.distanceKm, t)}</strong></article>
+                    <article><span>{t('range')}</span><strong>2 km</strong></article>
+                    <article><span>{t('status')}</span><strong>{t('newStatus')}</strong></article>
                   </div>
                 </section>
               </>
@@ -322,8 +323,8 @@ export default function DriverDispatchPage() {
                 <div className="dispatch-passenger-row">
                   <span>...</span>
                   <div>
-                    <strong>近くのお客様を検索しています</strong>
-                    <small>予約リクエストがない場合、サンプルデータは表示しません。</small>
+                    <strong>{t('searchingNearbyCustomers')}</strong>
+                    <small>{t('noSampleWithoutRequests')}</small>
                   </div>
                 </div>
               </section>
