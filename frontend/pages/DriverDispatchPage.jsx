@@ -197,6 +197,10 @@ export default function DriverDispatchPage() {
 
   async function handleAccept() {
     if (!pendingRide || isAccepting) return;
+    if (!driverLocation) {
+      setMessage(t('enableLocation'));
+      return;
+    }
     setIsAccepting(true);
     try {
       const result = await acceptDriverRide(pendingRide.requestId);
@@ -254,11 +258,12 @@ export default function DriverDispatchPage() {
                   <strong>{formatPickupDistance(pendingRide.distanceKm, t)}</strong>
                   <div className="dispatch-actions">
                     <Link className="dispatch-decline" to="/driver-home">{t('skip')}</Link>
-                    <button className="dispatch-accept" type="button" onClick={handleAccept} disabled={isAccepting}>
+                    <button className="dispatch-accept" type="button" onClick={handleAccept} disabled={isAccepting || !driverLocation}>
                       {isAccepting ? t('accepting') : t('accept')}
                     </button>
                   </div>
                 </section>
+                {!driverLocation ? <p className="muted-copy">{t('enableLocation')}</p> : null}
 
                 <section className="dispatch-customer-card">
                   <p>{t('customerInfo')}</p>

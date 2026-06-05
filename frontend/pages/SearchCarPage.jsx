@@ -306,7 +306,14 @@ export default function SearchCarPage() {
               <Link className="secondary-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/bill-confirm">
                 {t('cancel')}
               </Link>
-              <Link className="submit-button" style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }} to="/ride-status">
+              <Link
+                className={`submit-button ${locationRequired ? 'disabled' : ''}`}
+                onClick={(event) => {
+                  if (locationRequired) event.preventDefault();
+                }}
+                style={{ display: 'grid', placeItems: 'center', textDecoration: 'none' }}
+                to={locationRequired ? '#' : '/ride-status'}
+              >
                 {t('driverConfirm')}
               </Link>
             </div>

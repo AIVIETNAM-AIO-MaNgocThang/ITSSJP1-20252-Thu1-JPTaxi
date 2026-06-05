@@ -547,8 +547,10 @@ export default function LocationSearchPage() {
     ? [
         {
           ...defaultPickupPlace,
-          address: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.address : 'GPSで現在位置を取得',
-          position: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.position : selfLocation,
+          address: selfLocation
+            ? (selectedPickup.id === defaultPickupPlace.id ? selectedPickup.address : 'GPSで現在位置を取得')
+            : t('enableLocation'),
+          position: selfLocation ?? null,
           time: '現在地',
           useCurrentLocation: true,
         },
@@ -700,7 +702,7 @@ export default function LocationSearchPage() {
             <div className="zip-location-actions">
               <Link className="flow-back-link" to="/home">戻る</Link>
               <Link
-                className={`zip-continue-button ${selectedDestination ? '' : 'disabled'}`}
+                className={`zip-continue-button ${selectedDestination && !locationRequired ? '' : 'disabled'}`}
                 to={selectedDestination ? '/bill-confirm' : '#'}
                 onClick={continueToBillConfirm}
               >
