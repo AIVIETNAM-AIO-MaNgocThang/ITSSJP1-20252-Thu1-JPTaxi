@@ -7,8 +7,6 @@ const textByLanguage = {
     'Arrived Safely': 'Đã đến nơi an toàn',
     'PayPay': 'PayPay',
     'Apple Pay': 'Apple Pay',
-    'ホーム': 'Trang chủ',
-    'アカウント': 'Tài khoản',
     '乗車地と目的地を検索': 'Tìm điểm đón và điểm đến',
     '先に乗車地を選択してから目的地を選択してください。乗車地から半径2km以内のドライバーを検索します。': 'Chọn điểm đón trước, sau đó chọn điểm đến. Hệ thống sẽ tìm tài xế trong bán kính 2 km quanh điểm đón.',
     '乗車地': 'Điểm đón',
@@ -26,8 +24,6 @@ const textByLanguage = {
     '距離': 'Quãng đường',
     '概算料金': 'Giá ước tính',
     '計算中': 'Đang tính',
-    '現在位置': 'Vị trí hiện tại',
-    'ハノイ・ホアンキエム周辺': 'Khu vực Hoàn Kiếm, Hà Nội',
     '選択': 'Chọn',
     '昨日': 'Hôm qua',
     '2日前': '2 ngày trước',
@@ -92,7 +88,6 @@ const textByLanguage = {
     'キムマー通り': 'Phố Kim Mã',
     '出発地': 'Điểm đi',
     '目的地': 'Điểm đến',
-    '乗車地': 'Điểm đón',
     '現在': 'Hiện tại',
     '直進 1.1 km': 'Đi thẳng 1.1 km',
     '右折して 2.7 km 進む': 'Rẽ phải và đi 2.7 km',
@@ -139,7 +134,6 @@ const textByLanguage = {
     '閉じる': 'Đóng',
     '現金': 'Tiền mặt',
     '選択中': 'Đang chọn',
-    '選択': 'Chọn',
     'この方法にする': 'Dùng phương thức này',
     'メッセージを入力...': 'Nhập tin nhắn...',
     '今どこですか？': 'Bạn đang ở đâu?',
@@ -150,7 +144,6 @@ const textByLanguage = {
     '承知いたしました。ホテルのロビー入り口で待っています。': 'Tôi hiểu rồi. Tôi đang chờ ở cửa sảnh khách sạn.',
     'ありがとうございます。黒色のトヨタ・ヴィオス、ナンバー「30A-123.45」です。まもなく到着します。': 'Cảm ơn bạn. Xe Toyota Vios màu đen, biển số 30A-123.45. Tôi sắp đến nơi.',
     'サポートセンター': 'Trung tâm hỗ trợ',
-    '昨日': 'Hôm qua',
     'お問い合わせの件につきまして、担当者が確認中です。': 'Nhân viên phụ trách đang kiểm tra yêu cầu của bạn.',
     '佐藤 お客様': 'Khách hàng Sato',
     '乗車地点で待機中': 'Đang chờ tại điểm đón',
@@ -440,12 +433,25 @@ function translateText(original, language) {
   return translated;
 }
 
+function isFreshDynamicValue(current, original, language) {
+  if (current === original) return false;
+  return current !== translateText(original, language);
+}
+
 function applyTranslations(root, language) {
   if (!root || ignoredTags.has(root.nodeName)) return;
 
   if (root.nodeType === Node.TEXT_NODE) {
-    if (!textOriginals.has(root)) textOriginals.set(root, root.nodeValue || '');
-    const original = textOriginals.get(root);
+    const current = root.nodeValue || '';
+    if (!textOriginals.has(root)) {
+      textOriginals.set(root, current);
+    } else {
+      const cached = textOriginals.get(root) || '';
+      if (isFreshDynamicValue(current, cached, language)) {
+        textOriginals.set(root, current);
+      }
+    }
+    const original = textOriginals.get(root) || '';
     const next = translateText(original, language);
     if (root.nodeValue !== next) root.nodeValue = next;
     return;
@@ -462,6 +468,11 @@ function applyTranslations(root, language) {
     }
     if (!Object.prototype.hasOwnProperty.call(originals, attr)) {
       originals[attr] = root.getAttribute(attr) || '';
+    } else {
+      const current = root.getAttribute(attr) || '';
+      if (isFreshDynamicValue(current, originals[attr], language)) {
+        originals[attr] = current;
+      }
     }
     const next = translateText(originals[attr], language);
     if (root.getAttribute(attr) !== next) root.setAttribute(attr, next);

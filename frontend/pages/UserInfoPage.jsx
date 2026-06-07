@@ -56,9 +56,9 @@ function getCardLastFour(value) {
 }
 
 const fallbackProfile = {
-  lastName: '山田',
-  firstName: '太郎',
-  email: localStorage.getItem('jpTaxiUserEmail') || 'yamada@example.com',
+  lastName: '',
+  firstName: '',
+  email: localStorage.getItem('jpTaxiCustomerEmail') || localStorage.getItem('jpTaxiUserEmail') || '',
   gender: 'Male',
   phone: '+84123456789',
   birthDate: '1990-01-01',
@@ -75,6 +75,30 @@ function normalizeProfile(profile = fallbackProfile) {
     avatarUrl: resolveAssetUrl(profile.avatarUrl),
     loginHistory: Array.isArray(profile.loginHistory) ? profile.loginHistory : [],
   };
+}
+
+function formatEmailDisplayName(value) {
+  const localPart = String(value ?? '').split('@')[0].trim();
+  if (!localPart) return '';
+  return localPart
+    .replace(/[._-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/(driver|customer|user)$/i, ' $1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getDisplayName(profile, fallback = '') {
+  const storedEmail = localStorage.getItem('jpTaxiCustomerEmail') || localStorage.getItem('jpTaxiUserEmail') || '';
+  const name = [profile.lastName, profile.firstName]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+  const emailName = formatEmailDisplayName(profile.email || storedEmail);
+  return name
+    || emailName
+    || fallback
+    || '';
 }
 
 function formatDate(value, locale = 'ja-JP') {
@@ -134,7 +158,8 @@ export default function UserInfoPage() {
     if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
   }, [avatarPreviewUrl]);
 
-  const fullName = `${profile.lastName} ${profile.firstName}`.trim();
+  const fullName = getDisplayName(profile, common.unregistered);
+  const avatarInitial = fullName.slice(0, 1) || profile.lastName.slice(0, 1);
   const avatar = profile.avatarUrl;
 
   const modalTitle = {
@@ -415,11 +440,11 @@ export default function UserInfoPage() {
             <aside className="profile-sidebar">
               <section className="profile-card zip-profile-card">
                 <div className="profile-avatar">
-                  {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : profile.lastName.slice(0, 1)}
+                  {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : avatarInitial}
                 </div>
                 <strong>{fullName}</strong>
                 <span>{profile.email}</span>
-                <em>{loading ? common.loading : userText.role}</em>
+                <em>{userText.role}</em>
                 <button className="link-btn" type="button" onClick={() => setModal('avatar')}>{common.changeImage}</button>
               </section>
               <nav className="side-menu" aria-label={userText.pageTitle}>
@@ -459,8 +484,9 @@ export default function UserInfoPage() {
           {modal === 'avatar' && (
             <div className="modal-form zip-modal-form">
               <div className="profile-avatar profile-avatar-preview">
-                {avatar ? <img src={avatar} alt="" /> : profile.lastName.slice(0, 1)}
+                {avatar ? <img src={avatar} alt={fullName} /> : avatarInitial}
               </div>
+              <strong className="profile-avatar-name">{fullName || common.unregistered}</strong>
               <label className="avatar-file-picker">
                 <span className="avatar-file-icon">🖼️</span>
                 <span className="avatar-file-copy">

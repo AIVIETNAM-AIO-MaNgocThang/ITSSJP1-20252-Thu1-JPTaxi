@@ -62,6 +62,14 @@ export class DriversService {
     return 'cancelled';
   }
 
+  async getProfileByEmail(email: string) {
+    const normalized = String(email ?? '').trim().toLowerCase();
+    if (!normalized) throw new NotFoundException();
+    const d = await this.drivers.findOne({ where: { email: normalized } });
+    if (!d) throw new NotFoundException();
+    return this.getProfile(d.driverId);
+  }
+
   async getProfile(driverId: number) {
     const d = await this.drivers.findOne({ where: { driverId } });
     if (!d) throw new NotFoundException();
@@ -76,6 +84,49 @@ export class DriversService {
       order: { startTime: 'DESC' },
       take: 20,
     });
+    const countedTripQb = this.trips
+      .createQueryBuilder('t')
+      .where('t.driver_id = :driverId', { driverId })
+      .andWhere('t.status != :cancelledStatus', { cancelledStatus: TripStatusType.cancelled_by_admin });
+    const completedTrips = await countedTripQb.getCount();
+    const salesRow = await this.trips
+      .createQueryBuilder('t')
+      .select('COALESCE(SUM(t.final_fare_jpy), 0)', 'totalSalesJpy')
+      .where('t.driver_id = :driverId', { driverId })
+      .andWhere('t.status != :cancelledStatus', { cancelledStatus: TripStatusType.cancelled_by_admin })
+      .getRawOne<{ totalSalesJpy: string | number | null }>();
+    const totalSalesJpy = Number(salesRow?.totalSalesJpy ?? 0);
+    const ratingStatsRow = await this.trips
+      .createQueryBuilder('t')
+      .innerJoin('rating', 'r', 'r.trip_id = t.trip_id')
+      .select('AVG(r.score)::float', 'averageRating')
+      .addSelect('COUNT(*)::int', 'ratingCount')
+      .where('t.driver_id = :driverId', { driverId })
+      .getRawOne<{ averageRating: string | number | null; ratingCount: string | number | null }>();
+    const ratingCount = Number(ratingStatsRow?.ratingCount ?? 0);
+    const averageRating =
+      ratingStatsRow?.averageRating != null
+        ? Math.round(Number(ratingStatsRow.averageRating) * 100) / 100
+        : null;
+    const ratingRows = await this.trips
+      .createQueryBuilder('t')
+      .innerJoin('rating', 'r', 'r.trip_id = t.trip_id')
+      .select('r.trip_id', 'tripId')
+      .addSelect('r.score', 'score')
+      .addSelect('r.comment', 'comment')
+      .addSelect('r.created_at', 'createdAt')
+      .where('t.driver_id = :driverId', { driverId })
+      .getRawMany<{ tripId: string | number; score: string | number; comment: string | null; createdAt: Date }>();
+    const ratingByTrip = new Map(
+      ratingRows.map((row) => [
+        Number(row.tripId),
+        {
+          score: Number(row.score),
+          comment: row.comment ?? null,
+          createdAt: row.createdAt,
+        },
+      ]),
+    );
 
     return {
       driverId: d.driverId,
@@ -122,6 +173,12 @@ export class DriversService {
             accountHolder: bank.accountHolder,
           }
         : null,
+      stats: {
+        completedTrips,
+        totalSalesJpy,
+        averageRating,
+        ratingCount,
+      },
       trips: tripRows.map((t) => ({
         tripId: t.tripId,
         status: this.mapTripStatus(t.status),
@@ -131,6 +188,8 @@ export class DriversService {
         distanceKm: Number(t.actualDistanceKm),
         finalFareJpy: t.finalFareJpy,
         finalFareVnd: t.finalFareVnd,
+        endTime: t.endTime,
+        rating: ratingByTrip.get(t.tripId) ?? null,
       })),
     };
   }

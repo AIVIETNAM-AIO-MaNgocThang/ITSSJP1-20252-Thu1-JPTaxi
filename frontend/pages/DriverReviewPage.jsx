@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getReviewContext, submitTripRating } from '../api/ratings.js';
 import PageShell from '../components/PageShell.jsx';
@@ -6,12 +6,6 @@ import { getLastInvoiceTripId } from '../utils/invoiceSession.js';
 import '../styles/app-pages.css';
 
 const tags = ['丁寧な対応', '安全運転', '車内が清潔', 'ルートが最適', '日本語が上手'];
-
-function getPointerScore(event, star) {
-  if (event.detail === 0) return star;
-  const rect = event.currentTarget.getBoundingClientRect();
-  return star - (event.clientX - rect.left <= rect.width / 2 ? 0.5 : 0);
-}
 
 function scoreLabel(score) {
   if (score === 0) return '未評価';
@@ -44,7 +38,8 @@ export default function DriverReviewPage() {
   const [status, setStatus] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const displayScore = hoverScore ?? score;
-  const label = useMemo(() => scoreLabel(score), [score]);
+  const label = '未評価';
+  const displayScoreText = displayScore.toFixed(1);
   const driverName = reviewContext?.driver?.name || '田中 ドライバー';
   const vehicle = reviewContext?.driver?.vehicle;
   const vehicleLabel = vehicle
@@ -133,25 +128,34 @@ export default function DriverReviewPage() {
 
             <section className="review-rating">
               <strong>今回の乗車はいかがでしたか?</strong>
-              <div className="review-stars half-stars" aria-label={`${score} stars`} onMouseLeave={() => setHoverScore(null)}>
+              <div className="review-stars half-stars" aria-label={`${displayScore} stars`} onMouseLeave={() => setHoverScore(null)}>
                 {[1, 2, 3, 4, 5].map((star) => {
                   const fill = Math.max(0, Math.min(1, displayScore - (star - 1))) * 100;
                   return (
-                    <button
-                      type="button"
+                    <span
+                      className="review-star-control"
                       key={star}
                       style={{ '--star-fill': `${fill}%` }}
-                      onMouseMove={(event) => setHoverScore(getPointerScore(event, star))}
-                      onFocus={() => setHoverScore(star)}
-                      onClick={(event) => { setScore(getPointerScore(event, star)); setHoverScore(null); setStatus(''); }}
                     >
-                      ★
-                    </button>
+                      <span aria-hidden="true">★</span>
+                      {[star - 0.5, star].map((value, index) => (
+                        <button
+                          aria-label={`${value.toFixed(1)}星`}
+                          className={`star-hit ${index === 0 ? 'left' : 'right'}`}
+                          key={value}
+                          onBlur={() => setHoverScore(null)}
+                          onClick={() => { setScore(value); setHoverScore(value); setStatus(''); }}
+                          onFocus={() => setHoverScore(value)}
+                          onMouseEnter={() => setHoverScore(value)}
+                          type="button"
+                        />
+                      ))}
+                    </span>
                   );
                 })}
-                <button className="clear-rating" type="button" aria-label="評価を0に戻す" title="クリックして0に戻す" onClick={() => { setScore(0); setHoverScore(null); }}>{score.toFixed(1)}</button>
+                <button className="clear-rating" type="button" aria-label="評価を0に戻す" title="クリックして0に戻す" onClick={() => { setScore(0); setHoverScore(null); }}>{displayScoreText}</button>
               </div>
-              <span>{label} ({score.toFixed(1)})</span>
+              <span className="review-rating-label">{label} ({displayScoreText})</span>
               {status ? <small className="review-status">{status}</small> : null}
             </section>
 

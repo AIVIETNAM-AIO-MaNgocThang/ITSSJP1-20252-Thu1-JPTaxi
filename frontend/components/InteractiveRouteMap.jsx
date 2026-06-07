@@ -344,7 +344,7 @@ export default function InteractiveRouteMap({
         })}
         {showCurrentLocation && (
           <Marker icon={createCurrentLocationIcon()} position={currentLocationPosition} title={currentLocationLabel}>
-            <Tooltip direction="top" offset={[0, -13]} opacity={1}>現在位置</Tooltip>
+            <Tooltip direction="top" offset={[0, -13]} opacity={1}>{currentLocationLabel}</Tooltip>
           </Marker>
         )}
         {fitToRoute ? <RouteBounds positions={displayedBoundsPositions} /> : <FixedMapView centerPosition={resolvedMapCenter} zoom={mapZoom} />}

@@ -46,6 +46,72 @@ function toPlace(result) {
   };
 }
 
+function cleanPlacePart(value) {
+  return String(value ?? '').trim();
+}
+
+function isUsefulPlaceName(value) {
+  const text = cleanPlacePart(value);
+  return text.length > 1 && !/^[\d\s.,/-]+$/.test(text);
+}
+
+function compactPlaceParts(parts) {
+  const seen = new Set();
+  return parts
+    .map(cleanPlacePart)
+    .filter(Boolean)
+    .filter((part) => {
+      const key = part.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function bestCurrentLocationName(place) {
+  const candidates = [
+    place?.name,
+    ...String(place?.address ?? '').split(','),
+  ];
+  return candidates.find(isUsefulPlaceName) || defaultPickupPlace.name;
+}
+
+function toCurrentLocationPlace(result, position) {
+  const address = result?.address ?? {};
+  const displayParts = String(result?.display_name ?? '').split(',').map((part) => part.trim()).filter(Boolean);
+  const namedetails = result?.namedetails ?? {};
+  const primaryName = [
+    namedetails['name:ja'],
+    namedetails['official_name:ja'],
+    namedetails['alt_name:ja'],
+    address.amenity,
+    address.tourism,
+    address.building,
+    address.road,
+    address.neighbourhood,
+    address.quarter,
+    address.suburb,
+    address.city_district,
+    result?.name,
+    displayParts.find(isUsefulPlaceName),
+  ].find(isUsefulPlaceName) || defaultPickupPlace.name;
+  const addressText = compactPlaceParts([
+    address.road,
+    address.neighbourhood,
+    address.quarter,
+    address.suburb,
+    address.city_district,
+    address.city || address.town,
+  ].filter((part) => cleanPlacePart(part).toLowerCase() !== primaryName.toLowerCase())).join(', ');
+
+  return {
+    ...defaultPickupPlace,
+    name: primaryName,
+    address: addressText || result?.display_name || defaultPickupPlace.address,
+    position,
+  };
+}
+
 function formatDuration(seconds, meters = 0) {
   const baseMinutes = Math.max(1, Math.round(seconds / 60));
   const distanceKm = Math.max(0, meters / 1000);
@@ -78,11 +144,20 @@ function normalizePlace(place, fallback = defaultPickupPlace) {
     return fallback;
   }
 
-  return {
+  const normalized = {
     ...fallback,
     ...place,
     position: place.position.map(Number),
   };
+
+  if (normalized.id === defaultPickupPlace.id) {
+    return {
+      ...normalized,
+      name: bestCurrentLocationName(normalized),
+    };
+  }
+
+  return normalized;
 }
 
 function distanceMeters(from, to) {
@@ -207,15 +282,7 @@ export default function LocationSearchPage() {
       });
       if (!response.ok) return null;
 
-      const place = toPlace(await response.json());
-      return place
-        ? {
-            ...defaultPickupPlace,
-            ...place,
-            id: defaultPickupPlace.id,
-            position,
-          }
-        : null;
+      return toCurrentLocationPlace(await response.json(), position);
     } catch {
       return null;
     }
@@ -285,7 +352,7 @@ export default function LocationSearchPage() {
         setSelfLocation(position);
         setSelectedPickup((current) => (
           current.id === defaultPickupPlace.id
-            ? { ...current, position, address: 'GPSで取得した現在位置' }
+            ? normalizePlace({ ...current, position, address: current.address || 'GPSで取得した現在位置' })
             : current
         ));
       },
@@ -502,6 +569,7 @@ export default function LocationSearchPage() {
     ? [
         {
           ...defaultPickupPlace,
+          name: selectedPickup.id === defaultPickupPlace.id ? bestCurrentLocationName(selectedPickup) : defaultPickupPlace.name,
           address: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.address : 'GPSで現在位置を取得',
           position: selectedPickup.id === defaultPickupPlace.id ? selectedPickup.position : selfLocation,
           time: '現在地',
@@ -668,6 +736,7 @@ export default function LocationSearchPage() {
               scrollWheelZoom
               showControls
               showCurrentLocation
+              currentLocationLabel={selectedPickup.name || defaultPickupPlace.name}
               showDetails={false}
               showDriver={false}
               showMarkers={Boolean(selectedDestination)}

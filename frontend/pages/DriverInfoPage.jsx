@@ -14,7 +14,7 @@ import {
   uploadAvatar,
   uploadDriverDocument,
 } from '../api/accounts.js';
-import { getDriverRatings } from '../api/ratings.js';
+import { getDriverRatings, getDriverRatingsSummary, getPublicDriverRatingSummary } from '../api/ratings.js';
 import {
   getStoredProfileLanguage,
   languageOptions,
@@ -67,11 +67,11 @@ function getCardLastFour(value) {
 }
 
 const fallbackDriver = {
-  lastName: '山田',
-  firstName: '太郎',
+  lastName: '',
+  firstName: '',
   nationality: 'Japan',
   phone: '+84123456789',
-  email: localStorage.getItem('jpTaxiUserEmail') || 'driver1@example.com',
+  email: localStorage.getItem('jpTaxiDriverEmail') || localStorage.getItem('jpTaxiUserEmail') || '',
   japaneseLevel: 'N2',
   birthDate: '1990-01-01',
   gender: 'Male',
@@ -94,9 +94,11 @@ const fallbackDriver = {
     accountHolder: 'TARO YAMADA',
   },
   trips: [],
+  stats: null,
 };
 
 function normalizeProfile(profile = fallbackDriver) {
+  const hasStats = profile.stats && typeof profile.stats === 'object';
   return {
     ...fallbackDriver,
     ...profile,
@@ -107,12 +109,25 @@ function normalizeProfile(profile = fallbackDriver) {
     licenses: Array.isArray(profile.licenses) ? profile.licenses : [],
     documents: profile.documents || {},
     trips: Array.isArray(profile.trips) ? profile.trips : [],
+    stats: hasStats
+      ? {
+          ...(profile.stats || {}),
+        }
+      : null,
   };
 }
 
 function formatCurrency(value) {
-  if (!value) return '¥0';
-  return `¥${Number(value).toLocaleString('ja-JP')}`;
+  const amount = parseNumericAmount(value);
+  if (!amount) return '¥0';
+  return `¥${amount.toLocaleString('ja-JP')}`;
+}
+
+function parseNumericAmount(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const normalized = String(value ?? '').replace(/[^\d.-]/g, '');
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : 0;
 }
 
 function formatDate(value, locale = 'ja-JP') {
@@ -126,6 +141,141 @@ function formatTripStatus(status) {
     ongoing: '乗車中',
     cancelled: 'キャンセル済み',
   }[status] || status || '-';
+}
+
+const historyFilterLabels = {
+  ja: {
+    all: 'すべて',
+    completed: '完了',
+    rated: '評価あり',
+    unrated: '未評価',
+  },
+  vi: {
+    all: 'Tất cả',
+    completed: 'Đã hoàn thành',
+    rated: 'Đã đánh giá',
+    unrated: 'Chưa đánh giá',
+  },
+  en: {
+    all: 'All',
+    completed: 'Completed',
+    rated: 'Rated',
+    unrated: 'Unrated',
+  },
+};
+
+const historyDateFilterLabels = {
+  ja: { date: '日付', clear: '解除' },
+  vi: { date: 'Ngày', clear: 'Xóa' },
+  en: { date: 'Date', clear: 'Clear' },
+};
+
+function formatDateInputValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatHistoryPlace(value, language = 'ja') {
+  const text = String(value ?? '').trim();
+  if (!text) return '-';
+
+  const repaired = text
+    .replace(/H\?\s*G\?\?m/gi, 'Hồ Gươm')
+    .replace(/Ho\?n\s*Ki\?m/gi, 'Hoàn Kiếm')
+    .replace(/Hoan\s*Kiem/gi, 'Hoàn Kiếm')
+    .replace(/Hanoi/gi, 'Hà Nội')
+    .replace(/\s+/g, ' ');
+
+  if (language === 'vi') {
+    return repaired
+      .replace(/West Lake/gi, 'Hồ Tây')
+      .replace(/Hoan Kiem Lake/gi, 'Hồ Hoàn Kiếm');
+  }
+
+  return repaired;
+}
+
+function formatEmailDisplayName(value) {
+  const localPart = String(value ?? '').split('@')[0].trim();
+  if (!localPart) return '';
+  return localPart
+    .replace(/[._-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/(driver|customer|user)$/i, ' $1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getDisplayName(profile, fallback = '') {
+  const storedEmail = localStorage.getItem('jpTaxiDriverEmail') || localStorage.getItem('jpTaxiUserEmail') || '';
+  const name = [profile.lastName, profile.firstName]
+    .map((part) => String(part ?? '').trim())
+    .filter(Boolean)
+    .join(' ');
+  const emailName = formatEmailDisplayName(profile.email || storedEmail);
+  return name
+    || emailName
+    || fallback
+    || '';
+}
+
+function readStoredDriverRatings() {
+  let stored = [];
+  try {
+    stored = JSON.parse(localStorage.getItem('jpTaxiDriverRatings') || '[]');
+  } catch {
+    stored = [];
+  }
+
+  if (!Array.isArray(stored)) return [];
+  return stored
+    .filter((item) => Number(item?.score) > 0)
+    .map((item) => ({
+      tripId: item.tripId,
+      score: Number(item.score),
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      comment: item.comment || null,
+      createdAt: item.createdAt || null,
+    }));
+}
+
+function readProfileTripRatings(trips = []) {
+  return trips
+    .map((trip) => ({
+      tripId: trip.tripId,
+      score: Number(trip.rating?.score),
+      comment: trip.rating?.comment || null,
+      createdAt: trip.rating?.createdAt || null,
+    }))
+    .filter((item) => Number.isFinite(item.score) && item.score > 0);
+}
+
+function mergeRatings(...ratingGroups) {
+  const byTrip = new Map();
+  ratingGroups.flat().forEach((rating) => {
+    const score = Number(rating?.score);
+    if (!Number.isFinite(score) || score <= 0) return;
+    const key = String(rating.tripId ?? `local-${byTrip.size}`);
+    if (!byTrip.has(key)) {
+      byTrip.set(key, { ...rating, score });
+    }
+  });
+  return [...byTrip.values()];
+}
+
+function summarizeRatings(items = []) {
+  const scores = items.map((item) => Number(item.score)).filter((score) => Number.isFinite(score) && score > 0);
+  if (!scores.length) return { averageScore: null, ratingCount: 0 };
+  const total = scores.reduce((sum, score) => sum + score, 0);
+  return {
+    averageScore: Math.round((total / scores.length) * 100) / 100,
+    ratingCount: scores.length,
+  };
 }
 
 export default function DriverInfoPage() {
@@ -152,9 +302,11 @@ export default function DriverInfoPage() {
   const [ratingsSummary, setRatingsSummary] = useState({ averageScore: null, ratingCount: 0 });
   const [selectedHistory, setSelectedHistory] = useState(null);
   const [historyFilter, setHistoryFilter] = useState('all');
+  const [historyDate, setHistoryDate] = useState('');
   const text = profileText[language] || profileText.ja;
   const common = text.common;
   const driverText = text.driver;
+  const historyDateText = historyDateFilterLabels[language] || historyDateFilterLabels.ja;
 
   useEffect(() => {
     let ignore = false;
@@ -179,25 +331,45 @@ export default function DriverInfoPage() {
   }, [text.status.driverDemo]);
 
   useEffect(() => {
+    if (loading) return undefined;
     let ignore = false;
-    getDriverRatings({ limit: 50 })
-      .then((result) => {
-        if (ignore) return;
-        setRatings(Array.isArray(result?.items) ? result.items : []);
-        setRatingsSummary({
-          averageScore: result?.averageScore ?? null,
-          ratingCount: Number(result?.ratingCount ?? 0),
-        });
-      })
-      .catch(() => {
-        if (ignore) return;
-        setRatings([]);
-        setRatingsSummary({ averageScore: null, ratingCount: 0 });
+
+    async function loadRatings() {
+      const result = await getDriverRatings({ limit: 50 }).catch(() => null);
+      const apiRatings = Array.isArray(result?.items) ? result.items : [];
+      const profileRatings = readProfileTripRatings(profile.trips);
+      const storedRatings = readStoredDriverRatings();
+      const mergedRatings = mergeRatings(apiRatings, profileRatings, storedRatings);
+      const summary = await (
+        profile.driverId
+          ? getPublicDriverRatingSummary(profile.driverId)
+          : getDriverRatingsSummary()
+      ).catch(() => result);
+      const derivedSummary = summarizeRatings(mergedRatings);
+      const profileSummary = profile.stats && Number(profile.stats.ratingCount ?? 0) > 0
+        ? {
+            averageScore: profile.stats.averageRating,
+            ratingCount: profile.stats.ratingCount,
+          }
+        : null;
+      const resolvedSummary = [summary, profileSummary, derivedSummary]
+        .filter((item) => Number(item?.ratingCount ?? 0) > 0)
+        .sort((a, b) => Number(b.ratingCount ?? 0) - Number(a.ratingCount ?? 0))[0]
+        || { averageScore: null, ratingCount: 0 };
+
+      if (ignore) return;
+      setRatings(mergedRatings);
+      setRatingsSummary({
+        averageScore: resolvedSummary?.averageScore ?? null,
+        ratingCount: Number(resolvedSummary?.ratingCount ?? 0),
       });
+    }
+
+    loadRatings();
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [loading, profile.driverId, profile.stats?.averageRating, profile.stats?.ratingCount, profile.trips]);
 
   useEffect(() => {
     function syncLanguage(event) {
@@ -212,7 +384,8 @@ export default function DriverInfoPage() {
     if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
   }, [avatarPreviewUrl]);
 
-  const fullName = `${profile.lastName} ${profile.firstName}`.trim();
+  const fullName = getDisplayName(profile, common.unregistered);
+  const avatarInitial = fullName.slice(0, 1) || profile.lastName.slice(0, 1);
   const avatar = profile.avatarUrl;
   const vehicle = profile.vehicle || fallbackDriver.vehicle;
   const primaryLicense = profile.licenses[0] || {};
@@ -225,14 +398,29 @@ export default function DriverInfoPage() {
     { key: 'registrationPaper', label: driverText.registrationPaper, icon: '📘', url: profile.documents?.registrationPaper || vehicle.registrationPaperUrl },
   ];
   const completedDocumentCount = driverDocuments.filter((item) => item.url).length;
-  const totalSales = profile.trips.reduce((sum, trip) => sum + Number(trip.finalFareJpy || 0), 0);
-  const completedTrips = profile.trips.filter((trip) => trip.status === 'completed').length;
-  const averageRating = ratingsSummary.averageScore == null ? '-' : Number(ratingsSummary.averageScore).toFixed(1);
+  const isCountedHistoryTrip = (trip) => trip.status !== 'cancelled' && trip.status !== 'cancelled_by_admin';
+  const historyStatsTrips = profile.trips.filter(isCountedHistoryTrip);
+  const fallbackCompletedTrips = historyStatsTrips.length;
+  const fallbackTotalSales = historyStatsTrips.reduce((sum, trip) => sum + parseNumericAmount(trip.finalFareJpy), 0);
+  const completedTrips = fallbackCompletedTrips || Number(profile.stats?.completedTrips ?? 0);
+  const totalSales = fallbackTotalSales || Number(profile.stats?.totalSalesJpy ?? 0);
+  const visibleRatings = mergeRatings(ratings, readProfileTripRatings(profile.trips));
+  const visibleRatingsSummary = summarizeRatings(visibleRatings);
+  const profileRatingsSummary = profile.stats && Number(profile.stats.ratingCount ?? 0) > 0
+    ? { averageScore: profile.stats.averageRating, ratingCount: profile.stats.ratingCount }
+    : null;
+  const displayRatingsSummary = [visibleRatingsSummary, ratingsSummary, profileRatingsSummary]
+    .find((item) => Number(item?.ratingCount ?? 0) > 0)
+    || { averageScore: null, ratingCount: 0 };
+  const averageRating = displayRatingsSummary.averageScore == null ? '0.0' : Number(displayRatingsSummary.averageScore).toFixed(1);
+  const ratingCount = Number(displayRatingsSummary.ratingCount ?? 0);
+  const getHistoryRating = (trip) => visibleRatings.find((item) => String(item.tripId) === String(trip.tripId));
   const filteredHistoryTrips = profile.trips.filter((trip) => {
-    const rating = ratings.find((item) => String(item.tripId) === String(trip.tripId));
+    const rating = getHistoryRating(trip);
+    if (historyDate && formatDateInputValue(trip.startTime) !== historyDate) return false;
     if (historyFilter === 'rated') return Boolean(rating);
     if (historyFilter === 'unrated') return !rating;
-    if (historyFilter === 'completed') return trip.status === 'completed';
+    if (historyFilter === 'completed') return isCountedHistoryTrip(trip);
     return true;
   });
 
@@ -455,30 +643,48 @@ export default function DriverInfoPage() {
     }
 
     if (activeSection === 'history') {
+      const historySummaryTrips = filteredHistoryTrips.length ? filteredHistoryTrips : profile.trips;
+      const historySummaryCount = historySummaryTrips.filter(isCountedHistoryTrip).length;
+      const historySummarySales = historySummaryTrips.reduce((sum, trip) => (
+        isCountedHistoryTrip(trip) ? sum + parseNumericAmount(trip.finalFareJpy) : sum
+      ), 0);
+      const historySummaryRatings = mergeRatings(
+        historySummaryTrips.map((trip) => getHistoryRating(trip)).filter(Boolean),
+        readProfileTripRatings(historySummaryTrips),
+      );
+      const historyRatingSummary = summarizeRatings(historySummaryRatings);
+      const historyAverageRating = historyRatingSummary.ratingCount
+        ? Number(historyRatingSummary.averageScore).toFixed(1)
+        : averageRating;
+
       return (
         <section className="panel zip-profile-panel">
           <h2 className="panel-title">{driverText.historyTitle}</h2>
           <div className="trip-summary">
-            <article><span>{driverText.completedTrips}</span><strong>{completedTrips}</strong></article>
-            <article><span>{driverText.ratingLabel}</span><strong>{averageRating}</strong></article>
-            <article><span>{driverText.sales}</span><strong>{formatCurrency(totalSales)}</strong></article>
+            <article><span>{driverText.completedTrips}</span><strong>{historySummaryCount || completedTrips}</strong></article>
+            <article><span>{driverText.ratingLabel}</span><strong>{historyAverageRating}</strong></article>
+            <article><span>{driverText.sales}</span><strong>{formatCurrency(historySummarySales || totalSales)}</strong></article>
           </div>
-          <div className="driver-history-filters" aria-label="履歴フィルター">
-            {[
-              ['all', 'すべて'],
-              ['completed', '完了'],
-              ['rated', '評価あり'],
-              ['unrated', '未評価'],
-            ].map(([value, label]) => (
-              <button className={historyFilter === value ? 'active' : ''} type="button" key={value} onClick={() => setHistoryFilter(value)}>{label}</button>
-            ))}
+          <div className="driver-history-filter-row">
+            <div className="driver-history-filters" aria-label={driverText.historyTitle}>
+              {Object.entries(historyFilterLabels[language] || historyFilterLabels.ja).map(([value, label]) => (
+                <button className={historyFilter === value ? 'active' : ''} type="button" key={value} onClick={() => setHistoryFilter(value)}>{label}</button>
+              ))}
+            </div>
+            <label className="driver-history-date-filter">
+              <span>{historyDateText.date}</span>
+              <input type="date" value={historyDate} onChange={(event) => setHistoryDate(event.target.value)} />
+              {historyDate ? <button type="button" onClick={() => setHistoryDate('')}>{historyDateText.clear}</button> : null}
+            </label>
           </div>
           <div className="modal-list history-list">
             {filteredHistoryTrips.length ? filteredHistoryTrips.map((trip) => {
-              const rating = ratings.find((item) => String(item.tripId) === String(trip.tripId));
+              const rating = getHistoryRating(trip);
               return (
                 <article className="driver-history-item" key={trip.tripId || `${trip.startTime}-${trip.pickupAddress}`}>
-                  <span className="driver-history-main">{formatDate(trip.startTime, text.locale)} {trip.pickupAddress} → {trip.dropoffAddress} / {formatCurrency(trip.finalFareJpy)}</span>
+                  <span className="driver-history-main">
+                    {formatDate(trip.startTime, text.locale)} {formatHistoryPlace(trip.pickupAddress, language)} → {formatHistoryPlace(trip.dropoffAddress, language)} / {formatCurrency(trip.finalFareJpy)}
+                  </span>
                   <span className="driver-history-actions">
                     <strong className="driver-history-rating">{rating ? `⭐ ${Number(rating.score).toFixed(1)}` : '-'}</strong>
                     <button className="driver-history-detail" type="button" onClick={() => { setSelectedHistory({ trip, rating }); setModal('rating'); }}>{common.details}<span>›</span></button>
@@ -496,7 +702,6 @@ export default function DriverInfoPage() {
         <section className="panel zip-profile-panel narrow-panel">
           <h2 className="panel-title">{driverText.payoutTitle}</h2>
           <div className="setting-list">
-            <article className="account-card"><strong>{driverText.weeklyPayout}</strong><span>{formatCurrency(totalSales)}</span></article>
             <button className="account-card" type="button" onClick={() => setModal('visaCard')}><strong>{common.visaCard}</strong><span>{common.visaCard} **** {getCardLastFour(visaCard.number)}</span></button>
             <button className="account-card" type="button" onClick={() => setModal('bank')}><strong>{driverText.bank}</strong><span>{bankAccount.bankName} **** {bankAccount.accountNumber.slice(-4)}</span></button>
             <button className="submit-button profile-save-button" type="button" onClick={() => setModal('visaCard')}>{common.addVisaCard}</button>
@@ -617,11 +822,11 @@ export default function DriverInfoPage() {
             <aside className="profile-sidebar">
               <section className="profile-card zip-profile-card driver-profile-card">
                 <div className="profile-avatar">
-                  {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : profile.lastName}
+                  {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} /> : avatarInitial}
                 </div>
                 <strong>{fullName}</strong>
-                <span>⭐ {averageRating} / 5.0 ({ratingsSummary.ratingCount} {driverText.rating})</span>
-                <em>{loading ? common.loading : driverText.role}</em>
+                <span>⭐ {averageRating} / 5.0 ({ratingCount} {driverText.rating})</span>
+                <em>{driverText.role}</em>
                 <button className="link-btn" type="button" onClick={() => setModal('avatar')}>{common.changeImage}</button>
               </section>
               <nav className="side-menu" aria-label={driverText.pageTitle}>
@@ -687,8 +892,9 @@ export default function DriverInfoPage() {
           {modal === 'avatar' && (
             <div className="modal-form zip-modal-form">
               <div className="profile-avatar profile-avatar-preview">
-                {avatar ? <img src={avatar} alt="" /> : profile.lastName}
+                {avatar ? <img src={avatar} alt={fullName} /> : avatarInitial}
               </div>
+              <strong className="profile-avatar-name">{fullName || common.unregistered}</strong>
               <label className="avatar-file-picker">
                 <span className="avatar-file-icon">🖼️</span>
                 <span className="avatar-file-copy">
@@ -787,11 +993,11 @@ export default function DriverInfoPage() {
                 <div className="driver-rating-route">
                   <article>
                     <span className="point-dot pickup"></span>
-                    <div><small>出発地</small><strong>{selectedHistory.trip.pickupAddress || '-'}</strong></div>
+                    <div><small>出発地</small><strong>{formatHistoryPlace(selectedHistory.trip.pickupAddress, language)}</strong></div>
                   </article>
                   <article>
                     <span className="point-dot destination"></span>
-                    <div><small>目的地</small><strong>{selectedHistory.trip.dropoffAddress || '-'}</strong></div>
+                    <div><small>目的地</small><strong>{formatHistoryPlace(selectedHistory.trip.dropoffAddress, language)}</strong></div>
                   </article>
                 </div>
                 <div className="driver-rating-trip-facts">

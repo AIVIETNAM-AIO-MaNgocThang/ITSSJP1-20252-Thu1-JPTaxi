@@ -316,26 +316,34 @@ export class RideRequestsService {
       };
     }
 
-    dispatch.status = DispatchStatusType.accepted;
-    dispatch.respondedAt = now;
-    await this.dispatches.save(dispatch);
+    await this.dataSource.transaction(async (manager) => {
+      const rideRepo = manager.getRepository(RideRequest);
+      const dispatchRepo = manager.getRepository(RideRequestDispatch);
 
-    request.status = RideRequestStatusType.assigned;
-    await this.rideRequests.save(request);
-
-    const otherPending = await this.dispatches.find({
-      where: {
-        requestId: request.requestId,
-        status: DispatchStatusType.pending,
-      },
-    });
-    for (const other of otherPending) {
-      if (other.dispatchId !== dispatchId) {
-        other.status = DispatchStatusType.rejected;
-        other.respondedAt = now;
-        await this.dispatches.save(other);
+      const claimResult = await rideRepo.update(
+        { requestId: request.requestId, status: RideRequestStatusType.searching },
+        { status: RideRequestStatusType.assigned },
+      );
+      if (!claimResult.affected) {
+        throw new BadRequestException('この配車リクエストは他のドライバーが承認しました。');
       }
-    }
+
+      const acceptResult = await dispatchRepo.update(
+        { dispatchId, driverId, status: DispatchStatusType.pending },
+        { status: DispatchStatusType.accepted, respondedAt: now },
+      );
+      if (!acceptResult.affected) {
+        throw new BadRequestException('この配車リクエストは既に処理済みです');
+      }
+
+      await dispatchRepo.update(
+        {
+          requestId: request.requestId,
+          status: DispatchStatusType.pending,
+        },
+        { status: DispatchStatusType.rejected, respondedAt: now },
+      );
+    });
 
     return this.getById(request.requestId, driverId, 'driver');
   }

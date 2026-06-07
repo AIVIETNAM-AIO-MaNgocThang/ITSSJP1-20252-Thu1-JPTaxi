@@ -32,6 +32,11 @@ export class DriversController {
     return this.drivers.searchDrivers(query);
   }
 
+  @Get('profile-by-email')
+  getProfileByEmail(@Query('email') email: string) {
+    return this.drivers.getProfileByEmail(email);
+  }
+
   @Get(':driverId/profile')
   getProfile(@Param('driverId', ParseIntPipe) driverId: number) {
     return this.drivers.getProfile(driverId);
@@ -83,4 +88,3 @@ export class DriversController {
     return this.drivers.approveDriver(driverId, status, reason);
   }
 }
-

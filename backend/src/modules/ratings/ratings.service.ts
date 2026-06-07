@@ -138,7 +138,6 @@ export class RatingsService {
       .select('AVG(r.score)::float', 'averageScore')
       .addSelect('COUNT(*)::int', 'ratingCount')
       .where('t.driver_id = :driverId', { driverId })
-      .andWhere('t.status = :status', { status: TripStatusType.completed })
       .getRawOne<{ averageScore: string | null; ratingCount: string }>();
 
     const count = Number(row?.ratingCount ?? 0);
@@ -177,7 +176,6 @@ export class RatingsService {
         'c.last_name AS "customerLastName"',
       ])
       .where('t.driver_id = :driverId', { driverId })
-      .andWhere('t.status = :status', { status: TripStatusType.completed })
       .orderBy('r.created_at', 'DESC')
       .offset(skip)
       .limit(take);

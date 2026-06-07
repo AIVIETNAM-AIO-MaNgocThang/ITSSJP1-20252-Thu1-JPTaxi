@@ -927,11 +927,19 @@
   margin-top: 18px;
 }
 
+.driver-history-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .driver-history-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 16px;
 }
 
 .driver-history-filters button {
@@ -949,6 +957,61 @@
   color: #047857;
   background: #ecfdf5;
   border-color: #86efac;
+}
+
+.driver-history-date-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-width: 260px;
+  margin-left: auto;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.driver-history-date-filter span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.driver-history-date-filter input {
+  flex: 0 0 150px;
+  width: 150px;
+  min-height: 34px;
+  padding: 0 10px;
+  color: #0f172a;
+  font: inherit;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+}
+
+.driver-history-date-filter button {
+  min-height: 34px;
+  padding: 0 12px;
+  color: #047857;
+  font-size: 12px;
+  font-weight: 900;
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+  border-radius: 999px;
+}
+
+@media (max-width: 760px) {
+  .driver-history-filter-row {
+    align-items: stretch;
+  }
+
+  .driver-history-date-filter {
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
 }
 
 .driver-history-item {
@@ -1768,6 +1831,15 @@
   font-weight: 900;
   background: #d1fae5;
   border-radius: 28px;
+}
+
+.profile-avatar-name {
+  display: block;
+  justify-self: center;
+  text-align: center;
+  color: #132238;
+  font-size: 0.98rem;
+  font-weight: 800;
 }
 
 .avatar-cropper {
@@ -4066,7 +4138,7 @@ button.zip-fast-button {
   gap: 12px;
 }
 
-.review-stars button {
+.review-stars > button {
   position: relative;
   width: auto;
   height: auto;
@@ -4082,13 +4154,56 @@ button.zip-fast-button {
   align-items: center;
 }
 
-.review-stars.half-stars button::before {
+.review-star-control {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 52px;
+  color: #d0d5dd;
+  font-size: 48px;
+  line-height: 1;
+}
+
+.review-star-control > span {
+  display: block;
+  line-height: 1;
+}
+
+.review-stars.half-stars .review-star-control::before {
   position: absolute;
   inset: 0;
   width: var(--star-fill, 0%);
   overflow: hidden;
   color: #f59e0b;
   content: '★';
+  pointer-events: none;
+}
+
+.review-stars .star-hit {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  width: 50%;
+  height: 100%;
+  padding: 0;
+  color: transparent;
+  font-size: 0;
+  background: transparent;
+  border: 0;
+}
+
+.review-stars .star-hit.left {
+  left: 0;
+}
+
+.review-stars .star-hit.right {
+  right: 0;
+}
+
+.review-stars .star-hit:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
 }
 
 .review-stars.half-stars .clear-rating {
@@ -4107,7 +4222,7 @@ button.zip-fast-button {
   content: none;
 }
 
-.review-rating span {
+.review-rating-label {
   display: block;
   height: 24px;
   margin-top: 16px;
