@@ -44,14 +44,8 @@ import { MessagesModule } from './modules/messages/messages.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DB_HOST', 'localhost'),
-        port: parseInt(config.get<string>('DB_PORT', '5432'), 10),
-        username: config.get<string>('DB_USER', 'postgres'),
-        password: config.get<string>('DB_PASS') ?? '123456',
-        database: config.get<string>('DB_NAME', 'JPTaxi'),
-        entities: [
+      useFactory: (config: ConfigService) => {
+        const entities = [
           Customer,
           Driver,
           Admin,
@@ -72,10 +66,36 @@ import { MessagesModule } from './modules/messages/messages.module';
           AuditLog,
           Conversation,
           Message,
-        ],
-        synchronize: false,
-        logging: false,
-      }),
+        ];
+        const databaseUrl = config.get<string>('DATABASE_URL');
+        const sslEnabled =
+          config.get<string>('DB_SSL') === 'true' || Boolean(databaseUrl);
+        const ssl = sslEnabled ? { rejectUnauthorized: false } : undefined;
+
+        if (databaseUrl) {
+          return {
+            type: 'postgres' as const,
+            url: databaseUrl,
+            entities,
+            synchronize: false,
+            logging: false,
+            ssl,
+          };
+        }
+
+        return {
+          type: 'postgres' as const,
+          host: config.get<string>('DB_HOST', 'localhost'),
+          port: parseInt(config.get<string>('DB_PORT', '5432'), 10),
+          username: config.get<string>('DB_USER', 'postgres'),
+          password: config.get<string>('DB_PASS') ?? '123456',
+          database: config.get<string>('DB_NAME', 'JPTaxi'),
+          entities,
+          synchronize: false,
+          logging: false,
+          ssl,
+        };
+      },
     }),
     AuthModule,
     RideModule,

@@ -26,9 +26,12 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  app.enableCors();
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  const frontendOrigins = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : true;
+  app.enableCors({ origin: frontendOrigins, credentials: true });
+  const port = parseInt(process.env.PORT ?? '3000', 10);
+  await app.listen(port, '0.0.0.0');
 }
 
 bootstrap();
